@@ -1,0 +1,43 @@
+{
+  "name": "necoherence",
+  "version": "0.1.0",
+  "description": "Revision-aware state transition utilities for TypeScript",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist/",
+    "package.json",
+    "README.md",
+    "README-ja.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "pretest": "npm run build",
+    "typecheck": "tsc --project tsconfig.json --strict --noEmit",
+    "test": "vitest run --fileParallelism=false",
+    "pack": "npm pack --json",
+    "verify:consumer": "node scripts/verify-package-consumer.mjs",
+    "network-effect:runner": "node dist/network-effect-runner.js"
+  },
+  "dependencies": {
+    "@noble/hashes": "2.4.0",
+    "jsonc-parser": "3.3.1",
+    "lossless-json": "4.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.2",
+    "fast-check": "^3.23.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "vitest": "^2.1.8"
+  }
+}

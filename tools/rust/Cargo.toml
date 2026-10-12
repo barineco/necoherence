@@ -1,0 +1,32 @@
+# SPDX-FileCopyrightText: 2026 barineco
+# SPDX-License-Identifier: AGPL-3.0-only
+
+[package]
+name = "necoherence-tools"
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-only"
+description = "Search, derivation and code generation tools for necoherence"
+rust-version = "1.88"
+publish = false
+
+[lib]
+name = "necoherence_tools"
+path = "src/lib.rs"
+
+[dependencies]
+necoherence = { path = "../../rust" }
+
+[dev-dependencies]
+num-bigint = "0.4"
+num-traits = "0.2"
+serde_json = { version = "1", features = ["arbitrary_precision"] }
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+indexing_slicing = "deny"
+panic = "deny"

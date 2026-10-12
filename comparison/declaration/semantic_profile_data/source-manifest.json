@@ -1,0 +1,23 @@
+{
+  "schema": "ncoh-unicode-sources@1",
+  "sources": [
+    {"path": "GraphemeBreakProperty.txt", "sha256": "c29360bd6f7132811d701d29069541e827eb44bfc4c8fbde8c370d6982689dc1"},
+    {"path": "emoji-data.txt", "sha256": "f1365a5173eee18e1f98b240cdc492e84a25f1ce7e0c9d1094eb29c41a22696a"},
+    {"path": "DerivedCoreProperties.txt", "sha256": "39d35161f2954497f69e08bdb9e701493f476a3d30222de20028feda36c1dabd"},
+    {"path": "GraphemeBreakTest.txt", "sha256": "ee2b9354d270ac061b29f09662cafea06341d77e704b8cc6bd72aaeeda363cb5"},
+    {"path": "LICENSE.txt", "sha256": "e7a93b009565cfce55919a381437ac4db883e9da2126fa28b91d12732bc53d96"}
+  ],
+  "unicode": {
+    "version": "16.0.0",
+    "uax29_revision": 45,
+    "profile": "C1-1 default extended grapheme cluster, no tailoring",
+    "license": "Unicode License V3",
+    "table_ranges_are_code_point_inclusive": true,
+    "uax29_source": {
+      "repository": "unicode.org",
+      "revision": "UAX29-45",
+      "path": "reports/tr29/tr29-45.html",
+      "sha256": "4579c185bd45feac761de590d874aca71788e339b35179318a4c43412fd4f9e4"
+    }
+  }
+}

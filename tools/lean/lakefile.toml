@@ -1,0 +1,30 @@
+# SPDX-FileCopyrightText: 2026 barineco
+# SPDX-License-Identifier: AGPL-3.0-only
+
+name = "necoherence-tools"
+version = "0.1.0"
+defaultTargets = ["NecoherenceTools", "NecoherenceToolsTest"]
+
+[[require]]
+name = "necoherence"
+path = "../../lean"
+
+[[lean_lib]]
+name = "NecoherenceTools"
+globs = ["NecoherenceTools", "NecoherenceTools.+"]
+
+[[lean_lib]]
+name = "NecoherenceToolsTest"
+roots = ["NecoherenceToolsTests.TypedMappingSolverTest", "NecoherenceToolsTests.TypeSignatures", "NecoherenceToolsTests.SignatureExchange", "NecoherenceToolsTests.SignatureCompositionWire"]
+
+[[lean_exe]]
+name = "semantic_generation"
+root = "NecoherenceTools.SemanticGenerationRunner"
+
+[[lean_exe]]
+name = "signature_generation_tests"
+root = "NecoherenceToolsTests.SignatureGeneration"
+
+[[lean_exe]]
+name = "semantic_invariant"
+root = "NecoherenceTools.SemanticInvariantRunner"

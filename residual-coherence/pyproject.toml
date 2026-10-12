@@ -1,0 +1,47 @@
+# SPDX-FileCopyrightText: 2026 barineco
+# SPDX-License-Identifier: AGPL-3.0-only
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "residual-coherence"
+version = "0.1.0"
+description = "Residual coherence validation and analysis exchange tools"
+readme = "README.md"
+license = {text = "AGPL-3.0-only"}
+license-files = ["LICENSE", "schema/LICENSE"]
+requires-python = ">=3.12"
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest", "mypy", "build"]
+
+[project.scripts]
+residual-coherence = "residual_coherence.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/residual_coherence"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"README.md" = "residual_coherence/README.md"
+"README-ja.md" = "residual_coherence/README-ja.md"
+"examples/typed-reachability-minimal.json" = "residual_coherence/examples/typed-reachability-minimal.json"
+"schema/analysis-input.schema.json" = "residual_coherence/schema/analysis-input.schema.json"
+"schema/analysis-verification.schema.json" = "residual_coherence/schema/analysis-verification.schema.json"
+"schema/reachability-diagnostic.schema.json" = "residual_coherence/schema/reachability-diagnostic.schema.json"
+"schema/residual-coherence-report.schema.json" = "residual_coherence/schema/residual-coherence-report.schema.json"
+"schema/typed-reachability-artifact.schema.json" = "residual_coherence/schema/typed-reachability-artifact.schema.json"
+"schema/typed-reachability-verification.schema.json" = "residual_coherence/schema/typed-reachability-verification.schema.json"
+"schema/LICENSE" = "residual_coherence/schema/LICENSE"
+
+[tool.hatch.build.targets.sdist]
+include = ["src/residual_coherence", "tests", "README.md", "README-ja.md", "examples/typed-reachability-minimal.json", "LICENSE", "schema/*.json", "schema/LICENSE", "pyproject.toml"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+
+[tool.mypy]
+mypy_path = "src"
+strict = true

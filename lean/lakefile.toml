@@ -1,0 +1,18 @@
+# SPDX-FileCopyrightText: 2026 barineco
+# SPDX-License-Identifier: MIT
+
+name = "necoherence"
+version = "0.1.0"
+defaultTargets = ["Necoherence", "NecoherenceTest"]
+
+[[lean_lib]]
+name = "Necoherence"
+globs = ["Necoherence", "Necoherence.+"]
+
+[[lean_lib]]
+name = "NecoherenceTest"
+roots = ["Necoherence.NetworkEffectTest", "Tests.ExactJsonCodec", "Tests.GraphemeProfileVectors", "Tests.FormatProfileAdmission", "Tests.ProfileAdmissionVariations", "Tests.SequenceRecognition", "Tests.LabelSeparatorRecognition", "Tests.NonNullableFieldConstruction", "Tests.FormatRuleSamples", "Tests.ExternalValueShapes"]
+
+[[lean_exe]]
+name = "network_effect_runner"
+root = "Necoherence.NetworkEffectRunner"

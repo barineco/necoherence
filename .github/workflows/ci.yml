@@ -1,0 +1,615 @@
+# SPDX-FileCopyrightText: 2026 barineco
+# SPDX-License-Identifier: MIT
+
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lean:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Remove the tools to build the MIT package alone
+        run: rm -rf tools
+      - name: Set up Lean
+        uses: leanprover/lean-action@v1
+        with:
+          lake-package-directory: lean
+      - name: Build and run theorem tests
+        working-directory: lean
+        run: |
+          lake build
+          lake env lean Tests/ResidualCoherenceTheorems.lean
+          lake env lean --run Tests/ProofCompleteness.lean
+          LEAN_NUM_THREADS=2 lake env lean --run Tests/FormatEvaluation.lean
+          lake env lean --run Tests/ObjectClassification.lean
+          lake env lean --run Tests/UnionAndDomainDeclarations.lean
+          lake env lean --run Tests/InclusionAndSamples.lean
+          lake env lean --run Tests/ProfileWireAndChecks.lean
+          lake env lean --run Tests/ProfileAndLibraryPredicates.lean
+
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Remove the tools to build the MIT package alone
+        run: rm -rf tools
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: python/pyproject.toml
+      - name: Install build and test dependencies
+        working-directory: python
+        run: python -m pip install build .[dev]
+      - name: Test and type-check
+        working-directory: python
+        run: |
+          python -m pytest -q
+          python -m mypy src tests
+      - name: Build the wheel and test it in a clean environment
+        working-directory: python
+        run: |
+          python -m build
+          python -m venv .clean-install
+          .clean-install/bin/python -m pip install dist/*.whl pytest hypothesis
+          .clean-install/bin/python -c "import necoherence, sysconfig; assert necoherence.__file__.startswith(sysconfig.get_paths()['purelib']), necoherence.__file__"
+          .clean-install/bin/python -m pytest -q -p no:cacheprovider -o pythonpath=
+          .clean-install/bin/python -c "import zipfile; wheel=next(__import__('pathlib').Path('dist').glob('*.whl')); names=set(zipfile.ZipFile(wheel).namelist()); assert {'necoherence/README.md','necoherence/README-ja.md'} <= names, names"
+
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Remove the tools to build the MIT package alone
+        run: rm -rf tools
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Check, test, and package
+        working-directory: rust
+        run: |
+          cargo fmt --all -- --check
+          cargo clippy --all-targets -- -D warnings
+          cargo test --all-targets
+          cargo package
+          cargo package --list | grep -qx README-ja.md
+
+  typescript:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Remove the tools to build the MIT package alone
+        run: rm -rf tools
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: typescript/package-lock.json
+      - name: Install dependencies
+        working-directory: typescript
+        run: npm ci
+      - name: Type-check, test, and verify the package consumer
+        working-directory: typescript
+        run: |
+          npm run typecheck
+          npm test
+          npm run verify:consumer
+          npm pack --json > pack.json
+          python -c "import json, tarfile; name=json.load(open('pack.json'))[0]['filename']; names=set(tarfile.open(name).getnames()); assert {'package/README.md','package/README-ja.md'} <= names, names"
+
+  java:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Remove the tools to build the MIT package alone
+        run: rm -rf tools
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: x
+      - name: Build the jar and test it
+        working-directory: java
+        run: |
+          mkdir -p lib build/classes build/test-classes
+          curl --fail --location --silent --show-error \
+            --output lib/junit-platform-console-standalone-1.10.2.jar \
+            https://repo1.maven.org/maven2/org/junit/platform/junit-platform-console-standalone/1.10.2/junit-platform-console-standalone-1.10.2.jar
+          printf '%s  %s\n' \
+            a1de557821293ce903c213c694165fff532cf92081bac4238b9e05b35f04f43f \
+            lib/junit-platform-console-standalone-1.10.2.jar | shasum -a 256 -c -
+          find src/main/java -name '*.java' -print0 \
+            | xargs -0 javac -J-Duser.language=en --release 21 -d build/classes
+          jar --create --file build/necoherence.jar -C build/classes .
+          find src/test/java -name '*.java' -print0 \
+            | xargs -0 javac -J-Duser.language=en --release 21 \
+                -cp "build/necoherence.jar:lib/junit-platform-console-standalone-1.10.2.jar" \
+                -d build/test-classes
+          java -Duser.language=en -jar lib/junit-platform-console-standalone-1.10.2.jar execute \
+            --class-path build/necoherence.jar:build/test-classes --scan-class-path
+
+  gleam:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Remove the tools to build the MIT package alone
+        run: rm -rf tools
+      - name: Read the Gleam version range from the package manifest
+        id: gleam
+        run: python3 -c "import tomllib; print('version=' + tomllib.load(open('gleam/gleam.toml', 'rb'))['gleam'].replace(' and ', ' '))" >> "$GITHUB_OUTPUT"
+      - name: Set up Erlang and Gleam
+        uses: erlef/setup-beam@v1
+        with:
+          otp-version: "> 0"
+          gleam-version: ${{ steps.gleam.outputs.version }}
+          rebar3-version: "3"
+      - name: Check, test, and build the package archive
+        working-directory: gleam
+        run: |
+          gleam format --check
+          gleam build --warnings-as-errors
+          gleam test
+          gleam export hex-tarball
+          archive=$(python3 -c 'import tomllib; package = tomllib.load(open("gleam.toml", "rb")); print("build/" + package["name"] + "-" + package["version"] + ".tar")')
+          contents=$(mktemp -d)
+          tar -xf "$archive" -C "$contents" contents.tar.gz
+          test "$(tar -tzf "$contents/contents.tar.gz" | grep -Ec '^(README|README-ja)\.md$')" -eq 2
+
+  shared-operations:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Remove the tools to compare the MIT implementations alone
+        run: rm -rf tools
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: python/pyproject.toml
+      - name: Read the Gleam version range from the package manifest
+        id: gleam
+        run: python -c "import tomllib; print('version=' + tomllib.load(open('gleam/gleam.toml', 'rb'))['gleam'].replace(' and ', ' '))" >> "$GITHUB_OUTPUT"
+      - name: Set up Lean
+        uses: leanprover/lean-action@v1
+        with:
+          auto-config: "false"
+          lake-package-directory: comparison/shared_operations/lean_driver
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: typescript/package-lock.json
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: x
+      - name: Set up Erlang and Gleam
+        uses: erlef/setup-beam@v1
+        with:
+          otp-version: "> 0"
+          gleam-version: ${{ steps.gleam.outputs.version }}
+      - name: Install the TypeScript dependencies
+        working-directory: typescript
+        run: npm ci
+      - name: Compare the six implementations on the shared operations
+        run: python -m comparison.shared_operations.differential
+
+  network-effect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: python/pyproject.toml
+      - name: Read the Gleam version range from the package manifest
+        id: gleam
+        run: python -c "import tomllib; print('version=' + tomllib.load(open('gleam/gleam.toml', 'rb'))['gleam'].replace(' and ', ' '))" >> "$GITHUB_OUTPUT"
+      - name: Set up Lean
+        uses: leanprover/lean-action@v1
+        with:
+          auto-config: "false"
+          lake-package-directory: lean
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: typescript/package-lock.json
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: x
+      - name: Set up Erlang and Gleam
+        uses: erlef/setup-beam@v1
+        with:
+          otp-version: "> 0"
+          gleam-version: ${{ steps.gleam.outputs.version }}
+          rebar3-version: "3"
+      - name: Compare the network effect implementations
+        run: python -m comparison.network_effect.differential --all
+      - name: Check the host failure matrix
+        run: python -m comparison.network_effect.host_failure_matrix --all --assert-counts
+      - name: Check the request progression bridge
+        run: python -m comparison.network_effect.progression_bridge --all
+
+  typed-mapping-solver:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: python/pyproject.toml
+      - name: Read the Gleam version range from the package manifest
+        id: gleam
+        run: python -c "import tomllib; print('version=' + tomllib.load(open('tools/gleam/gleam.toml', 'rb'))['gleam'].replace(' and ', ' '))" >> "$GITHUB_OUTPUT"
+      - name: Set up Lean
+        uses: leanprover/lean-action@v1
+        with:
+          auto-config: "false"
+          lake-package-directory: tools/lean
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Set up Erlang and Gleam
+        uses: erlef/setup-beam@v1
+        with:
+          otp-version: "> 0"
+          gleam-version: ${{ steps.gleam.outputs.version }}
+          rebar3-version: "3"
+      - name: Compare the public solver implementations
+        run: |
+          python comparison/typed_mapping_solver/check.py --prepare-fixtures
+          (
+            cd tools/lean
+            lake build NecoherenceTools NecoherenceToolsTest
+            TMS_FIXTURES=../../comparison/typed_mapping_solver/fixtures.json \
+              lake env lean ../../comparison/typed_mapping_solver/lean_runner.lean \
+              > ../../comparison/typed_mapping_solver/out-lean.json
+          )
+          cargo run --quiet --manifest-path tools/rust/Cargo.toml \
+            --example typed_mapping_solver_compare -- \
+            comparison/typed_mapping_solver/fixtures.json \
+            > comparison/typed_mapping_solver/out-rust.json
+          (
+            cd tools/gleam
+            gleam run -m typed_mapping_solver_compare -- \
+              ../../comparison/typed_mapping_solver/fixtures.json \
+              > ../../comparison/typed_mapping_solver/out-gleam.json
+          )
+          python comparison/typed_mapping_solver/check.py \
+            --compare-public-producers \
+              lean=out-lean.json rust=out-rust.json gleam=out-gleam.json \
+            --require-same-public-solver \
+              lean-runtime-test rust-runtime-test gleam-runtime-test \
+            --reject-local-producers \
+            --reject-test-only-producers
+      - name: Recheck the saved mutation classifications
+        run: |
+          python comparison/typed_mapping_solver/check.py \
+            --mutation-classification \
+            --fixtures comparison/typed_mapping_solver/fixtures.json \
+            --mutation-results comparison/typed_mapping_solver/mutation-results.json \
+            --oracle comparison/typed_mapping_solver/oracle.py \
+            --lean-runner comparison/typed_mapping_solver/lean_runner.lean \
+            --rust-runner tools/rust/examples/typed_mapping_solver_compare.rs \
+            --gleam-runner tools/gleam/src/typed_mapping_solver_compare.gleam \
+            --lean-test tools/lean/NecoherenceToolsTests/TypedMappingSolverTest.lean \
+            --rust-test tools/rust/tests/typed_mapping_solver_tests.rs \
+            --gleam-test tools/gleam/test/typed_mapping_solver_test.gleam \
+            --require-coordinate binding-type \
+            --require-coordinate multiplicity \
+            --require-coordinate read-consume-mode \
+            --require-coordinate identity \
+            --require-coordinate index \
+            --require-coordinate revision \
+            --require-coordinate graph-edge \
+            --require-coordinate input-binding \
+            --require-coordinate token \
+            --require-coordinate domain-bound \
+            --require-coordinate input-place-membership \
+            --require-coordinate binding-coverage \
+            --require-coordinate cycle-closing-decrease \
+            --require-invalidating-result Invalid \
+            --require-preserving-result-equality \
+            --require-bound-exhaustion-result Unknown \
+            --require-unreachable-closure-witness \
+            --require-independent-entry oracle \
+            --require-independent-entry lean-checker \
+            --require-independent-entry rust-public-api \
+            --require-independent-entry gleam-public-api \
+            --require-independent-entry lean-runtime-test \
+            --require-independent-entry rust-runtime-test \
+            --require-independent-entry gleam-runtime-test \
+            --reject-shared-oracle-implementation \
+            --reject-candidate-only-agreement
+          rm comparison/typed_mapping_solver/fixtures.json \
+            comparison/typed_mapping_solver/out-lean.json \
+            comparison/typed_mapping_solver/out-rust.json \
+            comparison/typed_mapping_solver/out-gleam.json
+
+  declarations-and-presets:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: python/pyproject.toml
+      - name: Read the Gleam version range from the package manifest
+        id: gleam
+        run: python -c "import tomllib; print('version=' + tomllib.load(open('tools/gleam/gleam.toml', 'rb'))['gleam'].replace(' and ', ' '))" >> "$GITHUB_OUTPUT"
+      - name: Set up Lean
+        uses: leanprover/lean-action@v1
+        with:
+          auto-config: "false"
+          lake-package-directory: tools/lean
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: |
+            typescript/package-lock.json
+            tools/typescript/package-lock.json
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: x
+      - name: Set up Erlang and Gleam
+        uses: erlef/setup-beam@v1
+        with:
+          otp-version: "> 0"
+          gleam-version: ${{ steps.gleam.outputs.version }}
+          rebar3-version: "3"
+      - name: Install the Python implementations
+        run: |
+          python -m pip install -e python
+          python -m pip install -e tools/python
+      - name: Compare declaration semantics
+        run: python comparison/declaration/semantic_invariant_checks.py --mode declarations --languages python typescript java rust gleam
+      - name: Compare preset semantics
+        run: python comparison/declaration/semantic_invariant_checks.py --mode presets --languages python typescript java rust gleam
+      - name: Check the representative input generators
+        run: python comparison/declaration/semantic_invariant_inputs_test.py
+      - name: Check generated signatures end to end
+        run: python comparison/declaration/signature_generation_e2e.py
+      - name: Check semantic axioms
+        run: python comparison/declaration/semantic_axioms.py
+      - name: Check observation profiles
+        run: python tests/observation/check.py
+      - name: Run the Lean signature generation executable
+        working-directory: tools/lean
+        run: lake exe signature_generation_tests
+      - name: Reproduce the Unicode data and preset files
+        run: |
+          temporary=$(mktemp -d)
+          trap 'rm -rf "$temporary"' EXIT
+          python comparison/declaration/semantic_profile_data/materialize_unicode.py \
+            --source-root comparison/declaration/semantic_profile_data \
+            --source-manifest comparison/declaration/semantic_profile_data/source-manifest.json \
+            --output "$temporary/comparison-unicode.json"
+          python presets/tools/unicode/materialize_unicode.py \
+            --source-root presets/tools/unicode \
+            --source-manifest presets/tools/unicode/source-manifest.json \
+            --output "$temporary/preset-unicode.json"
+          cmp "$temporary/comparison-unicode.json" "$temporary/preset-unicode.json"
+          cp -R presets "$temporary/presets"
+          python "$temporary/presets/tools/generate.py"
+          cmp presets/atproto-data-model/profile.json \
+            "$temporary/presets/atproto-data-model/profile.json"
+          cmp presets/manifest.json "$temporary/presets/manifest.json"
+
+  tools-lean:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Lean
+        uses: leanprover/lean-action@v1
+        with:
+          lake-package-directory: tools/lean
+      - name: Build the tools and the test library
+        working-directory: tools/lean
+        run: lake build NecoherenceTools NecoherenceToolsTest
+
+  tools-gleam:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Read the Gleam version range from the package manifest
+        id: gleam
+        run: python3 -c "import tomllib; print('version=' + tomllib.load(open('tools/gleam/gleam.toml', 'rb'))['gleam'].replace(' and ', ' '))" >> "$GITHUB_OUTPUT"
+      - name: Set up Erlang and Gleam
+        uses: erlef/setup-beam@v1
+        with:
+          otp-version: "> 0"
+          gleam-version: ${{ steps.gleam.outputs.version }}
+          rebar3-version: "3"
+      - name: Build and test
+        working-directory: tools/gleam
+        run: |
+          gleam format --check
+          gleam build --warnings-as-errors
+          gleam test
+
+  tools-rust:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Check and test
+        working-directory: tools/rust
+        run: |
+          cargo fmt --all -- --check
+          cargo clippy --all-targets -- -D warnings
+          cargo test
+
+  tools-python:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: tools/python/pyproject.toml
+      - name: Install the MIT package and the tools in editable mode
+        run: |
+          python -m pip install -e python
+          python -m pip install -e "tools/python[dev]"
+      - name: Test and type-check
+        working-directory: tools/python
+        run: |
+          python -m pytest -q
+          python -m mypy src tests
+
+  tools-typescript:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: |
+            typescript/package-lock.json
+            tools/typescript/package-lock.json
+      - name: Build the MIT package
+        working-directory: typescript
+        run: |
+          npm ci
+          npm run build
+      - name: Build and test the tools
+        working-directory: tools/typescript
+        run: |
+          npm ci
+          npm run build
+          npm run typecheck
+          npm test
+
+  tools-java:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: x
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Compile against the MIT classes and run the main-form tests
+        run: |
+          mkdir -p java/lib tools/java/build/classes tools/java/build/test-classes
+          curl --fail --location --silent --show-error \
+            --output java/lib/junit-platform-console-standalone-1.10.2.jar \
+            https://repo1.maven.org/maven2/org/junit/platform/junit-platform-console-standalone/1.10.2/junit-platform-console-standalone-1.10.2.jar
+          printf '%s  %s\n' \
+            a1de557821293ce903c213c694165fff532cf92081bac4238b9e05b35f04f43f \
+            java/lib/junit-platform-console-standalone-1.10.2.jar | shasum -a 256 -c -
+          find java/src/main/java tools/java/src/main/java -name '*.java' -print0 \
+            | xargs -0 javac -J-Duser.language=en --release 21 -d tools/java/build/classes
+          find java/src/test/java/necoherence/semantic tools/java/src/test/java -name '*.java' -print0 \
+            | xargs -0 javac -J-Duser.language=en --release 21 \
+                -cp tools/java/build/classes:java/lib/junit-platform-console-standalone-1.10.2.jar \
+                -d tools/java/build/test-classes
+          for test in SemanticInvariantAdapterTest SemanticJavaSizeTest SemanticJavaTargetTest SemanticSignatureCompositionTest SemanticSignatureTest GeneratedJavaSemanticTest; do
+            java -Duser.language=en -cp tools/java/build/classes:tools/java/build/test-classes:java/lib/junit-platform-console-standalone-1.10.2.jar \
+              "necoherence.tools.renderer.$test"
+          done
+          for test in ProfileLibraryPredicateTest InclusionAndSamplesTest DeclarationWireTest; do
+            java -Duser.language=en -cp tools/java/build/classes:tools/java/build/test-classes:java/lib/junit-platform-console-standalone-1.10.2.jar \
+              "necoherence.semantic.$test"
+          done
+
+  residual-coherence:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: residual-coherence/pyproject.toml
+      - name: Install package and development dependencies
+        working-directory: residual-coherence
+        run: python -m pip install build .[dev]
+      - name: Test, type-check, build, and inspect wheel
+        working-directory: residual-coherence
+        run: |
+          python -m pytest -q
+          python -m mypy src tests
+          python -m build
+          python - <<'EOF'
+          import tomllib
+          import zipfile
+          from pathlib import Path
+
+          wheel, = Path("dist").glob("*.whl")
+          names = set(zipfile.ZipFile(wheel).namelist())
+          dist_info, = {name.split("/")[0] for name in names if name.split("/")[0].endswith(".dist-info")}
+          project = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))["project"]
+          sources = [path for directory in ("schema", "examples") for path in Path(directory).iterdir()]
+          shipped = {f"residual_coherence/{path.as_posix()}" for path in sources}
+          shipped |= {"residual_coherence/README.md", "residual_coherence/README-ja.md"}
+          shipped |= {f"{dist_info}/licenses/{name}" for name in project["license-files"]}
+          assert shipped <= names, sorted(shipped - names)
+          EOF
+      - name: Install wheel, test it, and smoke-test commands
+        working-directory: residual-coherence
+        run: |
+          python -m venv .clean-install
+          .clean-install/bin/python -m pip install dist/*.whl pytest
+          .clean-install/bin/python -c "import residual_coherence, sysconfig; assert residual_coherence.__file__.startswith(sysconfig.get_paths()['purelib']), residual_coherence.__file__"
+          .clean-install/bin/python -m pytest -q -p no:cacheprovider -o pythonpath=
+          for command in validate report reachability verify normalized-analysis typed-reachability python-source; do printf '{}\n' | .clean-install/bin/residual-coherence "$command" >/dev/null 2>/dev/null && exit 1 || test $? -eq 1; done
+
+  license-boundary:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: python/pyproject.toml
+      - name: Install the license tools
+        run: python -m pip install pytest "reuse[charset-normalizer]"
+      - name: Check the license declarations and the dependency direction
+        run: python -m pytest -q tests

@@ -1,0 +1,5768 @@
+{
+ "base_case": "baseline-reachable",
+ "base_result": {
+  "check_deadlock": {
+   "enabled": [
+    {
+     "bindings": [
+      {
+       "identity": "res-a",
+       "mode": "consume",
+       "multiplicity": 1,
+       "name": "b1",
+       "place": "p1",
+       "provenance": "decl",
+       "required_revision": 1,
+       "token_type": "tok",
+       "transition_id": "t1"
+      }
+     ],
+     "transition_id": "t1"
+    }
+   ],
+   "status": "not_deadlocked"
+  },
+  "check_reachability": {
+   "final_marking": {
+    "places": [
+     {
+      "place": "p1",
+      "tokens": []
+     },
+     {
+      "place": "p2",
+      "tokens": [
+       {
+        "index": 0,
+        "kind": "output",
+        "revision": 1,
+        "target": "t1"
+       }
+      ]
+     },
+     {
+      "place": "p-dead",
+      "tokens": []
+     }
+    ]
+   },
+   "path": [
+    "t1"
+   ],
+   "status": "reachable"
+  },
+  "check_well_foundedness": {
+   "status": "well_founded",
+   "witness": {
+    "explored_markings": [
+     {
+      "places": [
+       {
+        "place": "p1",
+        "tokens": []
+       },
+       {
+        "place": "p2",
+        "tokens": [
+         {
+          "index": 0,
+          "kind": "output",
+          "revision": 1,
+          "target": "t1"
+         }
+        ]
+       },
+       {
+        "place": "p-dead",
+        "tokens": []
+       }
+      ]
+     },
+     {
+      "places": [
+       {
+        "place": "p1",
+        "tokens": [
+         {
+          "index": 0,
+          "kind": "input",
+          "revision": 1,
+          "target": "res-a"
+         }
+        ]
+       },
+       {
+        "place": "p2",
+        "tokens": []
+       },
+       {
+        "place": "p-dead",
+        "tokens": []
+       }
+      ]
+     }
+    ],
+    "frontier": [],
+    "steps": 2
+   }
+  },
+  "derive_enabled": {
+   "enabled": [
+    {
+     "bindings": [
+      {
+       "identity": "res-a",
+       "mode": "consume",
+       "multiplicity": 1,
+       "name": "b1",
+       "place": "p1",
+       "provenance": "decl",
+       "required_revision": 1,
+       "token_type": "tok",
+       "transition_id": "t1"
+      }
+     ],
+     "transition_id": "t1"
+    }
+   ],
+   "status": "enabled_set"
+  }
+ },
+ "coordinates": [
+  "binding-coverage",
+  "binding-type",
+  "cycle-closing-decrease",
+  "domain-bound",
+  "graph-edge",
+  "identity",
+  "index",
+  "input-binding",
+  "input-place-membership",
+  "multiplicity",
+  "read-consume-mode",
+  "revision",
+  "token"
+ ],
+ "fixtures": "fixtures.json",
+ "mutants": [
+  {
+   "bound_exhausted": false,
+   "class": "invalidating",
+   "coordinate": "binding-type",
+   "description": "binding token_type no longer matches the declared place type",
+   "expected_class": "invalidating",
+   "id": "mut-binding-type-mismatch",
+   "mutated_input": {
+    "bindings": [
+     {
+      "identity": "res-a",
+      "mode": "consume",
+      "multiplicity": 1,
+      "name": "b1",
+      "place": "p1",
+      "provenance": "decl",
+      "required_revision": 1,
+      "token_type": "T-OTHER",
+      "transition_id": "t1"
+     },
+     {
+      "identity": "res-dead",
+      "mode": "consume",
+      "multiplicity": 1,
+      "name": "b2",
+      "place": "p-dead",
+      "provenance": "decl",
+      "required_revision": 1,
+      "token_type": "tok",
+      "transition_id": "t-dead"
+     }
+    ],
+    "bound": {
+     "index": 0,
+     "max_bindings": 8,
+     "max_search_steps": 8,
+     "revision": 1,
+     "target_identity": "unit:typed-mapping-solver"
+    },
+    "goal": {
+     "count": 1,
+     "kind": "place_has_at_least",
+     "place": "p2"
+    },
+    "graph": {
+     "edges": [
+      [
+       "p1",
+       "t1"
+      ],
+      [
+       "t1",
+       "p2"
+      ],
+      [
+       "p-dead",
+       "t-dead"
+      ],
+      [
+       "t-dead",
+       "p2"
+      ]
+     ],
+     "places": [
+      "p1",
+      "p2",
+      "p-dead"
+     ],
+     "revision": 1,
+     "transitions": [
+      "t1",
+      "t-dead"
+     ]
+    },
+    "marking": {
+     "places": [
+      {
+       "place": "p1",
+       "tokens": [
+        {
+         "index": 0,
+         "kind": "input",
+         "revision": 1,
+         "target": "res-a"
+        }
+       ]
+      },
+      {
+       "place": "p2",
+       "tokens": []
+      },
+      {
+       "place": "p-dead",
+       "tokens": []
+      }
+     ]
+    },
+    "places": [
+     {
+      "identity": "p1",
+      "revision": 1,
+      "token_type": "tok"
+     },
+     {
+      "identity": "p2",
+      "revision": 1,
+      "token_type": "tok"
+     },
+     {
+      "identity": "p-dead",
+      "revision": 1,
+      "token_type": "tok"
+     }
+    ],
+    "transitions": [
+     {
+      "failure_places": [],
+      "identity": "t1",
+      "input_places": [
+       "p1"
+      ],
+      "output_places": [
+       "p2"
+      ],
+      "revision": 1
+     },
+     {
+      "failure_places": [],
+      "identity": "t-dead",
+      "input_places": [
+       "p-dead"
+      ],
+      "output_places": [
+       "p2"
+      ],
+      "revision": 1
+     }
+    ]
+   },
+   "oracle_result": {
+    "check_deadlock": {
+     "reason": {
+      "actual": "tok",
+      "expected": "T-OTHER",
+      "kind": "type_mismatch",
+      "place": "p1"
+     },
+     "status": "invalid"
+    },
+    "check_reachability": {
+     "reason": {
+      "actual": "tok",
+      "expected": "T-OTHER",
+      "kind": "type_mismatch",
+      "place": "p1"
+     },
+     "status": "invalid"
+    },
+    "check_well_foundedness": {
+     "reason": {
+      "actual": "tok",
+      "expected": "T-OTHER",
+      "kind": "type_mismatch",
+      "place": "p1"
+     },
+     "status": "invalid"
+    },
+    "derive_enabled": {
+     "reason": {
+      "actual": "tok",
+      "expected": "T-OTHER",
+      "kind": "type_mismatch",
+      "place": "p1"
+     },
+     "status": "invalid"
+    }
+   }
+  },
+  {
+   "bound_exhausted": false,
+   "class": "meaning-preserving",
+   "coordinate": "binding-type",
+   "description": "place and binding token types renamed consistently on the never-enabled t-dead branch",
+   "expected_class": "meaning-preserving",
+   "id": "mut-binding-type-consistent-rename",
+   "mutated_input": {
+    "bindings": [
+     {
+      "identity": "res-a",
+      "mode": "consume",
+      "multiplicity": 1,
+      "name": "b1",
+      "place": "p1",
+      "provenance": "decl",
+      "required_revision": 1,
+      "token_type": "tok",
+      "transition_id": "t1"
+     },
+     {
+      "identity": "res-dead",
+      "mode": "consume",
+      "multiplicity": 1,
+      "name": "b2",
+      "place": "p-dead",
+      "provenance": "decl",
+      "required_revision": 1,
+      "token_type": "tok-x",
+      "transition_id": "t-dead"
+     }
+    ],
+    "bound": {
+     "index": 0,
+     "max_bindings": 8,
+     "max_search_steps": 8,
+     "revision": 1,
+     "target_identity": "unit:typed-mapping-solver"
+    },
+    "goal": {
+     "count": 1,
+     "kind": "place_has_at_least",
+     "place": "p2"
+    },
+    "graph": {
+     "edges": [
+      [
+       "p1",
+       "t1"
+      ],
+      [
+       "t1",
+       "p2"
+      ],
+      [
+       "p-dead",
+       "t-dead"
+      ],
+      [
+       "t-dead",
+       "p2"
+      ]
+     ],
+     "places": [
+      "p1",
+      "p2",
+      "p-dead"
+     ],
+     "revision": 1,
+     "transitions": [
+      "t1",
+      "t-dead"
+     ]
+    },
+    "marking": {
+     "places": [
+      {
+       "place": "p1",
+       "tokens": [
+        {
+         "index": 0,
+         "kind": "input",
+         "revision": 1,
+         "target": "res-a"
+        }
+       ]
+      },
+      {
+       "place": "p2",
+       "tokens": []
+      },
+      {
+       "place": "p-dead",
+       "tokens": []
+      }
+     ]
+    },
+    "places": [
+     {
+      "identity": "p1",
+      "revision": 1,
+      "token_type": "tok"
+     },
+     {
+      "identity": "p2",
+      "revision": 1,
+      "token_type": "tok"
+     },
+     {
+      "identity": "p-dead",
+      "revision": 1,
+      "token_type": "tok-x"
+     }
+    ],
+    "transitions": [
+     {
+      "failure_places": [],
+      "identity": "t1",
+      "input_places": [
+       "p1"
+      ],
+      "output_places": [
+       "p2"
+      ],
+      "revision": 1
+     },
+     {
+      "failure_places": [],
+      "identity": "t-dead",
+      "input_places": [
+       "p-dead"
+      ],
+      "output_places": [
+       "p2"
+      ],
+      "revision": 1
+     }
+    ]
+   },
+   "oracle_result": {
+    "check_deadlock": {
+     "enabled": [
+      {
+       "bindings": [
+        {
+         "identity": "res-a",
+         "mode": "consume",
+         "multiplicity": 1,
+         "name": "b1",
+         "place": "p1",
+         "provenance": "decl",
+         "required_revision": 1,
+         "token_type": "tok",
+         "transition_id": "t1"
+        }
+       ],
+       "transition_id": "t1"
+      }
+     ],
+     "status": "not_deadlocked"
+    },
+    "check_reachability": {
+     "final_marking": {
+      "places": [
+       {
+        "place": "p1",
+        "tokens": []
+       },
+       {
+        "place": "p2",
+        "tokens": [
+         {
+          "index": 0,
+          "kind": "output",
+          "revision": 1,
+          "target": "t1"
+         }
+        ]
+       },
+       {
+        "place": "p-dead",
+        "tokens": []
+       }
+      ]
+     },
+     "path": [
+      "t1"
+     ],
+     "status": "reachable"
+    },
+    "check_well_foundedness": {
+     "status": "well_founded",
+     "witness": {
+      "explored_markings": [
+       {
+        "places": [
+         {
+          "place": "p1",
+          "tokens": []
+         },
+         {
+          "place": "p2",
+          "tokens": [
+           {
+            "index": 0,
+            "kind": "output",
+            "revision": 1,
+            "target": "t1"
+           }
+          ]
+         },
+         {
+          "place": "p-dead",
+          "tokens": []
+         }
+        ]
+       },
+       {
+        "places": [
+         {
+          "place": "p1",
+          "tokens": [
+           {
+            "index": 0,
+            "kind": "input",
+            "revision": 1,
+            "target": "res-a"
+           }
+          ]
+         },
+         {
+          "place": "p2",
+          "tokens": []
+         },
+         {
+          "place": "p-dead",
+          "tokens": []
+         }
+        ]
+       }
+      ],
+      "frontier": [],
+      "steps": 2
+     }
+    },
+    "derive_enabled": {
+     "enabled": [
+      {
+       "bindings": [
+        {
+         "identity": "res-a",
+         "mode": "consume",
+         "multiplicity": 1,
+         "name": "b1",
+         "place": "p1",
+         "provenance": "decl",
+         "required_revision": 1,
+         "token_type": "tok",
+         "transition_id": "t1"
+        }
+       ],
+       "transition_id": "t1"
+      }
+     ],
+     "status": "enabled_set"
+    }
+   }
+  },
+  {
+   "bound_exhausted": false,
+   "class": "invalidating",
+   "coordinate": "multiplicity",
+   "description": "binding multiplicity set to zero",
+   "expected_class": "invalidating",
+   "id": "mut-multiplicity-zero",
+   "mutated_input": {
+    "bindings": [
+     {
+      "identity": "res-a",
+      "mode": "consume",
+      "multiplicity": 0,
+      "name": "b1",
+      "place": "p1",
+      "provenance": "decl",
+      "required_revision": 1,
+      "token_type": "tok",
+      "transition_id": "t1"
+     },
+     {
+      "identity": "res-dead",
+      "mode": "consume",
+      "multiplicity": 1,
+      "name": "b2",
+      "place": "p-dead",
+      "provenance": "decl",
+      "required_revision": 1,
+      "token_type": "tok",
+      "transition_id": "t-dead"
+     }
+    ],
+    "bound": {
+     "index": 0,
+     "max_bindings": 8,
+     "max_search_steps": 8,
+     "revision": 1,
+     "target_identity": "unit:typed-mapping-solver"
+    },
+    "goal": {
+     "count": 1,
+     "kind": "place_has_at_least",
+     "place": "p2"
+    },
+    "graph": {
+     "edges": [
+      [
+       "p1",
+       "t1"
+      ],
+      [
+       "t1",
+       "p2"
+      ],
+      [
+       "p-dead",
+       "t-dead"
+      ],
+      [
+       "t-dead",
+       "p2"
+      ]
+     ],
+     "places": [
+      "p1",
+      "p2",
+      "p-dead"
+     ],
+     "revision": 1,
+     "transitions": [
+      "t1",
+      "t-dead"
+     ]
+    },
+    "marking": {
+     "places": [
+      {
+       "place": "p1",
+       "tokens": [
+        {
+         "index": 0,
+         "kind": "input",
+         "revision": 1,
+         "target": "res-a"
+        }
+       ]
+      },
+      {
+       "place": "p2",
+       "tokens": []
+      },
+      {
+       "place": "p-dead",
+       "tokens": []
+      }
+     ]
+    },
+    "places": [
+     {
+      "identity": "p1",
+      "revision": 1,
+      "token_type": "tok"
+     },
+     {
+      "identity": "p2",
+      "revision": 1,
+      "token_type": "tok"
+     },
+     {
+      "identity": "p-dead",
+      "revision": 1,
+      "token_type": "tok"
+     }
+    ],
+    "transitions": [
+     {
+      "failure_places": [],
+      "identity": "t1",
+      "input_places": [
+       "p1"
+      ],
+      "output_places": [
+       "p2"
+      ],
+      "revision": 1
+     },
+     {
+      "failure_places": [],
+      "identity": "t-dead",
+      "input_places": [
+       "p-dead"
+      ],
+      "output_places": [
+       "p2"
+      ],
+      "revision": 1
+     }
+    ]
+   },
+   "oracle_result": {
+    "check_deadlock": {
+     "reason": {
+      "actual": 0,
+      "expected": 1,
+      "kind": "multiplicity_mismatch",
+      "name": "b1",
+      "transition_id": "t1"
+     },
+     "status": "invalid"
+    },
+    "check_reachability": {
+     "reason": {
+      "actual": 0,
+      "expected": 1,
+      "kind": "multiplicity_mismatch",
+      "name": "b1",
+      "transition_id": "t1"
+     },
+     "status": "invalid"
+    },
+    "check_well_foundedness": {
+     "reason": {
+      "actual": 0,
+      "expected": 1,
+      "kind": "multiplicity_mismatch",
+      "name": "b1",
+      "transition_id": "t1"
+     },
+     "status": "invalid"
+    },
+    "derive_enabled": {
+     "reason": {
+      "actual": 0,
+      "expected": 1,
+      "kind": "multiplicity_mismatch",
+      "name": "b1",
+      "transition_id": "t1"
+     },
+     "status": "invalid"
+    }
+   }
+  },
+  {
+   "bound_exhausted": false,
+   "class": "meaning-preserving",
+   "coordinate": "multiplicity",
+   "description": "multiplicity raised on the never-enabled t-dead binding",
+   "expected_class": "meaning-preserving",
+   "id": "mut-multiplicity-disabled",
+   "mutated_input": {
+    "bindings": [
+     {
+      "identity": "res-a",
+      "mode": "consume",
+      "multiplicity": 1,
+      "name": "b1",
+      "place": "p1",
+      "provenance": "decl",
+      "required_revision": 1,
+      "token_type": "tok",
+      "transition_id": "t1"
+     },
+     {
+      "identity": "res-dead",
+      "mode": "consume",
+      "multiplicity": 3,
+      "name": "b2",
+      "place": "p-dead",
+      "provenance": "decl",
+      "required_revision": 1,
+      "token_type": "tok",
+      "transition_id": "t-dead"
+     }
+    ],
+    "bound": {
+     "index": 0,
+     "max_bindings": 8,
+     "max_search_steps": 8,
+     "revision": 1,
+     "target_identity": "unit:typed-mapping-solver"
+    },
+    "goal": {
+     "count": 1,
+     "kind": "place_has_at_least",
+     "place": "p2"
+    },
+    "graph": {
+     "edges": [
+      [
+       "p1",
+       "t1"
+      ],
+      [
+       "t1",
+       "p2"
+      ],
+      [
+       "p-dead",
+       "t-dead"
+      ],
+      [
+       "t-dead",
+       "p2"
+      ]
+     ],
+     "places": [
+      "p1",
+      "p2",
+      "p-dead"
+     ],
+     "revision": 1,
+     "transitions": [
+      "t1",
+      "t-dead"
+     ]
+    },
+    "marking": {
+     "places": [
+      {
+       "place": "p1",
+       "tokens": [
+        {
+         "index": 0,
+         "kind": "input",
+         "revision": 1,
+         "target": "res-a"
+        }
+       ]
+      },
+      {
+       "place": "p2",
+       "tokens": []
+      },
+      {
+       "place": "p-dead",
+       "tokens": []
+      }
+     ]
+    },
+    "places": [
+     {
+      "identity": "p1",
+      "revision": 1,
+      "token_type": "tok"
+     },
+     {
+      "identity": "p2",
+      "revision": 1,
+      "token_type": "tok"
+     },
+     {
+      "identity": "p-dead",
+      "revision": 1,
+      "token_type": "tok"
+     }
+    ],
+    "transitions": [
+     {
+      "failure_places": [],
+      "identity": "t1",
+      "input_places": [
+       "p1"
+      ],
+      "output_places": [
+       "p2"
+      ],
+      "revision": 1
+     },
+     {
+      "failure_places": [],
+      "identity": "t-dead",
+      "input_places": [
+       "p-dead"
+      ],
+      "output_places": [
+       "p2"
+      ],
+      "revision": 1
+     }
+    ]
+   },
+   "oracle_result": {
+    "check_deadlock": {
+     "enabled": [
+      {
+       "bindings": [
+        {
+         "identity": "res-a",
+         "mode": "consume",
+         "multiplicity": 1,
+         "name": "b1",
+         "place": "p1",
+         "provenance": "decl",
+         "required_revision": 1,
+         "token_type": "tok",
+         "transition_id": "t1"
+        }
+       ],
+       "transition_id": "t1"
+      }
+     ],
+     "status": "not_deadlocked"
+    },
+    "check_reachability": {
+     "final_marking": {
+      "places": [
+       {
+        "place": "p1",
+        "tokens": []
+       },
+       {
+        "place": "p2",
+        "tokens": [
+         {
+          "index": 0,
+          "kind": "output",
+          "revision": 1,
+          "target": "t1"
+         }
+        ]
+       },
+       {
+        "place": "p-dead",
+        "tokens": []
+       }
+      ]
+     },
+     "path": [
+      "t1"
+     ],
+     "status": "reachable"
+    },
+    "check_well_foundedness": {
+     "status": "well_founded",
+     "witness": {
+      "explored_markings": [
+       {
+        "places": [
+         {
+          "place": "p1",
+          "tokens": []
+         },
+         {
+          "place": "p2",
+          "tokens": [
+           {
+            "index": 0,
+            "kind": "output",
+            "revision": 1,
+            "target": "t1"
+           }
+          ]
+         },
+         {
+          "place": "p-dead",
+          "tokens": []
+         }
+        ]
+       },
+       {
+        "places": [
+         {
+          "place": "p1",
+          "tokens": [
+           {
+            "index": 0,
+            "kind": "input",
+            "revision": 1,
+            "target": "res-a"
+           }
+          ]
+         },
+         {
+          "place": "p2",
+          "tokens": []
+         },
+         {
+          "place": "p-dead",
+          "tokens": []
+         }
+        ]
+       }
+      ],
+      "frontier": [],
+      "steps": 2
+     }
+    },
+    "derive_enabled": {
+     "enabled": [
+      {
+       "bindings": [
+        {
+         "identity": "res-a",
+         "mode": "consume",
+         "multiplicity": 1,
+         "name": "b1",
+         "place": "p1",
+         "provenance": "decl",
+         "required_revision": 1,
+         "token_type": "tok",
+         "transition_id": "t1"
+        }
+       ],
+       "transition_id": "t1"
+      }
+     ],
+     "status": "enabled_set"
+    }
+   }
+  },
+  {
+   "bound_exhausted": false,
+   "class": "meaning-preserving",
+   "coordinate": "read-consume-mode",
+   "description": "read/consume mode flipped on the never-enabled t-dead binding",
+   "expected_class": "meaning-preserving",
+   "id": "mut-mode-disabled",
+   "mutated_input": {
+    "bindings": [
+     {
+      "identity": "res-a",
+      "mode": "consume",
+      "multiplicity": 1,
+      "name": "b1",
+      "place": "p1",
+      "provenance": "decl",
+      "required_revision": 1,
+      "token_type": "tok",
+      "transition_id": "t1"
+     },
+     {
+      "identity": "res-dead",
+      "mode": "read",
+      "multiplicity": 1,
+      "name": "b2",
+      "place": "p-dead",
+      "provenance": "decl",
+      "required_revision": 1,
+      "token_type": "tok",
+      "transition_id": "t-dead"
+     }
+    ],
+    "bound": {
+     "index": 0,
+     "max_bindings": 8,
+     "max_search_steps": 8,
+     "revision": 1,
+     "target_identity": "unit:typed-mapping-solver"
+    },
+    "goal": {
+     "count": 1,
+     "kind": "place_has_at_least",
+     "place": "p2"
+    },
+    "graph": {
+     "edges": [
+      [
+       "p1",
+       "t1"
+      ],
+      [
+       "t1",
+       "p2"
+      ],
+      [
+       "p-dead",
+       "t-dead"
+      ],
+      [
+       "t-dead",
+       "p2"
+      ]
+     ],
+     "places": [
+      "p1",
+      "p2",
+      "p-dead"
+     ],
+     "revision": 1,
+     "transitions": [
+      "t1",
+      "t-dead"
+     ]
+    },
+    "marking": {
+     "places": [
+      {
+       "place": "p1",
+       "tokens": [
+        {
+         "index": 0,
+         "kind": "input",
+         "revision": 1,
+         "target": "res-a"
+        }
+       ]
+      },
+      {
+       "place": "p2",
+       "tokens": []
+      },
+      {
+       "place": "p-dead",
+       "tokens": []
+      }
+     ]
+    },
+    "places": [
+     {
+      "identity": "p1",
+      "revision": 1,
+      "token_type": "tok"
+     },
+     {
+      "identity": "p2",
+      "revision": 1,
+      "token_type": "tok"
+     },
+     {
+      "identity": "p-dead",
+      "revision": 1,
+      "token_type": "tok"
+     }
+    ],
+    "transitions": [
+     {
+      "failure_places": [],
+      "identity": "t1",
+      "input_places": [
+       "p1"
+      ],
+      "output_places": [
+       "p2"
+      ],
+      "revision": 1
+     },
+     {
+      "failure_places": [],
+      "identity": "t-dead",
+      "input_places": [
+       "p-dead"
+      ],
+      "output_places": [
+       "p2"
+      ],
+      "revision": 1
+     }
+    ]
+   },
+   "oracle_result": {
+    "check_deadlock": {
+     "enabled": [
+      {
+       "bindings": [
+        {
+         "identity": "res-a",
+         "mode": "consume",
+         "multiplicity": 1,
+         "name": "b1",
+         "place": "p1",
+         "provenance": "decl",
+         "required_revision": 1,
+         "token_type": "tok",
+         "transition_id": "t1"
+        }
+       ],
+       "transition_id": "t1"
+      }
+     ],
+     "status": "not_deadlocked"
+    },
+    "check_reachability": {
+     "final_marking": {
+      "places": [
+       {
+        "place": "p1",
+        "tokens": []
+       },
+       {
+        "place": "p2",
+        "tokens": [
+         {
+          "index": 0,
+          "kind": "output",
+          "revision": 1,
+          "target": "t1"
+         }
+        ]
+       },
+       {
+        "place": "p-dead",
+        "tokens": []
+       }
+      ]
+     },
+     "path": [
+      "t1"
+     ],
+     "status": "reachable"
+    },
+    "check_well_foundedness": {
+     "status": "well_founded",
+     "witness": {
+      "explored_markings": [
+       {
+        "places": [
+         {
+          "place": "p1",
+          "tokens": []
+         },
+         {
+          "place": "p2",
+          "tokens": [
+           {
+            "index": 0,
+            "kind": "output",
+            "revision": 1,
+            "target": "t1"
+           }
+          ]
+         },
+         {
+          "place": "p-dead",
+          "tokens": []
+         }
+        ]
+       },
+       {
+        "places": [
+         {
+          "place": "p1",
+          "tokens": [
+           {
+            "index": 0,
+            "kind": "input",
+            "revision": 1,
+            "target": "res-a"
+           }
+          ]
+         },
+         {
+          "place": "p2",
+          "tokens": []
+         },
+         {
+          "place": "p-dead",
+          "tokens": []
+         }
+        ]
+       }
+      ],
+      "frontier": [],
+      "steps": 2
+     }
+    },
+    "derive_enabled": {
+     "enabled": [
+      {
+       "bindings": [
+        {
+         "identity": "res-a",
+         "mode": "consume",
+         "multiplicity": 1,
+         "name": "b1",
+         "place": "p1",
+         "provenance": "decl",
+         "required_revision": 1,
+         "token_type": "tok",
+         "transition_id": "t1"
+        }
+       ],
+       "transition_id": "t1"
+      }
+     ],
+     "status": "enabled_set"
+    }
+   }
+  },
+  {
+   "bound_exhausted": false,
+   "class": "result-changing",
+   "coordinate": "read-consume-mode",
+   "description": "consume changed to read on the enabled t1 binding: the token is retained, so firing produces a different marking",
+   "expected_class": "result-changing",
+   "id": "mut-mode-enabled",
+   "mutated_input": {
+    "bindings": [
+     {
+      "identity": "res-a",
+      "mode": "read",
+      "multiplicity": 1,
+      "name": "b1",
+      "place": "p1",
+      "provenance": "decl",
+      "required_revision": 1,
+      "token_type": "tok",
+      "transition_id": "t1"
+     },
+     {
+      "identity": "res-dead",
+      "mode": "consume",
+      "multiplicity": 1,
+      "name": "b2",
+      "place": "p-dead",
+      "provenance": "decl",
+      "required_revision": 1,
+      "token_type": "tok",
+      "transition_id": "t-dead"
+     }
+    ],
+    "bound": {
+     "index": 0,
+     "max_bindings": 8,
+     "max_search_steps": 8,
+     "revision": 1,
+     "target_identity": "unit:typed-mapping-solver"
+    },
+    "goal": {
+     "count": 1,
+     "kind": "place_has_at_least",
+     "place": "p2"
+    },
+    "graph": {
+     "edges": [
+      [
+       "p1",
+       "t1"
+      ],
+      [
+       "t1",
+       "p2"
+      ],
+      [
+       "p-dead",
+       "t-dead"
+      ],
+      [
+       "t-dead",
+       "p2"
+      ]
+     ],
+     "places": [
+      "p1",
+      "p2",
+      "p-dead"
+     ],
+     "revision": 1,
+     "transitions": [
+      "t1",
+      "t-dead"
+     ]
+    },
+    "marking": {
+     "places": [
+      {
+       "place": "p1",
+       "tokens": [
+        {
+         "index": 0,
+         "kind": "input",
+         "revision": 1,
+         "target": "res-a"
+        }
+       ]
+      },
+      {
+       "place": "p2",
+       "tokens": []
+      },
+      {
+       "place": "p-dead",
+       "tokens": []
+      }
+     ]
+    },
+    "places": [
+     {
+      "identity": "p1",
+      "revision": 1,
+      "token_type": "tok"
+     },
+     {
+      "identity": "p2",
+      "revision": 1,
+      "token_type": "tok"
+     },
+     {
+      "identity": "p-dead",
+      "revision": 1,
+      "token_type": "tok"
+     }
+    ],
+    "transitions": [
+     {
+      "failure_places": [],
+      "identity": "t1",
+      "input_places": [
+       "p1"
+      ],
+      "output_places": [
+       "p2"
+      ],
+      "revision": 1
+     },
+     {
+      "failure_places": [],
+      "identity": "t-dead",
+      "input_places": [
+       "p-dead"
+      ],
+      "output_places": [
+       "p2"
+      ],
+      "revision": 1
+     }
+    ]
+   },
+   "oracle_result": {
+    "check_deadlock": {
+     "enabled": [
+      {
+       "bindings": [
+        {
+         "identity": "res-a",
+         "mode": "read",
+         "multiplicity": 1,
+         "name": "b1",
+         "place": "p1",
+         "provenance": "decl",
+         "required_revision": 1,
+         "token_type": "tok",
+         "transition_id": "t1"
+        }
+       ],
+       "transition_id": "t1"
+      }
+     ],
+     "status": "not_deadlocked"
+    },
+    "check_reachability": {
+     "final_marking": {
+      "places": [
+       {
+        "place": "p1",
+        "tokens": [
+         {
+          "index": 0,
+          "kind": "input",
+          "revision": 1,
+          "target": "res-a"
+         }
+        ]
+       },
+       {
+        "place": "p2",
+        "tokens": [
+         {
+          "index": 0,
+          "kind": "output",
+          "revision": 1,
+          "target": "t1"
+         }
+        ]
+       },
+       {
+        "place": "p-dead",
+        "tokens": []
+       }
+      ]
+     },
+     "path": [
+      "t1"
+     ],
+     "status": "reachable"
+    },
+    "check_well_foundedness": {
+     "reason": {
+      "kind": "search_step_bound_exhausted",
+      "limit": 8
+     },
+     "status": "unknown"
+    },
+    "derive_enabled": {
+     "enabled": [
+      {
+       "bindings": [
+        {
+         "identity": "res-a",
+         "mode": "read",
+         "multiplicity": 1,
+         "name": "b1",
+         "place": "p1",
+         "provenance": "decl",
+         "required_revision": 1,
+         "token_type": "tok",
+         "transition_id": "t1"
+        }
+       ],
+       "transition_id": "t1"
+      }
+     ],
+     "status": "enabled_set"
+    }
+   }
+  },
+  {
+   "bound_exhausted": false,
+   "class": "invalidating",
+   "coordinate": "identity",
+   "description": "transition identity renamed while bindings and graph still reference the old name",
+   "expected_class": "invalidating",
+   "id": "mut-identity-unknown-transition",
+   "mutated_input": {
+    "bindings": [
+     {
+      "identity": "res-a",
+      "mode": "consume",
+      "multiplicity": 1,
+      "name": "b1",
+      "place": "p1",
+      "provenance": "decl",
+      "required_revision": 1,
+      "token_type": "tok",
+      "transition_id": "t1"
+     },
+     {
+      "identity": "res-dead",
+      "mode": "consume",
+      "multiplicity": 1,
+      "name": "b2",
+      "place": "p-dead",
+      "provenance": "decl",
+      "required_revision": 1,
+      "token_type": "tok",
+      "transition_id": "t-dead"
+     }
+    ],
+    "bound": {
+     "index": 0,
+     "max_bindings": 8,
+     "max_search_steps": 8,
+     "revision": 1,
+     "target_identity": "unit:typed-mapping-solver"
+    },
+    "goal": {
+     "count": 1,
+     "kind": "place_has_at_least",
+     "place": "p2"
+    },
+    "graph": {
+     "edges": [
+      [
+       "p1",
+       "t1"
+      ],
+      [
+       "t1",
+       "p2"
+      ],
+      [
+       "p-dead",
+       "t-dead"
+      ],
+      [
+       "t-dead",
+       "p2"
+      ]
+     ],
+     "places": [
+      "p1",
+      "p2",
+      "p-dead"
+     ],
+     "revision": 1,
+     "transitions": [
+      "t1",
+      "t-dead"
+     ]
+    },
+    "marking": {
+     "places": [
+      {
+       "place": "p1",
+       "tokens": [
+        {
+         "index": 0,
+         "kind": "input",
+         "revision": 1,
+         "target": "res-a"
+        }
+       ]
+      },
+      {
+       "place": "p2",
+       "tokens": []
+      },
+      {
+       "place": "p-dead",
+       "tokens": []
+      }
+     ]
+    },
+    "places": [
+     {
+      "identity": "p1",
+      "revision": 1,
+      "token_type": "tok"
+     },
+     {
+      "identity": "p2",
+      "revision": 1,
+      "token_type": "tok"
+     },
+     {
+      "identity": "p-dead",
+      "revision": 1,
+      "token_type": "tok"
+     }
+    ],
+    "transitions": [
+     {
+      "failure_places": [],
+      "identity": "t1-renamed",
+      "input_places": [
+       "p1"
+      ],
+      "output_places": [
+       "p2"
+      ],
+      "revision": 1
+     },
+     {
+      "failure_places": [],
+      "identity": "t-dead",
+      "input_places": [
+       "p-dead"
+      ],
+      "output_places": [
+       "p2"
+      ],
+      "revision": 1
+     }
+    ]
+   },
+   "oracle_result": {
+    "check_deadlock": {
+     "reason": {
+      "kind": "missing_input_binding",
+      "place": "p1",
+      "transition_id": "t1-renamed"
+     },
+     "status": "invalid"
+    },
+    "check_reachability": {
+     "reason": {
+      "kind": "missing_input_binding",
+      "place": "p1",
+      "transition_id": "t1-renamed"
+     },
+     "status": "invalid"
+    },
+    "check_well_foundedness": {
+     "reason": {
+      "kind": "missing_input_binding",
+      "place": "p1",
+      "transition_id": "t1-renamed"
+     },
+     "status": "invalid"
+    },
+    "derive_enabled": {
+     "reason": {
+      "kind": "missing_input_binding",
+      "place": "p1",
+      "transition_id": "t1-renamed"
+     },
+     "status": "invalid"
+    }
+   }
+  },
+  {
+   "bound_exhausted": false,
+   "class": "meaning-preserving",
+   "coordinate": "identity",
+   "description": "binding name renamed on the never-enabled t-dead branch",
+   "expected_class": "meaning-preserving",
+   "id": "mut-identity-binding-name",
+   "mutated_input": {
+    "bindings": [
+     {
+      "identity": "res-a",
+      "mode": "consume",
+      "multiplicity": 1,
+      "name": "b1",
+      "place": "p1",
+      "provenance": "decl",
+      "required_revision": 1,
+      "token_type": "tok",
+      "transition_id": "t1"
+     },
+     {
+      "identity": "res-dead",
+      "mode": "consume",
+      "multiplicity": 1,
+      "name": "b-dead-renamed",
+      "place": "p-dead",
+      "provenance": "decl",
+      "required_revision": 1,
+      "token_type": "tok",
+      "transition_id": "t-dead"
+     }
+    ],
+    "bound": {
+     "index": 0,
+     "max_bindings": 8,
+     "max_search_steps": 8,
+     "revision": 1,
+     "target_identity": "unit:typed-mapping-solver"
+    },
+    "goal": {
+     "count": 1,
+     "kind": "place_has_at_least",
+     "place": "p2"
+    },
+    "graph": {
+     "edges": [
+      [
+       "p1",
+       "t1"
+      ],
+      [
+       "t1",
+       "p2"
+      ],
+      [
+       "p-dead",
+       "t-dead"
+      ],
+      [
+       "t-dead",
+       "p2"
+      ]
+     ],
+     "places": [
+      "p1",
+      "p2",
+      "p-dead"
+     ],
+     "revision": 1,
+     "transitions": [
+      "t1",
+      "t-dead"
+     ]
+    },
+    "marking": {
+     "places": [
+      {
+       "place": "p1",
+       "tokens": [
+        {
+         "index": 0,
+         "kind": "input",
+         "revision": 1,
+         "target": "res-a"
+        }
+       ]
+      },
+      {
+       "place": "p2",
+       "tokens": []
+      },
+      {
+       "place": "p-dead",
+       "tokens": []
+      }
+     ]
+    },
+    "places": [
+     {
+      "identity": "p1",
+      "revision": 1,
+      "token_type": "tok"
+     },
+     {
+      "identity": "p2",
+      "revision": 1,
+      "token_type": "tok"
+     },
+     {
+      "identity": "p-dead",
+      "revision": 1,
+      "token_type": "tok"
+     }
+    ],
+    "transitions": [
+     {
+      "failure_places": [],
+      "identity": "t1",
+      "input_places": [
+       "p1"
+      ],
+      "output_places": [
+       "p2"
+      ],
+      "revision": 1
+     },
+     {
+      "failure_places": [],
+      "identity": "t-dead",
+      "input_places": [
+       "p-dead"
+      ],
+      "output_places": [
+       "p2"
+      ],
+      "revision": 1
+     }
+    ]
+   },
+   "oracle_result": {
+    "check_deadlock": {
+     "enabled": [
+      {
+       "bindings": [
+        {
+         "identity": "res-a",
+         "mode": "consume",
+         "multiplicity": 1,
+         "name": "b1",
+         "place": "p1",
+         "provenance": "decl",
+         "required_revision": 1,
+         "token_type": "tok",
+         "transition_id": "t1"
+        }
+       ],
+       "transition_id": "t1"
+      }
+     ],
+     "status": "not_deadlocked"
+    },
+    "check_reachability": {
+     "final_marking": {
+      "places": [
+       {
+        "place": "p1",
+        "tokens": []
+       },
+       {
+        "place": "p2",
+        "tokens": [
+         {
+          "index": 0,
+          "kind": "output",
+          "revision": 1,
+          "target": "t1"
+         }
+        ]
+       },
+       {
+        "place": "p-dead",
+        "tokens": []
+       }
+      ]
+     },
+     "path": [
+      "t1"
+     ],
+     "status": "reachable"
+    },
+    "check_well_foundedness": {
+     "status": "well_founded",
+     "witness": {
+      "explored_markings": [
+       {
+        "places": [
+         {
+          "place": "p1",
+          "tokens": []
+         },
+         {
+          "place": "p2",
+          "tokens": [
+           {
+            "index": 0,
+            "kind": "output",
+            "revision": 1,
+            "target": "t1"
+           }
+          ]
+         },
+         {
+          "place": "p-dead",
+          "tokens": []
+         }
+        ]
+       },
+       {
+        "places": [
+         {
+          "place": "p1",
+          "tokens": [
+           {
+            "index": 0,
+            "kind": "input",
+            "revision": 1,
+            "target": "res-a"
+           }
+          ]
+         },
+         {
+          "place": "p2",
+          "tokens": []
+         },
+         {
+          "place": "p-dead",
+          "tokens": []
+         }
+        ]
+       }
+      ],
+      "frontier": [],
+      "steps": 2
+     }
+    },
+    "derive_enabled": {
+     "enabled": [
+      {
+       "bindings": [
+        {
+         "identity": "res-a",
+         "mode": "consume",
+         "multiplicity": 1,
+         "name": "b1",
+         "place": "p1",
+         "provenance": "decl",
+         "required_revision": 1,
+         "token_type": "tok",
+         "transition_id": "t1"
+        }
+       ],
+       "transition_id": "t1"
+      }
+     ],
+     "status": "enabled_set"
+    }
+   }
+  },
+  {
+   "bound_exhausted": false,
+   "class": "invalidating",
+   "coordinate": "identity",
+   "description": "a transition identity is declared twice",
+   "expected_class": "invalidating",
+   "id": "mut-identity-duplicate-transition",
+   "mutated_input": {
+    "bindings": [
+     {
+      "identity": "res-a",
+      "mode": "consume",
+      "multiplicity": 1,
+      "name": "b1",
+      "place": "p1",
+      "provenance": "decl",
+      "required_revision": 1,
+      "token_type": "tok",
+      "transition_id": "t1"
+     },
+     {
+      "identity": "res-dead",
+      "mode": "consume",
+      "multiplicity": 1,
+      "name": "b2",
+      "place": "p-dead",
+      "provenance": "decl",
+      "required_revision": 1,
+      "token_type": "tok",
+      "transition_id": "t-dead"
+     }
+    ],
+    "bound": {
+     "index": 0,
+     "max_bindings": 8,
+     "max_search_steps": 8,
+     "revision": 1,
+     "target_identity": "unit:typed-mapping-solver"
+    },
+    "goal": {
+     "count": 1,
+     "kind": "place_has_at_least",
+     "place": "p2"
+    },
+    "graph": {
+     "edges": [
+      [
+       "p1",
+       "t1"
+      ],
+      [
+       "t1",
+       "p2"
+      ],
+      [
+       "p-dead",
+       "t-dead"
+      ],
+      [
+       "t-dead",
+       "p2"
+      ]
+     ],
+     "places": [
+      "p1",
+      "p2",
+      "p-dead"
+     ],
+     "revision": 1,
+     "transitions": [
+      "t1",
+      "t-dead"
+     ]
+    },
+    "marking": {
+     "places": [
+      {
+       "place": "p1",
+       "tokens": [
+        {
+         "index": 0,
+         "kind": "input",
+         "revision": 1,
+         "target": "res-a"
+        }
+       ]
+      },
+      {
+       "place": "p2",
+       "tokens": []
+      },
+      {
+       "place": "p-dead",
+       "tokens": []
+      }
+     ]
+    },
+    "places": [
+     {
+      "identity": "p1",
+      "revision": 1,
+      "token_type": "tok"
+     },
+     {
+      "identity": "p2",
+      "revision": 1,
+      "token_type": "tok"
+     },
+     {
+      "identity": "p-dead",
+      "revision": 1,
+      "token_type": "tok"
+     }
+    ],
+    "transitions": [
+     {
+      "failure_places": [],
+      "identity": "t1",
+      "input_places": [
+       "p1"
+      ],
+      "output_places": [
+       "p2"
+      ],
+      "revision": 1
+     },
+     {
+      "failure_places": [],
+      "identity": "t-dead",
+      "input_places": [
+       "p-dead"
+      ],
+      "output_places": [
+       "p2"
+      ],
+      "revision": 1
+     },
+     {
+      "failure_places": [],
+      "identity": "t1",
+      "input_places": [
+       "p1"
+      ],
+      "output_places": [
+       "p2"
+      ],
+      "revision": 1
+     }
+    ]
+   },
+   "oracle_result": {
+    "check_deadlock": {
+     "reason": {
+      "identity": "t1",
+      "kind": "duplicate_transition_identity"
+     },
+     "status": "invalid"
+    },
+    "check_reachability": {
+     "reason": {
+      "identity": "t1",
+      "kind": "duplicate_transition_identity"
+     },
+     "status": "invalid"
+    },
+    "check_well_foundedness": {
+     "reason": {
+      "identity": "t1",
+      "kind": "duplicate_transition_identity"
+     },
+     "status": "invalid"
+    },
+    "derive_enabled": {
+     "reason": {
+      "identity": "t1",
+      "kind": "duplicate_transition_identity"
+     },
+     "status": "invalid"
+    }
+   }
+  },
+  {
+   "bound_exhausted": false,
+   "class": "result-changing",
+   "coordinate": "index",
+   "description": "colored token index changes the exact marking witness",
+   "expected_class": "result-changing",
+   "id": "mut-index-token",
+   "mutated_input": {
+    "bindings": [
+     {
+      "identity": "res-a",
+      "mode": "consume",
+      "multiplicity": 1,
+      "name": "b1",
+      "place": "p1",
+      "provenance": "decl",
+      "required_revision": 1,
+      "token_type": "tok",
+      "transition_id": "t1"
+     },
+     {
+      "identity": "res-dead",
+      "mode": "consume",
+      "multiplicity": 1,
+      "name": "b2",
+      "place": "p-dead",
+      "provenance": "decl",
+      "required_revision": 1,
+      "token_type": "tok",
+      "transition_id": "t-dead"
+     }
+    ],
+    "bound": {
+     "index": 0,
+     "max_bindings": 8,
+     "max_search_steps": 8,
+     "revision": 1,
+     "target_identity": "unit:typed-mapping-solver"
+    },
+    "goal": {
+     "count": 1,
+     "kind": "place_has_at_least",
+     "place": "p2"
+    },
+    "graph": {
+     "edges": [
+      [
+       "p1",
+       "t1"
+      ],
+      [
+       "t1",
+       "p2"
+      ],
+      [
+       "p-dead",
+       "t-dead"
+      ],
+      [
+       "t-dead",
+       "p2"
+      ]
+     ],
+     "places": [
+      "p1",
+      "p2",
+      "p-dead"
+     ],
+     "revision": 1,
+     "transitions": [
+      "t1",
+      "t-dead"
+     ]
+    },
+    "marking": {
+     "places": [
+      {
+       "place": "p1",
+       "tokens": [
+        {
+         "index": 7,
+         "kind": "input",
+         "revision": 1,
+         "target": "res-a"
+        }
+       ]
+      },
+      {
+       "place": "p2",
+       "tokens": []
+      },
+      {
+       "place": "p-dead",
+       "tokens": []
+      }
+     ]
+    },
+    "places": [
+     {
+      "identity": "p1",
+      "revision": 1,
+      "token_type": "tok"
+     },
+     {
+      "identity": "p2",
+      "revision": 1,
+      "token_type": "tok"
+     },
+     {
+      "identity": "p-dead",
+      "revision": 1,
+      "token_type": "tok"
+     }
+    ],
+    "transitions": [
+     {
+      "failure_places": [],
+      "identity": "t1",
+      "input_places": [
+       "p1"
+      ],
+      "output_places": [
+       "p2"
+      ],
+      "revision": 1
+     },
+     {
+      "failure_places": [],
+      "identity": "t-dead",
+      "input_places": [
+       "p-dead"
+      ],
+      "output_places": [
+       "p2"
+      ],
+      "revision": 1
+     }
+    ]
+   },
+   "oracle_result": {
+    "check_deadlock": {
+     "enabled": [
+      {
+       "bindings": [
+        {
+         "identity": "res-a",
+         "mode": "consume",
+         "multiplicity": 1,
+         "name": "b1",
+         "place": "p1",
+         "provenance": "decl",
+         "required_revision": 1,
+         "token_type": "tok",
+         "transition_id": "t1"
+        }
+       ],
+       "transition_id": "t1"
+      }
+     ],
+     "status": "not_deadlocked"
+    },
+    "check_reachability": {
+     "final_marking": {
+      "places": [
+       {
+        "place": "p1",
+        "tokens": []
+       },
+       {
+        "place": "p2",
+        "tokens": [
+         {
+          "index": 0,
+          "kind": "output",
+          "revision": 1,
+          "target": "t1"
+         }
+        ]
+       },
+       {
+        "place": "p-dead",
+        "tokens": []
+       }
+      ]
+     },
+     "path": [
+      "t1"
+     ],
+     "status": "reachable"
+    },
+    "check_well_foundedness": {
+     "status": "well_founded",
+     "witness": {
+      "explored_markings": [
+       {
+        "places": [
+         {
+          "place": "p1",
+          "tokens": []
+         },
+         {
+          "place": "p2",
+          "tokens": [
+           {
+            "index": 0,
+            "kind": "output",
+            "revision": 1,
+            "target": "t1"
+           }
+          ]
+         },
+         {
+          "place": "p-dead",
+          "tokens": []
+         }
+        ]
+       },
+       {
+        "places": [
+         {
+          "place": "p1",
+          "tokens": [
+           {
+            "index": 7,
+            "kind": "input",
+            "revision": 1,
+            "target": "res-a"
+           }
+          ]
+         },
+         {
+          "place": "p2",
+          "tokens": []
+         },
+         {
+          "place": "p-dead",
+          "tokens": []
+         }
+        ]
+       }
+      ],
+      "frontier": [],
+      "steps": 2
+     }
+    },
+    "derive_enabled": {
+     "enabled": [
+      {
+       "bindings": [
+        {
+         "identity": "res-a",
+         "mode": "consume",
+         "multiplicity": 1,
+         "name": "b1",
+         "place": "p1",
+         "provenance": "decl",
+         "required_revision": 1,
+         "token_type": "tok",
+         "transition_id": "t1"
+        }
+       ],
+       "transition_id": "t1"
+      }
+     ],
+     "status": "enabled_set"
+    }
+   }
+  },
+  {
+   "bound_exhausted": false,
+   "class": "invalidating",
+   "coordinate": "revision",
+   "description": "marked token revision diverges from the binding's required revision",
+   "expected_class": "invalidating",
+   "id": "mut-revision-token",
+   "mutated_input": {
+    "bindings": [
+     {
+      "identity": "res-a",
+      "mode": "consume",
+      "multiplicity": 1,
+      "name": "b1",
+      "place": "p1",
+      "provenance": "decl",
+      "required_revision": 1,
+      "token_type": "tok",
+      "transition_id": "t1"
+     },
+     {
+      "identity": "res-dead",
+      "mode": "consume",
+      "multiplicity": 1,
+      "name": "b2",
+      "place": "p-dead",
+      "provenance": "decl",
+      "required_revision": 1,
+      "token_type": "tok",
+      "transition_id": "t-dead"
+     }
+    ],
+    "bound": {
+     "index": 0,
+     "max_bindings": 8,
+     "max_search_steps": 8,
+     "revision": 1,
+     "target_identity": "unit:typed-mapping-solver"
+    },
+    "goal": {
+     "count": 1,
+     "kind": "place_has_at_least",
+     "place": "p2"
+    },
+    "graph": {
+     "edges": [
+      [
+       "p1",
+       "t1"
+      ],
+      [
+       "t1",
+       "p2"
+      ],
+      [
+       "p-dead",
+       "t-dead"
+      ],
+      [
+       "t-dead",
+       "p2"
+      ]
+     ],
+     "places": [
+      "p1",
+      "p2",
+      "p-dead"
+     ],
+     "revision": 1,
+     "transitions": [
+      "t1",
+      "t-dead"
+     ]
+    },
+    "marking": {
+     "places": [
+      {
+       "place": "p1",
+       "tokens": [
+        {
+         "index": 0,
+         "kind": "input",
+         "revision": 2,
+         "target": "res-a"
+        }
+       ]
+      },
+      {
+       "place": "p2",
+       "tokens": []
+      },
+      {
+       "place": "p-dead",
+       "tokens": []
+      }
+     ]
+    },
+    "places": [
+     {
+      "identity": "p1",
+      "revision": 1,
+      "token_type": "tok"
+     },
+     {
+      "identity": "p2",
+      "revision": 1,
+      "token_type": "tok"
+     },
+     {
+      "identity": "p-dead",
+      "revision": 1,
+      "token_type": "tok"
+     }
+    ],
+    "transitions": [
+     {
+      "failure_places": [],
+      "identity": "t1",
+      "input_places": [
+       "p1"
+      ],
+      "output_places": [
+       "p2"
+      ],
+      "revision": 1
+     },
+     {
+      "failure_places": [],
+      "identity": "t-dead",
+      "input_places": [
+       "p-dead"
+      ],
+      "output_places": [
+       "p2"
+      ],
+      "revision": 1
+     }
+    ]
+   },
+   "oracle_result": {
+    "check_deadlock": {
+     "reason": {
+      "actual": 2,
+      "expected": 1,
+      "kind": "revision_mismatch",
+      "name": "b1",
+      "transition_id": "t1"
+     },
+     "status": "invalid"
+    },
+    "check_reachability": {
+     "reason": {
+      "actual": 2,
+      "expected": 1,
+      "kind": "revision_mismatch",
+      "name": "b1",
+      "transition_id": "t1"
+     },
+     "status": "invalid"
+    },
+    "check_well_foundedness": {
+     "reason": {
+      "actual": 2,
+      "expected": 1,
+      "kind": "revision_mismatch",
+      "name": "b1",
+      "transition_id": "t1"
+     },
+     "status": "invalid"
+    },
+    "derive_enabled": {
+     "reason": {
+      "actual": 2,
+      "expected": 1,
+      "kind": "revision_mismatch",
+      "name": "b1",
+      "transition_id": "t1"
+     },
+     "status": "invalid"
+    }
+   }
+  },
+  {
+   "bound_exhausted": false,
+   "class": "meaning-preserving",
+   "coordinate": "revision",
+   "description": "domain bound revision bumped; bound metadata is not part of the search semantics",
+   "expected_class": "meaning-preserving",
+   "id": "mut-revision-bound",
+   "mutated_input": {
+    "bindings": [
+     {
+      "identity": "res-a",
+      "mode": "consume",
+      "multiplicity": 1,
+      "name": "b1",
+      "place": "p1",
+      "provenance": "decl",
+      "required_revision": 1,
+      "token_type": "tok",
+      "transition_id": "t1"
+     },
+     {
+      "identity": "res-dead",
+      "mode": "consume",
+      "multiplicity": 1,
+      "name": "b2",
+      "place": "p-dead",
+      "provenance": "decl",
+      "required_revision": 1,
+      "token_type": "tok",
+      "transition_id": "t-dead"
+     }
+    ],
+    "bound": {
+     "index": 0,
+     "max_bindings": 8,
+     "max_search_steps": 8,
+     "revision": 2,
+     "target_identity": "unit:typed-mapping-solver"
+    },
+    "goal": {
+     "count": 1,
+     "kind": "place_has_at_least",
+     "place": "p2"
+    },
+    "graph": {
+     "edges": [
+      [
+       "p1",
+       "t1"
+      ],
+      [
+       "t1",
+       "p2"
+      ],
+      [
+       "p-dead",
+       "t-dead"
+      ],
+      [
+       "t-dead",
+       "p2"
+      ]
+     ],
+     "places": [
+      "p1",
+      "p2",
+      "p-dead"
+     ],
+     "revision": 1,
+     "transitions": [
+      "t1",
+      "t-dead"
+     ]
+    },
+    "marking": {
+     "places": [
+      {
+       "place": "p1",
+       "tokens": [
+        {
+         "index": 0,
+         "kind": "input",
+         "revision": 1,
+         "target": "res-a"
+        }
+       ]
+      },
+      {
+       "place": "p2",
+       "tokens": []
+      },
+      {
+       "place": "p-dead",
+       "tokens": []
+      }
+     ]
+    },
+    "places": [
+     {
+      "identity": "p1",
+      "revision": 1,
+      "token_type": "tok"
+     },
+     {
+      "identity": "p2",
+      "revision": 1,
+      "token_type": "tok"
+     },
+     {
+      "identity": "p-dead",
+      "revision": 1,
+      "token_type": "tok"
+     }
+    ],
+    "transitions": [
+     {
+      "failure_places": [],
+      "identity": "t1",
+      "input_places": [
+       "p1"
+      ],
+      "output_places": [
+       "p2"
+      ],
+      "revision": 1
+     },
+     {
+      "failure_places": [],
+      "identity": "t-dead",
+      "input_places": [
+       "p-dead"
+      ],
+      "output_places": [
+       "p2"
+      ],
+      "revision": 1
+     }
+    ]
+   },
+   "oracle_result": {
+    "check_deadlock": {
+     "enabled": [
+      {
+       "bindings": [
+        {
+         "identity": "res-a",
+         "mode": "consume",
+         "multiplicity": 1,
+         "name": "b1",
+         "place": "p1",
+         "provenance": "decl",
+         "required_revision": 1,
+         "token_type": "tok",
+         "transition_id": "t1"
+        }
+       ],
+       "transition_id": "t1"
+      }
+     ],
+     "status": "not_deadlocked"
+    },
+    "check_reachability": {
+     "final_marking": {
+      "places": [
+       {
+        "place": "p1",
+        "tokens": []
+       },
+       {
+        "place": "p2",
+        "tokens": [
+         {
+          "index": 0,
+          "kind": "output",
+          "revision": 1,
+          "target": "t1"
+         }
+        ]
+       },
+       {
+        "place": "p-dead",
+        "tokens": []
+       }
+      ]
+     },
+     "path": [
+      "t1"
+     ],
+     "status": "reachable"
+    },
+    "check_well_foundedness": {
+     "status": "well_founded",
+     "witness": {
+      "explored_markings": [
+       {
+        "places": [
+         {
+          "place": "p1",
+          "tokens": []
+         },
+         {
+          "place": "p2",
+          "tokens": [
+           {
+            "index": 0,
+            "kind": "output",
+            "revision": 1,
+            "target": "t1"
+           }
+          ]
+         },
+         {
+          "place": "p-dead",
+          "tokens": []
+         }
+        ]
+       },
+       {
+        "places": [
+         {
+          "place": "p1",
+          "tokens": [
+           {
+            "index": 0,
+            "kind": "input",
+            "revision": 1,
+            "target": "res-a"
+           }
+          ]
+         },
+         {
+          "place": "p2",
+          "tokens": []
+         },
+         {
+          "place": "p-dead",
+          "tokens": []
+         }
+        ]
+       }
+      ],
+      "frontier": [],
+      "steps": 2
+     }
+    },
+    "derive_enabled": {
+     "enabled": [
+      {
+       "bindings": [
+        {
+         "identity": "res-a",
+         "mode": "consume",
+         "multiplicity": 1,
+         "name": "b1",
+         "place": "p1",
+         "provenance": "decl",
+         "required_revision": 1,
+         "token_type": "tok",
+         "transition_id": "t1"
+        }
+       ],
+       "transition_id": "t1"
+      }
+     ],
+     "status": "enabled_set"
+    }
+   }
+  },
+  {
+   "bound_exhausted": false,
+   "class": "invalidating",
+   "coordinate": "graph-edge",
+   "description": "dependency edge endpoint is not a declared graph node",
+   "expected_class": "invalidating",
+   "id": "mut-graph-edge-ghost",
+   "mutated_input": {
+    "bindings": [
+     {
+      "identity": "res-a",
+      "mode": "consume",
+      "multiplicity": 1,
+      "name": "b1",
+      "place": "p1",
+      "provenance": "decl",
+      "required_revision": 1,
+      "token_type": "tok",
+      "transition_id": "t1"
+     },
+     {
+      "identity": "res-dead",
+      "mode": "consume",
+      "multiplicity": 1,
+      "name": "b2",
+      "place": "p-dead",
+      "provenance": "decl",
+      "required_revision": 1,
+      "token_type": "tok",
+      "transition_id": "t-dead"
+     }
+    ],
+    "bound": {
+     "index": 0,
+     "max_bindings": 8,
+     "max_search_steps": 8,
+     "revision": 1,
+     "target_identity": "unit:typed-mapping-solver"
+    },
+    "goal": {
+     "count": 1,
+     "kind": "place_has_at_least",
+     "place": "p2"
+    },
+    "graph": {
+     "edges": [
+      [
+       "p1",
+       "ghost-node"
+      ],
+      [
+       "t1",
+       "p2"
+      ],
+      [
+       "p-dead",
+       "t-dead"
+      ],
+      [
+       "t-dead",
+       "p2"
+      ]
+     ],
+     "places": [
+      "p1",
+      "p2",
+      "p-dead"
+     ],
+     "revision": 1,
+     "transitions": [
+      "t1",
+      "t-dead"
+     ]
+    },
+    "marking": {
+     "places": [
+      {
+       "place": "p1",
+       "tokens": [
+        {
+         "index": 0,
+         "kind": "input",
+         "revision": 1,
+         "target": "res-a"
+        }
+       ]
+      },
+      {
+       "place": "p2",
+       "tokens": []
+      },
+      {
+       "place": "p-dead",
+       "tokens": []
+      }
+     ]
+    },
+    "places": [
+     {
+      "identity": "p1",
+      "revision": 1,
+      "token_type": "tok"
+     },
+     {
+      "identity": "p2",
+      "revision": 1,
+      "token_type": "tok"
+     },
+     {
+      "identity": "p-dead",
+      "revision": 1,
+      "token_type": "tok"
+     }
+    ],
+    "transitions": [
+     {
+      "failure_places": [],
+      "identity": "t1",
+      "input_places": [
+       "p1"
+      ],
+      "output_places": [
+       "p2"
+      ],
+      "revision": 1
+     },
+     {
+      "failure_places": [],
+      "identity": "t-dead",
+      "input_places": [
+       "p-dead"
+      ],
+      "output_places": [
+       "p2"
+      ],
+      "revision": 1
+     }
+    ]
+   },
+   "oracle_result": {
+    "check_deadlock": {
+     "reason": {
+      "kind": "dependency_mismatch",
+      "place": "ghost-node",
+      "transition_id": "p1"
+     },
+     "status": "invalid"
+    },
+    "check_reachability": {
+     "reason": {
+      "kind": "dependency_mismatch",
+      "place": "ghost-node",
+      "transition_id": "p1"
+     },
+     "status": "invalid"
+    },
+    "check_well_foundedness": {
+     "reason": {
+      "kind": "dependency_mismatch",
+      "place": "ghost-node",
+      "transition_id": "p1"
+     },
+     "status": "invalid"
+    },
+    "derive_enabled": {
+     "reason": {
+      "kind": "dependency_mismatch",
+      "place": "ghost-node",
+      "transition_id": "p1"
+     },
+     "status": "invalid"
+    }
+   }
+  },
+  {
+   "bound_exhausted": false,
+   "class": "meaning-preserving",
+   "coordinate": "graph-edge",
+   "description": "extra edge between two declared nodes; the graph is validated but not consulted by the search",
+   "expected_class": "meaning-preserving",
+   "id": "mut-graph-edge-extra",
+   "mutated_input": {
+    "bindings": [
+     {
+      "identity": "res-a",
+      "mode": "consume",
+      "multiplicity": 1,
+      "name": "b1",
+      "place": "p1",
+      "provenance": "decl",
+      "required_revision": 1,
+      "token_type": "tok",
+      "transition_id": "t1"
+     },
+     {
+      "identity": "res-dead",
+      "mode": "consume",
+      "multiplicity": 1,
+      "name": "b2",
+      "place": "p-dead",
+      "provenance": "decl",
+      "required_revision": 1,
+      "token_type": "tok",
+      "transition_id": "t-dead"
+     }
+    ],
+    "bound": {
+     "index": 0,
+     "max_bindings": 8,
+     "max_search_steps": 8,
+     "revision": 1,
+     "target_identity": "unit:typed-mapping-solver"
+    },
+    "goal": {
+     "count": 1,
+     "kind": "place_has_at_least",
+     "place": "p2"
+    },
+    "graph": {
+     "edges": [
+      [
+       "p1",
+       "t1"
+      ],
+      [
+       "t1",
+       "p2"
+      ],
+      [
+       "p-dead",
+       "t-dead"
+      ],
+      [
+       "t-dead",
+       "p2"
+      ],
+      [
+       "p2",
+       "t-dead"
+      ]
+     ],
+     "places": [
+      "p1",
+      "p2",
+      "p-dead"
+     ],
+     "revision": 1,
+     "transitions": [
+      "t1",
+      "t-dead"
+     ]
+    },
+    "marking": {
+     "places": [
+      {
+       "place": "p1",
+       "tokens": [
+        {
+         "index": 0,
+         "kind": "input",
+         "revision": 1,
+         "target": "res-a"
+        }
+       ]
+      },
+      {
+       "place": "p2",
+       "tokens": []
+      },
+      {
+       "place": "p-dead",
+       "tokens": []
+      }
+     ]
+    },
+    "places": [
+     {
+      "identity": "p1",
+      "revision": 1,
+      "token_type": "tok"
+     },
+     {
+      "identity": "p2",
+      "revision": 1,
+      "token_type": "tok"
+     },
+     {
+      "identity": "p-dead",
+      "revision": 1,
+      "token_type": "tok"
+     }
+    ],
+    "transitions": [
+     {
+      "failure_places": [],
+      "identity": "t1",
+      "input_places": [
+       "p1"
+      ],
+      "output_places": [
+       "p2"
+      ],
+      "revision": 1
+     },
+     {
+      "failure_places": [],
+      "identity": "t-dead",
+      "input_places": [
+       "p-dead"
+      ],
+      "output_places": [
+       "p2"
+      ],
+      "revision": 1
+     }
+    ]
+   },
+   "oracle_result": {
+    "check_deadlock": {
+     "enabled": [
+      {
+       "bindings": [
+        {
+         "identity": "res-a",
+         "mode": "consume",
+         "multiplicity": 1,
+         "name": "b1",
+         "place": "p1",
+         "provenance": "decl",
+         "required_revision": 1,
+         "token_type": "tok",
+         "transition_id": "t1"
+        }
+       ],
+       "transition_id": "t1"
+      }
+     ],
+     "status": "not_deadlocked"
+    },
+    "check_reachability": {
+     "final_marking": {
+      "places": [
+       {
+        "place": "p1",
+        "tokens": []
+       },
+       {
+        "place": "p2",
+        "tokens": [
+         {
+          "index": 0,
+          "kind": "output",
+          "revision": 1,
+          "target": "t1"
+         }
+        ]
+       },
+       {
+        "place": "p-dead",
+        "tokens": []
+       }
+      ]
+     },
+     "path": [
+      "t1"
+     ],
+     "status": "reachable"
+    },
+    "check_well_foundedness": {
+     "status": "well_founded",
+     "witness": {
+      "explored_markings": [
+       {
+        "places": [
+         {
+          "place": "p1",
+          "tokens": []
+         },
+         {
+          "place": "p2",
+          "tokens": [
+           {
+            "index": 0,
+            "kind": "output",
+            "revision": 1,
+            "target": "t1"
+           }
+          ]
+         },
+         {
+          "place": "p-dead",
+          "tokens": []
+         }
+        ]
+       },
+       {
+        "places": [
+         {
+          "place": "p1",
+          "tokens": [
+           {
+            "index": 0,
+            "kind": "input",
+            "revision": 1,
+            "target": "res-a"
+           }
+          ]
+         },
+         {
+          "place": "p2",
+          "tokens": []
+         },
+         {
+          "place": "p-dead",
+          "tokens": []
+         }
+        ]
+       }
+      ],
+      "frontier": [],
+      "steps": 2
+     }
+    },
+    "derive_enabled": {
+     "enabled": [
+      {
+       "bindings": [
+        {
+         "identity": "res-a",
+         "mode": "consume",
+         "multiplicity": 1,
+         "name": "b1",
+         "place": "p1",
+         "provenance": "decl",
+         "required_revision": 1,
+         "token_type": "tok",
+         "transition_id": "t1"
+        }
+       ],
+       "transition_id": "t1"
+      }
+     ],
+     "status": "enabled_set"
+    }
+   }
+  },
+  {
+   "bound_exhausted": false,
+   "class": "invalidating",
+   "coordinate": "input-binding",
+   "description": "duplicate binding name within one transition",
+   "expected_class": "invalidating",
+   "id": "mut-input-binding-duplicate",
+   "mutated_input": {
+    "bindings": [
+     {
+      "identity": "res-a",
+      "mode": "consume",
+      "multiplicity": 1,
+      "name": "b1",
+      "place": "p1",
+      "provenance": "decl",
+      "required_revision": 1,
+      "token_type": "tok",
+      "transition_id": "t1"
+     },
+     {
+      "identity": "res-dead",
+      "mode": "consume",
+      "multiplicity": 1,
+      "name": "b2",
+      "place": "p-dead",
+      "provenance": "decl",
+      "required_revision": 1,
+      "token_type": "tok",
+      "transition_id": "t-dead"
+     },
+     {
+      "identity": "res-a",
+      "mode": "consume",
+      "multiplicity": 1,
+      "name": "b1",
+      "place": "p1",
+      "provenance": "decl",
+      "required_revision": 1,
+      "token_type": "tok",
+      "transition_id": "t1"
+     }
+    ],
+    "bound": {
+     "index": 0,
+     "max_bindings": 8,
+     "max_search_steps": 8,
+     "revision": 1,
+     "target_identity": "unit:typed-mapping-solver"
+    },
+    "goal": {
+     "count": 1,
+     "kind": "place_has_at_least",
+     "place": "p2"
+    },
+    "graph": {
+     "edges": [
+      [
+       "p1",
+       "t1"
+      ],
+      [
+       "t1",
+       "p2"
+      ],
+      [
+       "p-dead",
+       "t-dead"
+      ],
+      [
+       "t-dead",
+       "p2"
+      ]
+     ],
+     "places": [
+      "p1",
+      "p2",
+      "p-dead"
+     ],
+     "revision": 1,
+     "transitions": [
+      "t1",
+      "t-dead"
+     ]
+    },
+    "marking": {
+     "places": [
+      {
+       "place": "p1",
+       "tokens": [
+        {
+         "index": 0,
+         "kind": "input",
+         "revision": 1,
+         "target": "res-a"
+        }
+       ]
+      },
+      {
+       "place": "p2",
+       "tokens": []
+      },
+      {
+       "place": "p-dead",
+       "tokens": []
+      }
+     ]
+    },
+    "places": [
+     {
+      "identity": "p1",
+      "revision": 1,
+      "token_type": "tok"
+     },
+     {
+      "identity": "p2",
+      "revision": 1,
+      "token_type": "tok"
+     },
+     {
+      "identity": "p-dead",
+      "revision": 1,
+      "token_type": "tok"
+     }
+    ],
+    "transitions": [
+     {
+      "failure_places": [],
+      "identity": "t1",
+      "input_places": [
+       "p1"
+      ],
+      "output_places": [
+       "p2"
+      ],
+      "revision": 1
+     },
+     {
+      "failure_places": [],
+      "identity": "t-dead",
+      "input_places": [
+       "p-dead"
+      ],
+      "output_places": [
+       "p2"
+      ],
+      "revision": 1
+     }
+    ]
+   },
+   "oracle_result": {
+    "check_deadlock": {
+     "reason": {
+      "kind": "identity_mismatch",
+      "name": "b1",
+      "transition_id": "t1"
+     },
+     "status": "invalid"
+    },
+    "check_reachability": {
+     "reason": {
+      "kind": "identity_mismatch",
+      "name": "b1",
+      "transition_id": "t1"
+     },
+     "status": "invalid"
+    },
+    "check_well_foundedness": {
+     "reason": {
+      "kind": "identity_mismatch",
+      "name": "b1",
+      "transition_id": "t1"
+     },
+     "status": "invalid"
+    },
+    "derive_enabled": {
+     "reason": {
+      "kind": "identity_mismatch",
+      "name": "b1",
+      "transition_id": "t1"
+     },
+     "status": "invalid"
+    }
+   }
+  },
+  {
+   "bound_exhausted": false,
+   "class": "meaning-preserving",
+   "coordinate": "input-binding",
+   "description": "extra binding on the never-enabled t-dead branch",
+   "expected_class": "meaning-preserving",
+   "id": "mut-input-binding-extra",
+   "mutated_input": {
+    "bindings": [
+     {
+      "identity": "res-a",
+      "mode": "consume",
+      "multiplicity": 1,
+      "name": "b1",
+      "place": "p1",
+      "provenance": "decl",
+      "required_revision": 1,
+      "token_type": "tok",
+      "transition_id": "t1"
+     },
+     {
+      "identity": "res-dead",
+      "mode": "consume",
+      "multiplicity": 1,
+      "name": "b2",
+      "place": "p-dead",
+      "provenance": "decl",
+      "required_revision": 1,
+      "token_type": "tok",
+      "transition_id": "t-dead"
+     },
+     {
+      "identity": "res-dead",
+      "mode": "read",
+      "multiplicity": 1,
+      "name": "b3",
+      "place": "p-dead",
+      "provenance": "decl",
+      "required_revision": 1,
+      "token_type": "tok",
+      "transition_id": "t-dead"
+     }
+    ],
+    "bound": {
+     "index": 0,
+     "max_bindings": 8,
+     "max_search_steps": 8,
+     "revision": 1,
+     "target_identity": "unit:typed-mapping-solver"
+    },
+    "goal": {
+     "count": 1,
+     "kind": "place_has_at_least",
+     "place": "p2"
+    },
+    "graph": {
+     "edges": [
+      [
+       "p1",
+       "t1"
+      ],
+      [
+       "t1",
+       "p2"
+      ],
+      [
+       "p-dead",
+       "t-dead"
+      ],
+      [
+       "t-dead",
+       "p2"
+      ]
+     ],
+     "places": [
+      "p1",
+      "p2",
+      "p-dead"
+     ],
+     "revision": 1,
+     "transitions": [
+      "t1",
+      "t-dead"
+     ]
+    },
+    "marking": {
+     "places": [
+      {
+       "place": "p1",
+       "tokens": [
+        {
+         "index": 0,
+         "kind": "input",
+         "revision": 1,
+         "target": "res-a"
+        }
+       ]
+      },
+      {
+       "place": "p2",
+       "tokens": []
+      },
+      {
+       "place": "p-dead",
+       "tokens": []
+      }
+     ]
+    },
+    "places": [
+     {
+      "identity": "p1",
+      "revision": 1,
+      "token_type": "tok"
+     },
+     {
+      "identity": "p2",
+      "revision": 1,
+      "token_type": "tok"
+     },
+     {
+      "identity": "p-dead",
+      "revision": 1,
+      "token_type": "tok"
+     }
+    ],
+    "transitions": [
+     {
+      "failure_places": [],
+      "identity": "t1",
+      "input_places": [
+       "p1"
+      ],
+      "output_places": [
+       "p2"
+      ],
+      "revision": 1
+     },
+     {
+      "failure_places": [],
+      "identity": "t-dead",
+      "input_places": [
+       "p-dead"
+      ],
+      "output_places": [
+       "p2"
+      ],
+      "revision": 1
+     }
+    ]
+   },
+   "oracle_result": {
+    "check_deadlock": {
+     "enabled": [
+      {
+       "bindings": [
+        {
+         "identity": "res-a",
+         "mode": "consume",
+         "multiplicity": 1,
+         "name": "b1",
+         "place": "p1",
+         "provenance": "decl",
+         "required_revision": 1,
+         "token_type": "tok",
+         "transition_id": "t1"
+        }
+       ],
+       "transition_id": "t1"
+      }
+     ],
+     "status": "not_deadlocked"
+    },
+    "check_reachability": {
+     "final_marking": {
+      "places": [
+       {
+        "place": "p1",
+        "tokens": []
+       },
+       {
+        "place": "p2",
+        "tokens": [
+         {
+          "index": 0,
+          "kind": "output",
+          "revision": 1,
+          "target": "t1"
+         }
+        ]
+       },
+       {
+        "place": "p-dead",
+        "tokens": []
+       }
+      ]
+     },
+     "path": [
+      "t1"
+     ],
+     "status": "reachable"
+    },
+    "check_well_foundedness": {
+     "status": "well_founded",
+     "witness": {
+      "explored_markings": [
+       {
+        "places": [
+         {
+          "place": "p1",
+          "tokens": []
+         },
+         {
+          "place": "p2",
+          "tokens": [
+           {
+            "index": 0,
+            "kind": "output",
+            "revision": 1,
+            "target": "t1"
+           }
+          ]
+         },
+         {
+          "place": "p-dead",
+          "tokens": []
+         }
+        ]
+       },
+       {
+        "places": [
+         {
+          "place": "p1",
+          "tokens": [
+           {
+            "index": 0,
+            "kind": "input",
+            "revision": 1,
+            "target": "res-a"
+           }
+          ]
+         },
+         {
+          "place": "p2",
+          "tokens": []
+         },
+         {
+          "place": "p-dead",
+          "tokens": []
+         }
+        ]
+       }
+      ],
+      "frontier": [],
+      "steps": 2
+     }
+    },
+    "derive_enabled": {
+     "enabled": [
+      {
+       "bindings": [
+        {
+         "identity": "res-a",
+         "mode": "consume",
+         "multiplicity": 1,
+         "name": "b1",
+         "place": "p1",
+         "provenance": "decl",
+         "required_revision": 1,
+         "token_type": "tok",
+         "transition_id": "t1"
+        }
+       ],
+       "transition_id": "t1"
+      }
+     ],
+     "status": "enabled_set"
+    }
+   }
+  },
+  {
+   "bound_exhausted": false,
+   "class": "invalidating",
+   "coordinate": "input-place-membership",
+   "description": "an undeclared input place is introduced with no bindings",
+   "expected_class": "invalidating",
+   "id": "mut-input-place-ghost",
+   "mutated_input": {
+    "bindings": [],
+    "bound": {
+     "index": 0,
+     "max_bindings": 8,
+     "max_search_steps": 8,
+     "revision": 1,
+     "target_identity": "unit:typed-mapping-solver"
+    },
+    "goal": {
+     "count": 1,
+     "kind": "place_has_at_least",
+     "place": "p2"
+    },
+    "graph": {
+     "edges": [
+      [
+       "p1",
+       "t1"
+      ],
+      [
+       "t1",
+       "p2"
+      ],
+      [
+       "p-dead",
+       "t-dead"
+      ],
+      [
+       "t-dead",
+       "p2"
+      ]
+     ],
+     "places": [
+      "p1",
+      "p2",
+      "p-dead"
+     ],
+     "revision": 1,
+     "transitions": [
+      "t1",
+      "t-dead"
+     ]
+    },
+    "marking": {
+     "places": [
+      {
+       "place": "p1",
+       "tokens": [
+        {
+         "index": 0,
+         "kind": "input",
+         "revision": 1,
+         "target": "res-a"
+        }
+       ]
+      },
+      {
+       "place": "p2",
+       "tokens": []
+      },
+      {
+       "place": "p-dead",
+       "tokens": []
+      }
+     ]
+    },
+    "places": [
+     {
+      "identity": "p1",
+      "revision": 1,
+      "token_type": "tok"
+     },
+     {
+      "identity": "p2",
+      "revision": 1,
+      "token_type": "tok"
+     },
+     {
+      "identity": "p-dead",
+      "revision": 1,
+      "token_type": "tok"
+     }
+    ],
+    "transitions": [
+     {
+      "failure_places": [],
+      "identity": "t1",
+      "input_places": [
+       "GHOST"
+      ],
+      "output_places": [
+       "p2"
+      ],
+      "revision": 1
+     },
+     {
+      "failure_places": [],
+      "identity": "t-dead",
+      "input_places": [
+       "p-dead"
+      ],
+      "output_places": [
+       "p2"
+      ],
+      "revision": 1
+     }
+    ]
+   },
+   "oracle_result": {
+    "check_deadlock": {
+     "reason": {
+      "kind": "unknown_input_place",
+      "place": "GHOST",
+      "transition_id": "t1"
+     },
+     "status": "invalid"
+    },
+    "check_reachability": {
+     "reason": {
+      "kind": "unknown_input_place",
+      "place": "GHOST",
+      "transition_id": "t1"
+     },
+     "status": "invalid"
+    },
+    "check_well_foundedness": {
+     "reason": {
+      "kind": "unknown_input_place",
+      "place": "GHOST",
+      "transition_id": "t1"
+     },
+     "status": "invalid"
+    },
+    "derive_enabled": {
+     "reason": {
+      "kind": "unknown_input_place",
+      "place": "GHOST",
+      "transition_id": "t1"
+     },
+     "status": "invalid"
+    }
+   }
+  },
+  {
+   "bound_exhausted": false,
+   "class": "invalidating",
+   "coordinate": "binding-coverage",
+   "description": "a declared input place loses every binding",
+   "expected_class": "invalidating",
+   "id": "mut-binding-coverage-missing",
+   "mutated_input": {
+    "bindings": [
+     {
+      "identity": "res-dead",
+      "mode": "consume",
+      "multiplicity": 1,
+      "name": "b2",
+      "place": "p-dead",
+      "provenance": "decl",
+      "required_revision": 1,
+      "token_type": "tok",
+      "transition_id": "t-dead"
+     }
+    ],
+    "bound": {
+     "index": 0,
+     "max_bindings": 8,
+     "max_search_steps": 8,
+     "revision": 1,
+     "target_identity": "unit:typed-mapping-solver"
+    },
+    "goal": {
+     "count": 1,
+     "kind": "place_has_at_least",
+     "place": "p2"
+    },
+    "graph": {
+     "edges": [
+      [
+       "p1",
+       "t1"
+      ],
+      [
+       "t1",
+       "p2"
+      ],
+      [
+       "p-dead",
+       "t-dead"
+      ],
+      [
+       "t-dead",
+       "p2"
+      ]
+     ],
+     "places": [
+      "p1",
+      "p2",
+      "p-dead"
+     ],
+     "revision": 1,
+     "transitions": [
+      "t1",
+      "t-dead"
+     ]
+    },
+    "marking": {
+     "places": [
+      {
+       "place": "p1",
+       "tokens": [
+        {
+         "index": 0,
+         "kind": "input",
+         "revision": 1,
+         "target": "res-a"
+        }
+       ]
+      },
+      {
+       "place": "p2",
+       "tokens": []
+      },
+      {
+       "place": "p-dead",
+       "tokens": []
+      }
+     ]
+    },
+    "places": [
+     {
+      "identity": "p1",
+      "revision": 1,
+      "token_type": "tok"
+     },
+     {
+      "identity": "p2",
+      "revision": 1,
+      "token_type": "tok"
+     },
+     {
+      "identity": "p-dead",
+      "revision": 1,
+      "token_type": "tok"
+     }
+    ],
+    "transitions": [
+     {
+      "failure_places": [],
+      "identity": "t1",
+      "input_places": [
+       "p1"
+      ],
+      "output_places": [
+       "p2"
+      ],
+      "revision": 1
+     },
+     {
+      "failure_places": [],
+      "identity": "t-dead",
+      "input_places": [
+       "p-dead"
+      ],
+      "output_places": [
+       "p2"
+      ],
+      "revision": 1
+     }
+    ]
+   },
+   "oracle_result": {
+    "check_deadlock": {
+     "reason": {
+      "kind": "missing_input_binding",
+      "place": "p1",
+      "transition_id": "t1"
+     },
+     "status": "invalid"
+    },
+    "check_reachability": {
+     "reason": {
+      "kind": "missing_input_binding",
+      "place": "p1",
+      "transition_id": "t1"
+     },
+     "status": "invalid"
+    },
+    "check_well_foundedness": {
+     "reason": {
+      "kind": "missing_input_binding",
+      "place": "p1",
+      "transition_id": "t1"
+     },
+     "status": "invalid"
+    },
+    "derive_enabled": {
+     "reason": {
+      "kind": "missing_input_binding",
+      "place": "p1",
+      "transition_id": "t1"
+     },
+     "status": "invalid"
+    }
+   }
+  },
+  {
+   "bound_exhausted": false,
+   "class": "result-changing",
+   "coordinate": "token",
+   "description": "token kind changes the exact marking witness",
+   "expected_class": "result-changing",
+   "id": "mut-token-kind",
+   "mutated_input": {
+    "bindings": [
+     {
+      "identity": "res-a",
+      "mode": "consume",
+      "multiplicity": 1,
+      "name": "b1",
+      "place": "p1",
+      "provenance": "decl",
+      "required_revision": 1,
+      "token_type": "tok",
+      "transition_id": "t1"
+     },
+     {
+      "identity": "res-dead",
+      "mode": "consume",
+      "multiplicity": 1,
+      "name": "b2",
+      "place": "p-dead",
+      "provenance": "decl",
+      "required_revision": 1,
+      "token_type": "tok",
+      "transition_id": "t-dead"
+     }
+    ],
+    "bound": {
+     "index": 0,
+     "max_bindings": 8,
+     "max_search_steps": 8,
+     "revision": 1,
+     "target_identity": "unit:typed-mapping-solver"
+    },
+    "goal": {
+     "count": 1,
+     "kind": "place_has_at_least",
+     "place": "p2"
+    },
+    "graph": {
+     "edges": [
+      [
+       "p1",
+       "t1"
+      ],
+      [
+       "t1",
+       "p2"
+      ],
+      [
+       "p-dead",
+       "t-dead"
+      ],
+      [
+       "t-dead",
+       "p2"
+      ]
+     ],
+     "places": [
+      "p1",
+      "p2",
+      "p-dead"
+     ],
+     "revision": 1,
+     "transitions": [
+      "t1",
+      "t-dead"
+     ]
+    },
+    "marking": {
+     "places": [
+      {
+       "place": "p1",
+       "tokens": [
+        {
+         "index": 0,
+         "kind": "observation",
+         "revision": 1,
+         "target": "res-a"
+        }
+       ]
+      },
+      {
+       "place": "p2",
+       "tokens": []
+      },
+      {
+       "place": "p-dead",
+       "tokens": []
+      }
+     ]
+    },
+    "places": [
+     {
+      "identity": "p1",
+      "revision": 1,
+      "token_type": "tok"
+     },
+     {
+      "identity": "p2",
+      "revision": 1,
+      "token_type": "tok"
+     },
+     {
+      "identity": "p-dead",
+      "revision": 1,
+      "token_type": "tok"
+     }
+    ],
+    "transitions": [
+     {
+      "failure_places": [],
+      "identity": "t1",
+      "input_places": [
+       "p1"
+      ],
+      "output_places": [
+       "p2"
+      ],
+      "revision": 1
+     },
+     {
+      "failure_places": [],
+      "identity": "t-dead",
+      "input_places": [
+       "p-dead"
+      ],
+      "output_places": [
+       "p2"
+      ],
+      "revision": 1
+     }
+    ]
+   },
+   "oracle_result": {
+    "check_deadlock": {
+     "enabled": [
+      {
+       "bindings": [
+        {
+         "identity": "res-a",
+         "mode": "consume",
+         "multiplicity": 1,
+         "name": "b1",
+         "place": "p1",
+         "provenance": "decl",
+         "required_revision": 1,
+         "token_type": "tok",
+         "transition_id": "t1"
+        }
+       ],
+       "transition_id": "t1"
+      }
+     ],
+     "status": "not_deadlocked"
+    },
+    "check_reachability": {
+     "final_marking": {
+      "places": [
+       {
+        "place": "p1",
+        "tokens": []
+       },
+       {
+        "place": "p2",
+        "tokens": [
+         {
+          "index": 0,
+          "kind": "output",
+          "revision": 1,
+          "target": "t1"
+         }
+        ]
+       },
+       {
+        "place": "p-dead",
+        "tokens": []
+       }
+      ]
+     },
+     "path": [
+      "t1"
+     ],
+     "status": "reachable"
+    },
+    "check_well_foundedness": {
+     "status": "well_founded",
+     "witness": {
+      "explored_markings": [
+       {
+        "places": [
+         {
+          "place": "p1",
+          "tokens": []
+         },
+         {
+          "place": "p2",
+          "tokens": [
+           {
+            "index": 0,
+            "kind": "output",
+            "revision": 1,
+            "target": "t1"
+           }
+          ]
+         },
+         {
+          "place": "p-dead",
+          "tokens": []
+         }
+        ]
+       },
+       {
+        "places": [
+         {
+          "place": "p1",
+          "tokens": [
+           {
+            "index": 0,
+            "kind": "observation",
+            "revision": 1,
+            "target": "res-a"
+           }
+          ]
+         },
+         {
+          "place": "p2",
+          "tokens": []
+         },
+         {
+          "place": "p-dead",
+          "tokens": []
+         }
+        ]
+       }
+      ],
+      "frontier": [],
+      "steps": 2
+     }
+    },
+    "derive_enabled": {
+     "enabled": [
+      {
+       "bindings": [
+        {
+         "identity": "res-a",
+         "mode": "consume",
+         "multiplicity": 1,
+         "name": "b1",
+         "place": "p1",
+         "provenance": "decl",
+         "required_revision": 1,
+         "token_type": "tok",
+         "transition_id": "t1"
+        }
+       ],
+       "transition_id": "t1"
+      }
+     ],
+     "status": "enabled_set"
+    }
+   }
+  },
+  {
+   "bound_exhausted": false,
+   "class": "result-changing",
+   "coordinate": "token",
+   "description": "token target changed; the t1 binding is no longer satisfied",
+   "expected_class": "result-changing",
+   "id": "mut-token-target",
+   "mutated_input": {
+    "bindings": [
+     {
+      "identity": "res-a",
+      "mode": "consume",
+      "multiplicity": 1,
+      "name": "b1",
+      "place": "p1",
+      "provenance": "decl",
+      "required_revision": 1,
+      "token_type": "tok",
+      "transition_id": "t1"
+     },
+     {
+      "identity": "res-dead",
+      "mode": "consume",
+      "multiplicity": 1,
+      "name": "b2",
+      "place": "p-dead",
+      "provenance": "decl",
+      "required_revision": 1,
+      "token_type": "tok",
+      "transition_id": "t-dead"
+     }
+    ],
+    "bound": {
+     "index": 0,
+     "max_bindings": 8,
+     "max_search_steps": 8,
+     "revision": 1,
+     "target_identity": "unit:typed-mapping-solver"
+    },
+    "goal": {
+     "count": 1,
+     "kind": "place_has_at_least",
+     "place": "p2"
+    },
+    "graph": {
+     "edges": [
+      [
+       "p1",
+       "t1"
+      ],
+      [
+       "t1",
+       "p2"
+      ],
+      [
+       "p-dead",
+       "t-dead"
+      ],
+      [
+       "t-dead",
+       "p2"
+      ]
+     ],
+     "places": [
+      "p1",
+      "p2",
+      "p-dead"
+     ],
+     "revision": 1,
+     "transitions": [
+      "t1",
+      "t-dead"
+     ]
+    },
+    "marking": {
+     "places": [
+      {
+       "place": "p1",
+       "tokens": [
+        {
+         "index": 0,
+         "kind": "input",
+         "revision": 1,
+         "target": "res-x"
+        }
+       ]
+      },
+      {
+       "place": "p2",
+       "tokens": []
+      },
+      {
+       "place": "p-dead",
+       "tokens": []
+      }
+     ]
+    },
+    "places": [
+     {
+      "identity": "p1",
+      "revision": 1,
+      "token_type": "tok"
+     },
+     {
+      "identity": "p2",
+      "revision": 1,
+      "token_type": "tok"
+     },
+     {
+      "identity": "p-dead",
+      "revision": 1,
+      "token_type": "tok"
+     }
+    ],
+    "transitions": [
+     {
+      "failure_places": [],
+      "identity": "t1",
+      "input_places": [
+       "p1"
+      ],
+      "output_places": [
+       "p2"
+      ],
+      "revision": 1
+     },
+     {
+      "failure_places": [],
+      "identity": "t-dead",
+      "input_places": [
+       "p-dead"
+      ],
+      "output_places": [
+       "p2"
+      ],
+      "revision": 1
+     }
+    ]
+   },
+   "oracle_result": {
+    "check_deadlock": {
+     "marking": {
+      "places": [
+       {
+        "place": "p1",
+        "tokens": [
+         {
+          "index": 0,
+          "kind": "input",
+          "revision": 1,
+          "target": "res-x"
+         }
+        ]
+       },
+       {
+        "place": "p2",
+        "tokens": []
+       },
+       {
+        "place": "p-dead",
+        "tokens": []
+       }
+      ]
+     },
+     "status": "deadlocked"
+    },
+    "check_reachability": {
+     "closure_witness": {
+      "explored_markings": [
+       {
+        "places": [
+         {
+          "place": "p1",
+          "tokens": [
+           {
+            "index": 0,
+            "kind": "input",
+            "revision": 1,
+            "target": "res-x"
+           }
+          ]
+         },
+         {
+          "place": "p2",
+          "tokens": []
+         },
+         {
+          "place": "p-dead",
+          "tokens": []
+         }
+        ]
+       }
+      ],
+      "frontier": [],
+      "steps": 1
+     },
+     "status": "unreachable"
+    },
+    "check_well_foundedness": {
+     "status": "well_founded",
+     "witness": {
+      "explored_markings": [
+       {
+        "places": [
+         {
+          "place": "p1",
+          "tokens": [
+           {
+            "index": 0,
+            "kind": "input",
+            "revision": 1,
+            "target": "res-x"
+           }
+          ]
+         },
+         {
+          "place": "p2",
+          "tokens": []
+         },
+         {
+          "place": "p-dead",
+          "tokens": []
+         }
+        ]
+       }
+      ],
+      "frontier": [],
+      "steps": 1
+     }
+    },
+    "derive_enabled": {
+     "enabled": [],
+     "status": "enabled_set"
+    }
+   }
+  },
+  {
+   "bound_exhausted": true,
+   "class": "bound-exhausted",
+   "coordinate": "domain-bound",
+   "description": "search-step bound exhausted with a nonempty frontier",
+   "expected_class": "bound-exhausted",
+   "id": "mut-bound-steps-zero",
+   "mutated_input": {
+    "bindings": [
+     {
+      "identity": "res-a",
+      "mode": "consume",
+      "multiplicity": 1,
+      "name": "b1",
+      "place": "p1",
+      "provenance": "decl",
+      "required_revision": 1,
+      "token_type": "tok",
+      "transition_id": "t1"
+     },
+     {
+      "identity": "res-dead",
+      "mode": "consume",
+      "multiplicity": 1,
+      "name": "b2",
+      "place": "p-dead",
+      "provenance": "decl",
+      "required_revision": 1,
+      "token_type": "tok",
+      "transition_id": "t-dead"
+     }
+    ],
+    "bound": {
+     "index": 0,
+     "max_bindings": 8,
+     "max_search_steps": 0,
+     "revision": 1,
+     "target_identity": "unit:typed-mapping-solver"
+    },
+    "goal": {
+     "count": 1,
+     "kind": "place_has_at_least",
+     "place": "p2"
+    },
+    "graph": {
+     "edges": [
+      [
+       "p1",
+       "t1"
+      ],
+      [
+       "t1",
+       "p2"
+      ],
+      [
+       "p-dead",
+       "t-dead"
+      ],
+      [
+       "t-dead",
+       "p2"
+      ]
+     ],
+     "places": [
+      "p1",
+      "p2",
+      "p-dead"
+     ],
+     "revision": 1,
+     "transitions": [
+      "t1",
+      "t-dead"
+     ]
+    },
+    "marking": {
+     "places": [
+      {
+       "place": "p1",
+       "tokens": [
+        {
+         "index": 0,
+         "kind": "input",
+         "revision": 1,
+         "target": "res-a"
+        }
+       ]
+      },
+      {
+       "place": "p2",
+       "tokens": []
+      },
+      {
+       "place": "p-dead",
+       "tokens": []
+      }
+     ]
+    },
+    "places": [
+     {
+      "identity": "p1",
+      "revision": 1,
+      "token_type": "tok"
+     },
+     {
+      "identity": "p2",
+      "revision": 1,
+      "token_type": "tok"
+     },
+     {
+      "identity": "p-dead",
+      "revision": 1,
+      "token_type": "tok"
+     }
+    ],
+    "transitions": [
+     {
+      "failure_places": [],
+      "identity": "t1",
+      "input_places": [
+       "p1"
+      ],
+      "output_places": [
+       "p2"
+      ],
+      "revision": 1
+     },
+     {
+      "failure_places": [],
+      "identity": "t-dead",
+      "input_places": [
+       "p-dead"
+      ],
+      "output_places": [
+       "p2"
+      ],
+      "revision": 1
+     }
+    ]
+   },
+   "oracle_result": {
+    "check_deadlock": {
+     "enabled": [
+      {
+       "bindings": [
+        {
+         "identity": "res-a",
+         "mode": "consume",
+         "multiplicity": 1,
+         "name": "b1",
+         "place": "p1",
+         "provenance": "decl",
+         "required_revision": 1,
+         "token_type": "tok",
+         "transition_id": "t1"
+        }
+       ],
+       "transition_id": "t1"
+      }
+     ],
+     "status": "not_deadlocked"
+    },
+    "check_reachability": {
+     "reason": {
+      "kind": "search_step_bound_exhausted",
+      "limit": 0
+     },
+     "status": "unknown"
+    },
+    "check_well_foundedness": {
+     "reason": {
+      "kind": "search_step_bound_exhausted",
+      "limit": 0
+     },
+     "status": "unknown"
+    },
+    "derive_enabled": {
+     "enabled": [
+      {
+       "bindings": [
+        {
+         "identity": "res-a",
+         "mode": "consume",
+         "multiplicity": 1,
+         "name": "b1",
+         "place": "p1",
+         "provenance": "decl",
+         "required_revision": 1,
+         "token_type": "tok",
+         "transition_id": "t1"
+        }
+       ],
+       "transition_id": "t1"
+      }
+     ],
+     "status": "enabled_set"
+    }
+   }
+  },
+  {
+   "bound_exhausted": false,
+   "class": "meaning-preserving",
+   "coordinate": "domain-bound",
+   "description": "binding bound raised; the declared finite domain already fits",
+   "expected_class": "meaning-preserving",
+   "id": "mut-bound-bindings",
+   "mutated_input": {
+    "bindings": [
+     {
+      "identity": "res-a",
+      "mode": "consume",
+      "multiplicity": 1,
+      "name": "b1",
+      "place": "p1",
+      "provenance": "decl",
+      "required_revision": 1,
+      "token_type": "tok",
+      "transition_id": "t1"
+     },
+     {
+      "identity": "res-dead",
+      "mode": "consume",
+      "multiplicity": 1,
+      "name": "b2",
+      "place": "p-dead",
+      "provenance": "decl",
+      "required_revision": 1,
+      "token_type": "tok",
+      "transition_id": "t-dead"
+     }
+    ],
+    "bound": {
+     "index": 0,
+     "max_bindings": 64,
+     "max_search_steps": 8,
+     "revision": 1,
+     "target_identity": "unit:typed-mapping-solver"
+    },
+    "goal": {
+     "count": 1,
+     "kind": "place_has_at_least",
+     "place": "p2"
+    },
+    "graph": {
+     "edges": [
+      [
+       "p1",
+       "t1"
+      ],
+      [
+       "t1",
+       "p2"
+      ],
+      [
+       "p-dead",
+       "t-dead"
+      ],
+      [
+       "t-dead",
+       "p2"
+      ]
+     ],
+     "places": [
+      "p1",
+      "p2",
+      "p-dead"
+     ],
+     "revision": 1,
+     "transitions": [
+      "t1",
+      "t-dead"
+     ]
+    },
+    "marking": {
+     "places": [
+      {
+       "place": "p1",
+       "tokens": [
+        {
+         "index": 0,
+         "kind": "input",
+         "revision": 1,
+         "target": "res-a"
+        }
+       ]
+      },
+      {
+       "place": "p2",
+       "tokens": []
+      },
+      {
+       "place": "p-dead",
+       "tokens": []
+      }
+     ]
+    },
+    "places": [
+     {
+      "identity": "p1",
+      "revision": 1,
+      "token_type": "tok"
+     },
+     {
+      "identity": "p2",
+      "revision": 1,
+      "token_type": "tok"
+     },
+     {
+      "identity": "p-dead",
+      "revision": 1,
+      "token_type": "tok"
+     }
+    ],
+    "transitions": [
+     {
+      "failure_places": [],
+      "identity": "t1",
+      "input_places": [
+       "p1"
+      ],
+      "output_places": [
+       "p2"
+      ],
+      "revision": 1
+     },
+     {
+      "failure_places": [],
+      "identity": "t-dead",
+      "input_places": [
+       "p-dead"
+      ],
+      "output_places": [
+       "p2"
+      ],
+      "revision": 1
+     }
+    ]
+   },
+   "oracle_result": {
+    "check_deadlock": {
+     "enabled": [
+      {
+       "bindings": [
+        {
+         "identity": "res-a",
+         "mode": "consume",
+         "multiplicity": 1,
+         "name": "b1",
+         "place": "p1",
+         "provenance": "decl",
+         "required_revision": 1,
+         "token_type": "tok",
+         "transition_id": "t1"
+        }
+       ],
+       "transition_id": "t1"
+      }
+     ],
+     "status": "not_deadlocked"
+    },
+    "check_reachability": {
+     "final_marking": {
+      "places": [
+       {
+        "place": "p1",
+        "tokens": []
+       },
+       {
+        "place": "p2",
+        "tokens": [
+         {
+          "index": 0,
+          "kind": "output",
+          "revision": 1,
+          "target": "t1"
+         }
+        ]
+       },
+       {
+        "place": "p-dead",
+        "tokens": []
+       }
+      ]
+     },
+     "path": [
+      "t1"
+     ],
+     "status": "reachable"
+    },
+    "check_well_foundedness": {
+     "status": "well_founded",
+     "witness": {
+      "explored_markings": [
+       {
+        "places": [
+         {
+          "place": "p1",
+          "tokens": []
+         },
+         {
+          "place": "p2",
+          "tokens": [
+           {
+            "index": 0,
+            "kind": "output",
+            "revision": 1,
+            "target": "t1"
+           }
+          ]
+         },
+         {
+          "place": "p-dead",
+          "tokens": []
+         }
+        ]
+       },
+       {
+        "places": [
+         {
+          "place": "p1",
+          "tokens": [
+           {
+            "index": 0,
+            "kind": "input",
+            "revision": 1,
+            "target": "res-a"
+           }
+          ]
+         },
+         {
+          "place": "p2",
+          "tokens": []
+         },
+         {
+          "place": "p-dead",
+          "tokens": []
+         }
+        ]
+       }
+      ],
+      "frontier": [],
+      "steps": 2
+     }
+    },
+    "derive_enabled": {
+     "enabled": [
+      {
+       "bindings": [
+        {
+         "identity": "res-a",
+         "mode": "consume",
+         "multiplicity": 1,
+         "name": "b1",
+         "place": "p1",
+         "provenance": "decl",
+         "required_revision": 1,
+         "token_type": "tok",
+         "transition_id": "t1"
+        }
+       ],
+       "transition_id": "t1"
+      }
+     ],
+     "status": "enabled_set"
+    }
+   }
+  },
+  {
+   "bound_exhausted": true,
+   "class": "bound-exhausted",
+   "coordinate": "domain-bound",
+   "description": "binding bound decreased to zero; the declared finite domain no longer fits, so evaluation reports bound exhaustion",
+   "expected_class": "bound-exhausted",
+   "id": "mut-bound-bindings-exhausted",
+   "mutated_input": {
+    "bindings": [
+     {
+      "identity": "res-a",
+      "mode": "consume",
+      "multiplicity": 1,
+      "name": "b1",
+      "place": "p1",
+      "provenance": "decl",
+      "required_revision": 1,
+      "token_type": "tok",
+      "transition_id": "t1"
+     },
+     {
+      "identity": "res-dead",
+      "mode": "consume",
+      "multiplicity": 1,
+      "name": "b2",
+      "place": "p-dead",
+      "provenance": "decl",
+      "required_revision": 1,
+      "token_type": "tok",
+      "transition_id": "t-dead"
+     }
+    ],
+    "bound": {
+     "index": 0,
+     "max_bindings": 0,
+     "max_search_steps": 8,
+     "revision": 1,
+     "target_identity": "unit:typed-mapping-solver"
+    },
+    "goal": {
+     "count": 1,
+     "kind": "place_has_at_least",
+     "place": "p2"
+    },
+    "graph": {
+     "edges": [
+      [
+       "p1",
+       "t1"
+      ],
+      [
+       "t1",
+       "p2"
+      ],
+      [
+       "p-dead",
+       "t-dead"
+      ],
+      [
+       "t-dead",
+       "p2"
+      ]
+     ],
+     "places": [
+      "p1",
+      "p2",
+      "p-dead"
+     ],
+     "revision": 1,
+     "transitions": [
+      "t1",
+      "t-dead"
+     ]
+    },
+    "marking": {
+     "places": [
+      {
+       "place": "p1",
+       "tokens": [
+        {
+         "index": 0,
+         "kind": "input",
+         "revision": 1,
+         "target": "res-a"
+        }
+       ]
+      },
+      {
+       "place": "p2",
+       "tokens": []
+      },
+      {
+       "place": "p-dead",
+       "tokens": []
+      }
+     ]
+    },
+    "places": [
+     {
+      "identity": "p1",
+      "revision": 1,
+      "token_type": "tok"
+     },
+     {
+      "identity": "p2",
+      "revision": 1,
+      "token_type": "tok"
+     },
+     {
+      "identity": "p-dead",
+      "revision": 1,
+      "token_type": "tok"
+     }
+    ],
+    "transitions": [
+     {
+      "failure_places": [],
+      "identity": "t1",
+      "input_places": [
+       "p1"
+      ],
+      "output_places": [
+       "p2"
+      ],
+      "revision": 1
+     },
+     {
+      "failure_places": [],
+      "identity": "t-dead",
+      "input_places": [
+       "p-dead"
+      ],
+      "output_places": [
+       "p2"
+      ],
+      "revision": 1
+     }
+    ]
+   },
+   "oracle_result": {
+    "check_deadlock": {
+     "reason": {
+      "kind": "binding_bound_exhausted",
+      "limit": 0
+     },
+     "status": "unknown"
+    },
+    "check_reachability": {
+     "reason": {
+      "kind": "binding_bound_exhausted",
+      "limit": 0
+     },
+     "status": "unknown"
+    },
+    "check_well_foundedness": {
+     "reason": {
+      "kind": "binding_bound_exhausted",
+      "limit": 0
+     },
+     "status": "unknown"
+    },
+    "derive_enabled": {
+     "enabled": [
+      {
+       "bindings": [
+        {
+         "identity": "res-a",
+         "mode": "consume",
+         "multiplicity": 1,
+         "name": "b1",
+         "place": "p1",
+         "provenance": "decl",
+         "required_revision": 1,
+         "token_type": "tok",
+         "transition_id": "t1"
+        }
+       ],
+       "transition_id": "t1"
+      }
+     ],
+     "status": "enabled_set"
+    }
+   }
+  },
+  {
+   "bound_exhausted": false,
+   "class": "meaning-preserving",
+   "coordinate": "domain-bound",
+   "description": "domain bound target identity changed; it is descriptive metadata",
+   "expected_class": "meaning-preserving",
+   "id": "mut-bound-target",
+   "mutated_input": {
+    "bindings": [
+     {
+      "identity": "res-a",
+      "mode": "consume",
+      "multiplicity": 1,
+      "name": "b1",
+      "place": "p1",
+      "provenance": "decl",
+      "required_revision": 1,
+      "token_type": "tok",
+      "transition_id": "t1"
+     },
+     {
+      "identity": "res-dead",
+      "mode": "consume",
+      "multiplicity": 1,
+      "name": "b2",
+      "place": "p-dead",
+      "provenance": "decl",
+      "required_revision": 1,
+      "token_type": "tok",
+      "transition_id": "t-dead"
+     }
+    ],
+    "bound": {
+     "index": 0,
+     "max_bindings": 8,
+     "max_search_steps": 8,
+     "revision": 1,
+     "target_identity": "unit:OTHER"
+    },
+    "goal": {
+     "count": 1,
+     "kind": "place_has_at_least",
+     "place": "p2"
+    },
+    "graph": {
+     "edges": [
+      [
+       "p1",
+       "t1"
+      ],
+      [
+       "t1",
+       "p2"
+      ],
+      [
+       "p-dead",
+       "t-dead"
+      ],
+      [
+       "t-dead",
+       "p2"
+      ]
+     ],
+     "places": [
+      "p1",
+      "p2",
+      "p-dead"
+     ],
+     "revision": 1,
+     "transitions": [
+      "t1",
+      "t-dead"
+     ]
+    },
+    "marking": {
+     "places": [
+      {
+       "place": "p1",
+       "tokens": [
+        {
+         "index": 0,
+         "kind": "input",
+         "revision": 1,
+         "target": "res-a"
+        }
+       ]
+      },
+      {
+       "place": "p2",
+       "tokens": []
+      },
+      {
+       "place": "p-dead",
+       "tokens": []
+      }
+     ]
+    },
+    "places": [
+     {
+      "identity": "p1",
+      "revision": 1,
+      "token_type": "tok"
+     },
+     {
+      "identity": "p2",
+      "revision": 1,
+      "token_type": "tok"
+     },
+     {
+      "identity": "p-dead",
+      "revision": 1,
+      "token_type": "tok"
+     }
+    ],
+    "transitions": [
+     {
+      "failure_places": [],
+      "identity": "t1",
+      "input_places": [
+       "p1"
+      ],
+      "output_places": [
+       "p2"
+      ],
+      "revision": 1
+     },
+     {
+      "failure_places": [],
+      "identity": "t-dead",
+      "input_places": [
+       "p-dead"
+      ],
+      "output_places": [
+       "p2"
+      ],
+      "revision": 1
+     }
+    ]
+   },
+   "oracle_result": {
+    "check_deadlock": {
+     "enabled": [
+      {
+       "bindings": [
+        {
+         "identity": "res-a",
+         "mode": "consume",
+         "multiplicity": 1,
+         "name": "b1",
+         "place": "p1",
+         "provenance": "decl",
+         "required_revision": 1,
+         "token_type": "tok",
+         "transition_id": "t1"
+        }
+       ],
+       "transition_id": "t1"
+      }
+     ],
+     "status": "not_deadlocked"
+    },
+    "check_reachability": {
+     "final_marking": {
+      "places": [
+       {
+        "place": "p1",
+        "tokens": []
+       },
+       {
+        "place": "p2",
+        "tokens": [
+         {
+          "index": 0,
+          "kind": "output",
+          "revision": 1,
+          "target": "t1"
+         }
+        ]
+       },
+       {
+        "place": "p-dead",
+        "tokens": []
+       }
+      ]
+     },
+     "path": [
+      "t1"
+     ],
+     "status": "reachable"
+    },
+    "check_well_foundedness": {
+     "status": "well_founded",
+     "witness": {
+      "explored_markings": [
+       {
+        "places": [
+         {
+          "place": "p1",
+          "tokens": []
+         },
+         {
+          "place": "p2",
+          "tokens": [
+           {
+            "index": 0,
+            "kind": "output",
+            "revision": 1,
+            "target": "t1"
+           }
+          ]
+         },
+         {
+          "place": "p-dead",
+          "tokens": []
+         }
+        ]
+       },
+       {
+        "places": [
+         {
+          "place": "p1",
+          "tokens": [
+           {
+            "index": 0,
+            "kind": "input",
+            "revision": 1,
+            "target": "res-a"
+           }
+          ]
+         },
+         {
+          "place": "p2",
+          "tokens": []
+         },
+         {
+          "place": "p-dead",
+          "tokens": []
+         }
+        ]
+       }
+      ],
+      "frontier": [],
+      "steps": 2
+     }
+    },
+    "derive_enabled": {
+     "enabled": [
+      {
+       "bindings": [
+        {
+         "identity": "res-a",
+         "mode": "consume",
+         "multiplicity": 1,
+         "name": "b1",
+         "place": "p1",
+         "provenance": "decl",
+         "required_revision": 1,
+         "token_type": "tok",
+         "transition_id": "t1"
+        }
+       ],
+       "transition_id": "t1"
+      }
+     ],
+     "status": "enabled_set"
+    }
+   }
+  },
+  {
+   "bound_exhausted": false,
+   "class": "result-changing",
+   "coordinate": "cycle-closing-decrease",
+   "description": "an additive edge followed by a consuming edge returns to the exact initial marking with a decreasing closing measure",
+   "expected_class": "result-changing",
+   "id": "mut-cycle-closing-decrease",
+   "mutated_input": {
+    "bindings": [
+     {
+      "identity": "t-add",
+      "mode": "consume",
+      "multiplicity": 1,
+      "name": "b-token",
+      "place": "p-token",
+      "provenance": "decl",
+      "required_revision": 1,
+      "token_type": "tok",
+      "transition_id": "t-consume"
+     },
+     {
+      "identity": "res-seed",
+      "mode": "read",
+      "multiplicity": 1,
+      "name": "b-seed",
+      "place": "p-seed",
+      "provenance": "decl",
+      "required_revision": 1,
+      "token_type": "tok",
+      "transition_id": "t-add"
+     }
+    ],
+    "bound": {
+     "index": 0,
+     "max_bindings": 8,
+     "max_search_steps": 8,
+     "revision": 1,
+     "target_identity": "unit:typed-mapping-solver"
+    },
+    "goal": {
+     "count": 1,
+     "kind": "place_has_at_least",
+     "place": "p-seed"
+    },
+    "graph": {
+     "edges": [
+      [
+       "p-token",
+       "t-consume"
+      ],
+      [
+       "p-seed",
+       "t-add"
+      ],
+      [
+       "t-add",
+       "p-token"
+      ]
+     ],
+     "places": [
+      "p-seed",
+      "p-token"
+     ],
+     "revision": 1,
+     "transitions": [
+      "t-consume",
+      "t-add"
+     ]
+    },
+    "marking": {
+     "places": [
+      {
+       "place": "p-seed",
+       "tokens": [
+        {
+         "index": 0,
+         "kind": "input",
+         "revision": 1,
+         "target": "res-seed"
+        }
+       ]
+      },
+      {
+       "place": "p-token",
+       "tokens": []
+      }
+     ]
+    },
+    "places": [
+     {
+      "identity": "p-seed",
+      "revision": 1,
+      "token_type": "tok"
+     },
+     {
+      "identity": "p-token",
+      "revision": 1,
+      "token_type": "tok"
+     }
+    ],
+    "transitions": [
+     {
+      "failure_places": [],
+      "identity": "t-consume",
+      "input_places": [
+       "p-token"
+      ],
+      "output_places": [],
+      "revision": 1
+     },
+     {
+      "failure_places": [],
+      "identity": "t-add",
+      "input_places": [
+       "p-seed"
+      ],
+      "output_places": [
+       "p-token"
+      ],
+      "revision": 1
+     }
+    ]
+   },
+   "oracle_result": {
+    "check_deadlock": {
+     "enabled": [
+      {
+       "bindings": [
+        {
+         "identity": "res-seed",
+         "mode": "read",
+         "multiplicity": 1,
+         "name": "b-seed",
+         "place": "p-seed",
+         "provenance": "decl",
+         "required_revision": 1,
+         "token_type": "tok",
+         "transition_id": "t-add"
+        }
+       ],
+       "transition_id": "t-add"
+      }
+     ],
+     "status": "not_deadlocked"
+    },
+    "check_reachability": {
+     "final_marking": {
+      "places": [
+       {
+        "place": "p-seed",
+        "tokens": [
+         {
+          "index": 0,
+          "kind": "input",
+          "revision": 1,
+          "target": "res-seed"
+         }
+        ]
+       },
+       {
+        "place": "p-token",
+        "tokens": []
+       }
+      ]
+     },
+     "path": [],
+     "status": "reachable"
+    },
+    "check_well_foundedness": {
+     "status": "not_well_founded",
+     "witness": {
+      "cycle_end": {
+       "places": [
+        {
+         "place": "p-seed",
+         "tokens": [
+          {
+           "index": 0,
+           "kind": "input",
+           "revision": 1,
+           "target": "res-seed"
+          }
+         ]
+        },
+        {
+         "place": "p-token",
+         "tokens": []
+        }
+       ]
+      },
+      "cycle_path": [
+       "t-add",
+       "t-consume"
+      ],
+      "cycle_start": {
+       "places": [
+        {
+         "place": "p-seed",
+         "tokens": [
+          {
+           "index": 0,
+           "kind": "input",
+           "revision": 1,
+           "target": "res-seed"
+          }
+         ]
+        },
+        {
+         "place": "p-token",
+         "tokens": []
+        }
+       ]
+      },
+      "measure_decreasing": true,
+      "prefix_path": []
+     }
+    },
+    "derive_enabled": {
+     "enabled": [
+      {
+       "bindings": [
+        {
+         "identity": "res-seed",
+         "mode": "read",
+         "multiplicity": 1,
+         "name": "b-seed",
+         "place": "p-seed",
+         "provenance": "decl",
+         "required_revision": 1,
+         "token_type": "tok",
+         "transition_id": "t-add"
+        }
+       ],
+       "transition_id": "t-add"
+      }
+     ],
+     "status": "enabled_set"
+    }
+   }
+  }
+ ],
+ "schema": "ncoh-typed-mapping-solver/mutation-results@1"
+}

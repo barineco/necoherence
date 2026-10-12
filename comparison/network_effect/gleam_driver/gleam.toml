@@ -1,0 +1,11 @@
+# SPDX-FileCopyrightText: 2026 barineco
+# SPDX-License-Identifier: MIT
+
+name = "host_failure_evidence"
+version = "0.1.0"
+target = "erlang"
+
+[dependencies]
+gleam_stdlib = ">= 1.0.0 and < 2.0.0"
+gleam_erlang = ">= 1.3.0 and < 2.0.0"
+necoherence = { path = "../../../gleam" }

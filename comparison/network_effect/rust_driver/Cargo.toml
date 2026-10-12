@@ -1,0 +1,17 @@
+# SPDX-FileCopyrightText: 2026 barineco
+# SPDX-License-Identifier: MIT
+
+[package]
+name = "host_failure_driver"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[[bin]]
+name = "host_failure_driver"
+path = "src/main.rs"
+
+[dependencies]
+necoherence = { path = "../../../rust" }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["arbitrary_precision"] }

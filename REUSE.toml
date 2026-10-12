@@ -1,0 +1,88 @@
+# SPDX-FileCopyrightText: 2026 barineco
+# SPDX-License-Identifier: MIT
+
+version = 1
+
+[[annotations]]
+path = [
+  "LICENSE",
+  "*/LICENSE",
+  "*/README.md",
+  "*/README-ja.md",
+  "comparison/**/*.json",
+  "tests/observation/**/*.json",
+  "comparison/**/*.txt",
+  "comparison/**/Cargo.lock",
+  "comparison/**/manifest.toml",
+  "gleam/manifest.toml",
+  "gleam/priv/japanese-readme",
+  "lean/lake-manifest.json",
+  "lean/lean-toolchain",
+  "rust/Cargo.lock",
+  "java/src/test/fixtures/discriminator-binding.json",
+  "rust/tests/fixtures/canonical-profile.json",
+  "typescript/package.json",
+  "typescript/package-lock.json",
+  "typescript/tsconfig.json",
+  "typescript/tsconfig.build.json",
+  "typescript/tests/synthetic-profile.json",
+  "residual-coherence/schema/*",
+  "presets/**/*.json",
+]
+SPDX-FileCopyrightText = "2026 barineco"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = [
+  "tools/LICENSE",
+  "tools/gleam/manifest.toml",
+  "tools/lean/lake-manifest.json",
+  "tools/lean/lean-toolchain",
+  "tools/rust/Cargo.lock",
+  "tools/typescript/package.json",
+  "tools/typescript/package-lock.json",
+  "tools/typescript/tsconfig.json",
+  "tools/typescript/tsconfig.build.json",
+  "comparison/declaration/signature_generator/Cargo.lock",
+  "residual-coherence/LICENSE",
+  "residual-coherence/README.md",
+  "residual-coherence/README-ja.md",
+  "residual-coherence/examples/*.json",
+]
+SPDX-FileCopyrightText = "2026 barineco"
+SPDX-License-Identifier = "AGPL-3.0-only"
+
+[[annotations]]
+path = [
+  "CHANGELOG.md",
+  "README.md",
+  "README-ja.md",
+]
+precedence = "override"
+SPDX-FileCopyrightText = "2026 barineco"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = [
+  "tools/gleam/src/necoherence_tools/renderer.gleam",
+  "tools/java/src/main/java/necoherence/tools/renderer/Renderer.java",
+  "tools/lean/NecoherenceTools/SignatureGeneration.lean",
+  "tools/python/src/necoherence_tools/signature_codegen.py",
+  "tools/rust/src/renderer.rs",
+  "tools/typescript/src/signature_generation.ts",
+  "tools/typescript/src/signature_renderer.ts",
+  "tools/README.md",
+  "tools/README-ja.md",
+]
+precedence = "override"
+SPDX-FileCopyrightText = "2026 barineco"
+SPDX-License-Identifier = "AGPL-3.0-only"
+
+[[annotations]]
+path = [
+  "comparison/declaration/semantic_profile_data/*.txt",
+  "presets/tools/unicode/*.txt",
+]
+precedence = "override"
+SPDX-FileCopyrightText = "1991-2026 Unicode, Inc."
+SPDX-License-Identifier = "Unicode-3.0"

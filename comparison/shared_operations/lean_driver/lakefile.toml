@@ -1,0 +1,15 @@
+# SPDX-FileCopyrightText: 2026 barineco
+# SPDX-License-Identifier: MIT
+
+name = "shared_operations_driver"
+version = "0.1.0"
+defaultTargets = ["feature-check"]
+
+[[require]]
+name = "necoherence"
+path = "../../../lean"
+
+[[lean_exe]]
+name = "feature-check"
+root = "FeatureCheck"
+supportInterpreter = true
