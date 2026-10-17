@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 name = "necoherence"
-version = "0.1.0"
+version = "0.2.0"
 defaultTargets = ["Necoherence", "NecoherenceTest"]
 
 [[lean_lib]]
@@ -11,7 +11,7 @@ globs = ["Necoherence", "Necoherence.+"]
 
 [[lean_lib]]
 name = "NecoherenceTest"
-roots = ["Necoherence.NetworkEffectTest", "Tests.ExactJsonCodec", "Tests.GraphemeProfileVectors", "Tests.FormatProfileAdmission", "Tests.ProfileAdmissionVariations", "Tests.SequenceRecognition", "Tests.LabelSeparatorRecognition", "Tests.NonNullableFieldConstruction", "Tests.FormatRuleSamples", "Tests.ExternalValueShapes"]
+roots = ["Necoherence.NetworkEffectTest", "Tests.ExactJsonCodec", "Tests.GraphemeProfileVectors", "Tests.FormatProfileAdmission", "Tests.ProfileAdmissionVariations", "Tests.SequenceRecognition", "Tests.LabelSeparatorRecognition", "Tests.NonNullableFieldConstruction", "Tests.FormatRuleSamples", "Tests.ExternalValueShapes", "Tests.WrapperBase64Vectors", "Tests.SealedLeafSampleVectors"]
 
 [[lean_exe]]
 name = "network_effect_runner"

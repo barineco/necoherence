@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT
 
 import gleam/option.{type Option, None, Some}
-import necoherence/http_adapter as adapter
 import necoherence/network_effect as network
+import necoherence/network_host as adapter
 import necoherence/semantic_generation_runtime as runtime
 
 pub type Failure {

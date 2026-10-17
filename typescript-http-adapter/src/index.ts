@@ -14,7 +14,7 @@ import {
   type StartObservation,
   sourceNone,
   sourceSome,
-} from "./network-effect.js";
+} from "necoherence/network-effect";
 
 export interface FetchResponseLike {
   readonly status: number;

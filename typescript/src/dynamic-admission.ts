@@ -1,8 +1,6 @@
 // SPDX-FileCopyrightText: 2026 barineco
 // SPDX-License-Identifier: MIT
 
-// Dynamic admission over RequestProgression. AdmissionProvenance
-// is an explicit input, never inferred from a snapshot.
 
 import { applied, rejected, type Outcome } from "./core.js";
 import {

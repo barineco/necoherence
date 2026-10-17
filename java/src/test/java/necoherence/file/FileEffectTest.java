@@ -18,7 +18,7 @@ import necoherence.core.UnknownResource;
 import necoherence.core.World;
 import org.junit.jupiter.api.Test;
 
-/** Tests translating lean/Necoherence/FileEffect.lean. */
+
 final class FileEffectTest {
 
     private static NormalizedPath path(boolean root, String... segments) {
@@ -191,7 +191,6 @@ final class FileEffectTest {
         ContentDigest expected = new ContentDigest("d1");
         World world = new World(List.of(new World.Entry(resource, revision(2))));
         Digests digests = new Digests(List.of(new Digests.Entry(resource, expected)));
-        // The external state's current digest differs from the last recorded digest.
         ExternalFileState state = trackedState(p, new ContentDigest("mutated"), List.of((byte) 7));
 
         ReplaceContents intent = new ReplaceContents(List.of((byte) 9), new ContentDigest("d2"));

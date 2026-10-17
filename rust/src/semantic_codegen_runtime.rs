@@ -21,6 +21,8 @@ pub enum RuntimeFailure {
     Representation(String),
     BranchSelection,
     UndefinedType(TypeRef),
+    Validation(crate::semantic_types::ValueDecision),
+    Defaults(crate::semantic_validation::DefaultFailure),
 }
 impl fmt::Display for RuntimeFailure {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -33,6 +35,36 @@ pub fn representation(c: impl Into<String>) -> RuntimeFailure {
 }
 pub fn parse_integer(s: &str) -> Result<BigInt, RuntimeFailure> {
     s.parse().map_err(|_| representation("integer"))
+}
+pub fn integer_decode(
+    profile: &VersionedSemanticProfile,
+    domain: Option<&str>,
+    value: JsonValue,
+) -> Result<BigInt, RuntimeFailure> {
+    let binding = profile
+        .integer_domain(domain)
+        .ok_or_else(|| representation("integer domain"))?;
+    crate::semantic_validation::parse_integer(binding, &value)
+        .ok_or_else(|| representation("integer"))
+}
+pub fn integer_encode(
+    profile: &VersionedSemanticProfile,
+    domain: Option<&str>,
+    value: &BigInt,
+) -> Result<JsonValue, RuntimeFailure> {
+    use crate::semantic_types::IntegerForm;
+    let binding = profile
+        .integer_domain(domain)
+        .ok_or_else(|| representation("integer domain"))?;
+    if binding.forms.contains(&IntegerForm::Number) {
+        Ok(JsonValue::Num(value.clone()))
+    } else if binding.forms.contains(&IntegerForm::IntegralDecimal) {
+        Ok(JsonValue::Dec(format!("{value}.0")))
+    } else if binding.forms.contains(&IntegerForm::DecimalString) {
+        Ok(JsonValue::Str(value.to_string()))
+    } else {
+        Err(representation("integer form"))
+    }
 }
 pub fn decode_json(s: &str) -> Result<JsonValue, RuntimeFailure> {
     serde_json::from_str(s).map_err(|e| RuntimeFailure::Json(e.to_string()))
@@ -130,44 +162,6 @@ fn base64_encode(bytes: &[u8], url_safe: bool, padded: bool) -> Result<String, R
     }
     Ok(output)
 }
-fn base64_value(byte: u8, url_safe: bool) -> Option<u8> {
-    match byte {
-        b'A'..=b'Z' => Some(byte - b'A'),
-        b'a'..=b'z' => Some(byte - b'a' + 26),
-        b'0'..=b'9' => Some(byte - b'0' + 52),
-        b'+' if !url_safe => Some(62),
-        b'/' if !url_safe => Some(63),
-        b'-' if url_safe => Some(62),
-        b'_' if url_safe => Some(63),
-        _ => None,
-    }
-}
-fn base64_decode(text: &str, url_safe: bool) -> Option<Vec<u8>> {
-    let text = text.trim_end_matches('=');
-    if text.len() % 4 == 1 {
-        return None;
-    }
-    let values = text
-        .bytes()
-        .map(|byte| base64_value(byte, url_safe))
-        .collect::<Option<Vec<_>>>()?;
-    let mut output = Vec::new();
-    for chunk in values.chunks(4) {
-        let mut value = 0u32;
-        for digit in chunk {
-            value = (value << 6) | u32::from(*digit);
-        }
-        value <<= 6 * (4 - chunk.len());
-        output.push((value >> 16) as u8);
-        if chunk.len() >= 3 {
-            output.push((value >> 8) as u8);
-        }
-        if chunk.len() == 4 {
-            output.push(value as u8);
-        }
-    }
-    Some(output)
-}
 pub fn bytes_encode(
     profile: &VersionedSemanticProfile,
     bytes: &[u8],
@@ -201,15 +195,7 @@ pub fn bytes_decode(
             _ => return Err(representation("bytes text")),
         },
     };
-    let alphabets: &[bool] = match policy.alphabet {
-        crate::semantic_types::BytesAlphabet::Standard => &[false],
-        crate::semantic_types::BytesAlphabet::UrlSafe => &[true],
-        crate::semantic_types::BytesAlphabet::Either => &[false, true],
-    };
-    alphabets
-        .iter()
-        .find_map(|url_safe| base64_decode(&text, *url_safe))
-        .ok_or_else(|| representation("base64"))
+    crate::semantic_validation::base64_decode(policy, &text).ok_or_else(|| representation("base64"))
 }
 pub fn with_member(key: &str, text: &str, value: JsonValue) -> Result<JsonValue, RuntimeFailure> {
     let JsonValue::Obj(mut m) = value else {

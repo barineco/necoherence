@@ -1,7 +1,6 @@
 # SPDX-FileCopyrightText: 2026 barineco
 # SPDX-License-Identifier: MIT
 
-"""Executable connection evidence for the Python public APIs."""
 
 from __future__ import annotations
 

@@ -1,8 +1,6 @@
 // SPDX-FileCopyrightText: 2026 barineco
 // SPDX-License-Identifier: MIT
 
-// Iterative call forms whose step-count upper bound is readable from the
-// input, with no caller-supplied fuel argument.
 
 import {
   io,
@@ -30,7 +28,6 @@ function callIo<S, P>(step: Immediate<S, P>, state: S, stepFields: readonly stri
   return io(step, requestOf(state, stepFields));
 }
 
-// -- fold --------------------------------------------------------------------
 
 export interface FoldReq<S> {
   readonly step: Immediate<S, S>;
@@ -79,7 +76,6 @@ export const fold: Immediate<FoldReq<unknown>, FoldOutcome<unknown>> = Object.fr
   output: foldOutput as (req: FoldReq<unknown>) => FoldOutcome<unknown>,
 });
 
-// -- recurse -----------------------------------------------------------------
 
 export interface Advance<S> {
   readonly tag: "Advance";
@@ -175,7 +171,6 @@ export const recurse: Immediate<RecurseReq<unknown>, RecurseOutcome<unknown>> = 
   output: recurseOutput as (req: RecurseReq<unknown>) => RecurseOutcome<unknown>,
 });
 
-// -- closure -----------------------------------------------------------------
 
 export interface ClosureState<T> {
   readonly elements: readonly T[];

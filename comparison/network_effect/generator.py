@@ -1,11 +1,6 @@
 # SPDX-FileCopyrightText: 2026 barineco
 # SPDX-License-Identifier: MIT
 
-"""Invocation-time finite domains for the network-effect comparison.
-
-Stateful domains receive authoritative states and tokens from the Lean runner,
-then derive one-field forgeries and transition inputs without stored outputs.
-"""
 
 from __future__ import annotations
 
@@ -79,7 +74,6 @@ LIMIT_RELATIONS = ("below", "equal", "above")
 
 
 def finite_domains() -> dict[str, tuple[Any, ...]]:
-    """Return every named finite value domain."""
     return {
         "method": METHODS,
         "target": TARGETS,
@@ -392,7 +386,6 @@ def generate_model_invocations(limit: int | None = None) -> Iterator[dict[str, A
 
 
 def generate_invocations(*, full: bool = False, limit: int | None = None) -> Iterable[dict[str, Any]]:
-    """Generate canonical or pairwise-covered model-domain invocations."""
     if full:
         return generate_model_invocations(limit)
     return ({"operation": "readNetworkState", "state": {"attempts": []}},)
@@ -433,7 +426,6 @@ def _forged_lineage(prepared: dict[str, Any]) -> dict[str, Any]:
 
 
 def generate_field_mutations(kind: str, value: dict[str, Any]) -> Iterator[dict[str, Any]]:
-    """Yield semantic one-field forgeries of an authoritative Lean value."""
     if kind not in ("prepared", "started"):
         raise ValueError(f"unknown token kind: {kind}")
     prepared_prefix = ("prepared",) if kind == "started" else ()
@@ -790,7 +782,6 @@ def generate_timeout_pairs() -> Iterator[dict[str, str]]:
 
 
 def generate_race_orders() -> Iterator[tuple[str, ...]]:
-    """Yield each terminal kind as a delivery winner."""
     yield from (
         ("response", "cancel", "deadline", "failure"),
         ("cancel", "response", "deadline", "failure"),

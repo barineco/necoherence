@@ -105,23 +105,13 @@ import necoherence.record.RecordBasis;
 import necoherence.store.Stores;
 import necoherence.transition.StepTransition;
 
-/**
- * Inspection adapter: reads one generated query from stdin, evaluates it against this package's
- * computable declarations, and writes one normalized JSON result to stdout.
- *
- * <p>Protocol mirrors {@code lean_driver/FeatureCheck.lean}: {@code {"kind":"surface"}} returns the fixed
- * feature/operation inventory; {@code {"kind":"evaluate","requests":[...]}} decodes and evaluates
- * each request in order; any syntax, shape, or unknown-name failure closes the whole reply as
- * {@code {"kind":"invalid","failure":{...}}}.
- *
- * <p>Non-negative integers are exchanged as decimal-digit JSON strings.
- */
+
 public final class FeatureCheck {
 
     private FeatureCheck() {
     }
 
-    /** Distinguishes why decoding a query or a request's input failed. */
+
     private enum FailureKind {
         JSON_SYNTAX("json_syntax"),
         QUERY_SHAPE("query_shape"),
@@ -149,7 +139,7 @@ public final class FeatureCheck {
         return new DecodeException(FailureKind.INPUT_SHAPE, detail);
     }
 
-    /* ---------------------------------------------------------------- JSON accessors */
+
 
     private static Json.JObj asObj(Json j) {
         if (j instanceof Json.JObj o) {
@@ -220,7 +210,7 @@ public final class FeatureCheck {
         return out;
     }
 
-    /* ---------------------------------------------------------------- Core */
+
 
     private static ResourceId decodeResourceId(Json j) {
         return new ResourceId(strField(j, "kind"), strField(j, "name"));
@@ -324,7 +314,7 @@ public final class FeatureCheck {
         return encodeApplyOutcome(Core.apply(world, command));
     }
 
-    /* ---------------------------------------------------------------- Call */
+
 
     private sealed interface FunctionForm {
         record IdentityForm() implements FunctionForm {
@@ -444,7 +434,7 @@ public final class FeatureCheck {
         return encodeCallResult(Call.issue(decl, req));
     }
 
-    /* ---------------------------------------------------------------- Step transition */
+
 
     private sealed interface AdvanceForm {
         record ConsumeImmediately(List<Json> outputs) implements AdvanceForm {
@@ -537,7 +527,7 @@ public final class FeatureCheck {
         return encodeStepTransitionResult(result);
     }
 
-    /* ---------------------------------------------------------------- Iteration */
+
 
     private static Json encodeStageFailed(Iteration.StageProjectionFailed s) {
         return Json.obj(
@@ -679,7 +669,7 @@ public final class FeatureCheck {
                 "stopped", encodeStageFailed(failed.stopped()));
     }
 
-    /* ---------------------------------------------------------------- Store */
+
 
     private static Stores.Store.Entry<Json> decodeStoreEntry(Json j) {
         return new Stores.Store.Entry<>(
@@ -750,7 +740,7 @@ public final class FeatureCheck {
         return encodeWorld(Stores.worldOfStore(store));
     }
 
-    /* ---------------------------------------------------------------- Record */
+
 
     private static CallRecord<Json, Json> decodeCallRecord(Json j) {
         String declaration = strField(j, "declaration");
@@ -790,7 +780,7 @@ public final class FeatureCheck {
         return Json.obj("holds", Json.bool(Record.hasEdge(earlier, later)));
     }
 
-    /* ---------------------------------------------------------------- Reconcile */
+
 
     private static Optional<Basis> decodeOptionBasis(Json j) {
         return j instanceof Json.JNull ? Optional.empty() : Optional.of(decodeBasis(j));
@@ -870,7 +860,7 @@ public final class FeatureCheck {
         return Json.obj("coherent", Json.bool(Reconcile.coherent(r)));
     }
 
-    /* ---------------------------------------------------------------- Request progression */
+
 
     private static RequestPolicy decodeRequestPolicy(Json j) {
         String s = asStr(j);
@@ -1339,7 +1329,7 @@ public final class FeatureCheck {
         return encodeResourceDemand(Progression.deriveConcurrent(snapshot));
     }
 
-    /* ---------------------------------------------------------------- Dynamic admission */
+
 
     private static EnvironmentSpecification decodeEnvironmentSpecification(Json j) {
         return new EnvironmentSpecification(natField(j, "maxObservationAge"));
@@ -1540,7 +1530,7 @@ public final class FeatureCheck {
         return encodeDynamicAdmissionOutcome(Admission.admitDynamicRequest(admissionInput));
     }
 
-    /* ---------------------------------------------------------------- File effect */
+
 
     private static NormalizedPath decodeNormalizedPath(Json j) {
         boolean root = asBool(objVal(j, "root"));
@@ -1779,7 +1769,7 @@ public final class FeatureCheck {
                 FileEffect.replace(new FileEffect.ReplaceReq(command, path, world, digests, state, observedAt)));
     }
 
-    /* ---------------------------------------------------------------- Surface inventory */
+
 
     private record SurfaceEntry(String feature, List<String> operations) {
     }
@@ -1811,7 +1801,7 @@ public final class FeatureCheck {
         return Json.obj("kind", Json.str("surface"), "features", Json.arr(features));
     }
 
-    /* ---------------------------------------------------------------- Dispatch */
+
 
     private static Json dispatch(String feature, String operation, Json input) {
         String key = feature + "." + operation;
@@ -1901,7 +1891,7 @@ public final class FeatureCheck {
                 "failure", Json.obj("kind", Json.str(f.kind.label), "detail", Json.str(f.getMessage())));
     }
 
-    /** Reads one query from stdin, evaluates it, and writes one normalized JSON result to stdout. */
+
     public static void main(String[] args) throws java.io.IOException {
         String content = new String(System.in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
         Json out;

@@ -545,13 +545,6 @@ fn composition_to_signature_wire(
                     }
                 }
             }
-            if fields.contains_key("max_expanded_states")
-                && fields.contains_key("max_binding_candidates")
-                && fields.contains_key("max_type_obligations")
-                && fields.contains_key("max_branch_nodes")
-            {
-                fields.remove("max_sample_length");
-            }
             if let Some(reference) = fields.remove("type_ref") {
                 fields.insert("type_id".into(), reference);
             }
@@ -711,12 +704,30 @@ fn composition_from_signature_wire(
     native_basis: &serde_json::Value,
     wire_basis: &serde_json::Value,
 ) -> Decoded<()> {
+    let library_digest = crate::signature_admission::canonical_digest(library);
+    composition_value_from_signature_wire(
+        value,
+        library,
+        &library_digest,
+        native_basis,
+        wire_basis,
+    )
+}
+
+fn composition_value_from_signature_wire(
+    value: &mut serde_json::Value,
+    library: &TypeSignatureLibrary,
+    library_digest: &str,
+    native_basis: &serde_json::Value,
+    wire_basis: &serde_json::Value,
+) -> Decoded<()> {
     match value {
         serde_json::Value::Array(values) => {
             for value in values {
-                composition_from_signature_wire(
+                composition_value_from_signature_wire(
                     value,
                     library,
+                    library_digest,
                     native_basis,
                     wire_basis,
                 )?;
@@ -734,7 +745,7 @@ fn composition_from_signature_wire(
                     .to_owned();
                 let reference = crate::signature_admission::signature_type_ref(
                     library,
-                    &crate::signature_admission::canonical_digest(library),
+                    library_digest,
                     &type_id,
                 );
                 let pointer = fields
@@ -764,7 +775,7 @@ fn composition_from_signature_wire(
                     .map(|id| {
                         composition_wire_value(&crate::signature_admission::signature_type_ref(
                             library,
-                            &crate::signature_admission::canonical_digest(library),
+                            library_digest,
                             &id,
                         ))
                     })
@@ -815,10 +826,21 @@ fn composition_from_signature_wire(
             {
                 let reference = crate::signature_admission::signature_type_ref(
                     library,
-                    &crate::signature_admission::canonical_digest(library),
+                    library_digest,
                     &type_id,
                 );
                 fields.insert("type_ref".into(), composition_wire_value(&reference)?);
+            }
+            if let Some(type_id) = fields
+                .get("source_type")
+                .and_then(serde_json::Value::as_str)
+            {
+                let reference = crate::signature_admission::signature_type_ref(
+                    library,
+                    library_digest,
+                    type_id,
+                );
+                fields.insert("source_type".into(), composition_wire_value(&reference)?);
             }
             if fields.contains_key("id") {
                 if let Some(type_id) = fields
@@ -828,7 +850,7 @@ fn composition_from_signature_wire(
                 {
                     let reference = crate::signature_admission::signature_type_ref(
                         library,
-                        &crate::signature_admission::canonical_digest(library),
+                        library_digest,
                         &type_id,
                     );
                     fields.insert(
@@ -836,16 +858,6 @@ fn composition_from_signature_wire(
                         composition_wire_value(&reference)?,
                     );
                 }
-            }
-            if fields.contains_key("max_expanded_states")
-                && fields.contains_key("max_binding_candidates")
-                && fields.contains_key("max_type_obligations")
-                && fields.contains_key("max_branch_nodes")
-            {
-                fields.insert(
-                    "max_sample_length".into(),
-                    serde_json::Value::String("32".into()),
-                );
             }
             composition_check_causes(fields, library)?;
             if fields.contains_key("basis") {
@@ -858,16 +870,17 @@ fn composition_from_signature_wire(
                 if let Some(id) = fields.get("value").and_then(serde_json::Value::as_str) {
                     let reference = crate::signature_admission::signature_definition_ref(
                         library,
-                        &crate::signature_admission::canonical_digest(library),
+                        library_digest,
                         id,
                     );
                     fields.insert("value".into(), composition_wire_value(&reference)?);
                 }
             }
             for value in fields.values_mut() {
-                composition_from_signature_wire(
+                composition_value_from_signature_wire(
                     value,
                     library,
+                    library_digest,
                     native_basis,
                     wire_basis,
                 )?;

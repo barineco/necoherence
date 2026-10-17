@@ -381,6 +381,27 @@ export function deepFreeze<T>(value: T): T {
   }
   return value;
 }
+
+const memberOrder = Symbol("exact object member order");
+export function preserveObjectOrder<T extends object>(value: T, order: readonly string[]): T {
+  requireEvidence(new Set(order).size === order.length && order.length === Object.keys(value).length
+    && order.every(key => Object.hasOwn(value, key)), "exact object member order");
+  Object.defineProperty(value, memberOrder, { value: Object.freeze([...order]), enumerable: false });
+  return value;
+}
+function orderedKeys(value: object): readonly string[] {
+  const order = (value as { readonly [memberOrder]?: unknown })[memberOrder];
+  if (order === undefined) return Object.keys(value);
+  requireEvidence(Array.isArray(order) && order.every(key => typeof key === "string")
+    && new Set(order).size === order.length && order.length === Object.keys(value).length
+    && order.every(key => Object.hasOwn(value, key)), "exact object member order");
+  return order;
+}
+export function orderedObject(members: readonly { readonly key: string; readonly value: ExactJson }[], source: object): ExactJson {
+  const order = orderedKeys(source), byKey = new Map(members.map(item => [item.key, item]));
+  return { tag: "Object", members: [...order, ...members.map(item => item.key).filter(key => !order.includes(key))]
+    .filter(key => byKey.has(key)).map(key => byKey.get(key)!) };
+}
 export function hashUtf8(text: string): string { return Array.from(sha256(new TextEncoder().encode(text)), n => n.toString(16).padStart(2, "0")).join(""); }
 export function parseLossless(text: string): unknown {
   const convert = (value: ExactJson): unknown => {
@@ -412,8 +433,8 @@ export function toExact(value: unknown): ExactJson {
       if (Array.isArray(value)) return { tag: "Array", items: value.map(child) };
       requireEvidence(Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null, "plain JSON object");
       const descriptors = Object.getOwnPropertyDescriptors(value);
-      requireEvidence(Object.getOwnPropertySymbols(value).length === 0 && Object.values(descriptors).every(d => "value" in d), "JSON data properties");
-      return { tag: "Object", members: Object.entries(value).map(([key, item]) => { toExact(key); return { key, value: child(item) }; }) };
+      requireEvidence(Object.getOwnPropertySymbols(value).every(symbol => symbol === memberOrder) && Object.values(descriptors).every(d => "value" in d), "JSON data properties");
+      return { tag: "Object", members: orderedKeys(value).map(key => { toExact(key); return { key, value: child((value as Record<string, unknown>)[key]) }; }) };
     } finally { active.delete(value); }
   };
   return convert(value);
@@ -428,7 +449,7 @@ export function fromExact(value: ExactJson): DynamicValue {
     case "Object": {
       const out: Record<string, DynamicValue> = Object.create(null);
       for (const { key, value: item } of value.members) { requireEvidence(!Object.hasOwn(out, key), "duplicate member"); out[key] = fromExact(item); }
-      return Object.freeze(out);
+      return Object.freeze(preserveObjectOrder(out, value.members.map(item => item.key)));
     }
   }
 }
@@ -519,9 +540,8 @@ function base64Digit(alphabet: BytesAlphabet, character: string): number | null 
   return null;
 }
 export function base64Decode(text: string, policy: BytesPolicy): Uint8Array | null {
-  const matched = /^([^=]*)(={0,2})$/.exec(text);
-  if (!matched) return null;
-  const data = matched[1]!, padding = matched[2]!.length, remainder = data.length % 4;
+  const parts = text.split("="), data = parts[0]!, padding = parts.length - 1, remainder = data.length % 4;
+  if (padding > 2 || parts.slice(1).some(part => part !== "")) return null;
   const digits = [...data].map(character => base64Digit(policy.alphabet, character));
   if (digits.some(digit => digit === null) || remainder === 1) return null;
   if (policy.strict_pad_bits && (remainder === 2 && digits[digits.length - 1]! % 16 !== 0 || remainder === 3 && digits[digits.length - 1]! % 4 !== 0)) return null;
@@ -584,6 +604,27 @@ function unicodeScalarString(text: string): boolean {
   return !/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/u.test(text);
 }
 
+function binaryFormatSequence(children: readonly FormatRule[], start: number, end: number): FormatRule {
+  if (start === end) return { tag: "Sequence", value: [] };
+  if (end - start === 1) return children[start]!;
+  const middle = Math.floor((start + end) / 2);
+  return { tag: "Sequence", value: [binaryFormatSequence(children, start, middle), binaryFormatSequence(children, middle, end)] };
+}
+
+function compileFormatSpan(rule: FormatRule): FormatRule {
+  switch (rule.tag) {
+    case "Sequence": {
+      const children = rule.value.map(compileFormatSpan);
+      return binaryFormatSequence(children, 0, children.length);
+    }
+    case "Choice": return { ...rule, value: rule.value.map(compileFormatSpan) };
+    case "Optional": case "Not": return { ...rule, value: compileFormatSpan(rule.value) };
+    case "Labels": return { tag: "Labels", fields: { ...rule.fields, rule: compileFormatSpan(rule.fields.rule) } };
+    case "Bounded": return { tag: "Bounded", fields: { ...rule.fields, rule: compileFormatSpan(rule.fields.rule) } };
+    default: return rule;
+  }
+}
+
 export function recognizeFormat(rule: FormatRule, text: string): boolean {
   if (!unicodeScalarString(text)) return false;
   const scalars = [...text], memo = new WeakMap<object, Map<string, boolean>>();
@@ -594,28 +635,31 @@ export function recognizeFormat(rule: FormatRule, text: string): boolean {
     const known = entries.get(key);
     if (known !== undefined) return known;
     entries.set(key, false);
-    const value = scalars.slice(start, end).join("");
+    const value = current.tag === "Sequence" ? "" : scalars.slice(start, end).join("");
     let accepted: boolean;
     switch (current.tag) {
       case "Literal": accepted = unicodeScalarString(current.value) && value === current.value; break;
       case "Sequence": {
-        let cursors = new Set([start]);
-        for (const part of current.value) {
-          const next = new Set<number>();
-          for (const cursor of cursors) for (let split = cursor; split <= end; split++) if (accepts(part, cursor, split)) next.add(split);
-          cursors = next;
-          if (cursors.size === 0) break;
+        accepted = current.value.length === 0 && start === end;
+        if (current.value.length === 2) {
+          for (let split = start; split <= end; split++) {
+            if (accepts(current.value[0]!, start, split) && accepts(current.value[1]!, split, end)) { accepted = true; break; }
+          }
         }
-        accepted = cursors.has(end);
         break;
       }
       case "Optional": accepted = start === end || accepts(current.value, start, end); break;
       case "Labels": {
-        const p = current.fields, labels = value.split(p.separator);
+        const p = current.fields, labels = p.separator === "" ? [] : value.split(p.separator);
         accepted = p.separator !== "" && BigInt(labels.length) >= BigInt(p.min_count)
           && (p.max_count === null || BigInt(labels.length) <= BigInt(p.max_count))
-          && (p.total_max === null || BigInt(end - start) <= BigInt(p.total_max))
-          && labels.every(label => recognizeFormat(p.rule, label));
+          && (p.total_max === null || BigInt(end - start) <= BigInt(p.total_max));
+        let cursor = start;
+        if (accepted) for (const label of labels) {
+          const length = [...label].length;
+          if (!accepts(p.rule, cursor, cursor + length)) { accepted = false; break; }
+          cursor += length + [...p.separator].length;
+        }
         break;
       }
       case "Bounded": {
@@ -667,7 +711,7 @@ export function recognizeFormat(rule: FormatRule, text: string): boolean {
     entries.set(key, accepted);
     return accepted;
   };
-  return accepts(rule, 0, scalars.length);
+  return accepts(compileFormatSpan(rule), 0, scalars.length);
 }
 function rangeAt<T extends CodepointRange>(rows: readonly T[], cp: number): T | undefined {
   let low = 0, high = rows.length;
@@ -708,16 +752,44 @@ export function wrapEncode(profile: VersionedSemanticProfile, wrapperName: strin
   requireEvidence(wrapper, "declared wrapper");
   return exactObject([{ key: wrapper.key, value: { tag: "String", value: payload instanceof Uint8Array ? (requireEvidence(profile.bytes_policy, "bytes policy"), base64Encode(payload, profile.bytes_policy)) : payload } }]);
 }
+type WrapperPayloadResult =
+  | { readonly tag: "Accepted"; readonly text: string; readonly decoded: string | Uint8Array }
+  | { readonly tag: "Rejected"; readonly condition: string };
+function wrapperPayload(profile: VersionedSemanticProfile, wrapper: Wrapper, value: ExactJson): WrapperPayloadResult {
+  const condition = wrapper.payload.tag === "Bytes" ? "InvalidBytes"
+    : wrapper.payload.value === null ? "WrongValueKind:wrapper text" : `Format:${wrapper.payload.value}`;
+  const rejected = { tag: "Rejected", condition } as const;
+  if (value.tag !== "Object" || value.members.length !== 1) return rejected;
+  const payload = member(value, wrapper.key);
+  if (payload?.tag !== "String") return rejected;
+  if (wrapper.payload.tag === "Bytes") {
+    const decoded = profile.bytes_policy && base64Decode(payload.value, profile.bytes_policy);
+    return decoded ? { tag: "Accepted", text: payload.value, decoded } : rejected;
+  }
+  if (!unicodeScalarString(payload.value)) return rejected;
+  if (wrapper.payload.value !== null) {
+    const format = wrapper.payload.value;
+    const rule = profile.format_bindings.find(binding => binding.name === format)?.rule;
+    if (!rule || !recognizeFormat(rule, payload.value)) return rejected;
+  }
+  return { tag: "Accepted", text: payload.value, decoded: payload.value };
+}
 export function wrapDecode(profile: VersionedSemanticProfile, wrapperName: string, value: ExactJson): string | Uint8Array {
   const wrapper = profile.wrappers.find(candidate => candidate.name === wrapperName);
-  requireEvidence(wrapper && value.tag === "Object" && value.members.length === 1, "declared wrapper value");
-  const payload = member(value, wrapper.key); requireEvidence(payload?.tag === "String", "wrapper payload");
-  if (wrapper.payload.tag === "Bytes") { requireEvidence(profile.bytes_policy, "bytes policy"); const bytes = base64Decode(payload.value, profile.bytes_policy); requireEvidence(bytes, "valid wrapped bytes"); return bytes; }
-  if (wrapper.payload.tag === "Text" && wrapper.payload.value !== null) {
-    const format = wrapper.payload.value;
-    requireEvidence(recognizeFormat(profile.format_bindings.find(binding => binding.name === format)?.rule!, payload.value), "wrapper payload format");
-  }
-  return payload.value;
+  requireEvidence(wrapper, "declared wrapper");
+  const result = wrapperPayload(profile, wrapper, value);
+  requireEvidence(result.tag === "Accepted", result.tag === "Rejected" ? result.condition : "wrapper payload");
+  return result.decoded;
+}
+function decodeBytes(profile: VersionedSemanticProfile, value: ExactJson): Uint8Array | null {
+  const policy = profile.bytes_policy;
+  if (policy === null) return null;
+  if (policy.wrapper === null) return value.tag === "String" ? base64Decode(value.value, policy) : null;
+  const wrapper = profile.wrappers.find(candidate => candidate.name === policy.wrapper);
+  if (!wrapper) return null;
+  const result = wrapperPayload(profile, wrapper, value);
+  if (result.tag === "Rejected") return null;
+  return result.decoded instanceof Uint8Array ? result.decoded : base64Decode(result.text, policy);
 }
 export function withMember(key: string, text: string, value: ExactJson): ExactJson {
   requireEvidence(value.tag === "Object", "object value"); const old = member(value, key);
@@ -739,6 +811,98 @@ export function selectBranch(graph: ValueGraph, ref: TypeRef, value: ExactJson):
   return null;
 }
 function exactKind(value: ExactJson): ValueKind["tag"] { return value.tag === "Null" ? "Null" : value.tag === "Bool" ? "Boolean" : value.tag === "Integer" || value.tag === "Decimal" ? "Number" : value.tag; }
+
+export interface DefaultApplication {
+  readonly value_path: readonly PathStep[];
+  readonly type_ref: TypeRef;
+  readonly origin: OccurrenceRef;
+  readonly value: ExactJson;
+}
+export type SemanticReason =
+  | { readonly tag: "MembershipBound" | "UnresolvedType" | "MissingGraphemeRules" | "MissingBytesPolicy" | "DecimalNotAdmitted" | "IntegerBound" | "MissingTagModel" }
+  | { readonly tag: "UnknownFormat" | "UnknownIntegerDomain" | "UnknownWrapper" | "WrapperPayload" | "UnknownSealedTag" | "OpaqueType"; readonly value: string };
+export interface SemanticObligation {
+  readonly type_ref: TypeRef; readonly origin: OccurrenceRef;
+  readonly value_path: readonly PathStep[]; readonly profile: ProfileRef;
+  readonly reason: SemanticReason;
+}
+export class SemanticUnresolvedError extends SemanticEvidenceError {
+  constructor(readonly obligations: readonly SemanticObligation[]) { super("unresolved value meaning"); }
+}
+
+function nodeMeaningReasons(graph: ValueGraph, ref: TypeRef): readonly SemanticReason[] {
+  const node = graph.nodes.find(node => typeIdentity(node.reference) === typeIdentity(ref));
+  if (!node) return [{ tag: "UnresolvedType" }];
+  const shape = node.shape, profile = graph.profile, reasons: SemanticReason[] = [];
+  if (shape.tag === "String") {
+    if (shape.value.lengths.some(bound => bound.unit.tag === "Graphemes") && profile.grapheme_rules === null) reasons.push({ tag: "MissingGraphemeRules" });
+    if (shape.value.format?.tag === "Named" && !profile.format_bindings.some(binding => binding.name === shape.value.format!.value)) reasons.push({ tag: "UnknownFormat", value: shape.value.format.value });
+    if (shape.value.wrapper !== null) {
+      const wrapper = profile.wrappers.find(wrapper => wrapper.name === shape.value.wrapper);
+      if (!wrapper) reasons.push({ tag: "UnknownWrapper", value: shape.value.wrapper });
+      else if (wrapper.payload.tag !== "Text") reasons.push({ tag: "WrapperPayload", value: shape.value.wrapper });
+    }
+  } else if (shape.tag === "Integer") {
+    const name = shape.value.domain ?? profile.default_integer_domain, binding = profile.integer_domains.find(binding => binding.name === name);
+    if (!binding) reasons.push({ tag: "UnknownIntegerDomain", value: name });
+    else if (binding.range.tag === "Inclusive" && (shape.value.minimum !== null && BigInt(shape.value.minimum) < BigInt(binding.range.fields.minimum) || shape.value.maximum !== null && BigInt(shape.value.maximum) > BigInt(binding.range.fields.maximum))) reasons.push({ tag: "IntegerBound" });
+  } else if (shape.tag === "Decimal" && !profile.numbers.decimals) reasons.push({ tag: "DecimalNotAdmitted" });
+  else if ((shape.tag === "Bytes" || shape.tag === "RawBody") && profile.bytes_policy === null) reasons.push({ tag: "MissingBytesPolicy" });
+  else if (shape.tag === "Sealed" && !profile.tag?.sealed.some(form => form.tag === shape.fields.tag)) reasons.push({ tag: "UnknownSealedTag", value: shape.fields.tag });
+  else if (shape.tag === "TaggedUnion" && profile.tag === null && shape.value.branches.some(branch => branch.selector.tag === "InternalTag")) reasons.push({ tag: "MissingTagModel" });
+  else if (shape.tag === "Opaque") reasons.push({ tag: "OpaqueType", value: shape.fields.type_name });
+  return reasons;
+}
+export function meaningObligations(graph: ValueGraph, refs: readonly TypeRef[]): readonly SemanticObligation[] {
+  const edges = graph.nodes.reduce((total, node) => total + children(node.shape).length, 0);
+  const pending = [...refs], seen = new Set<string>(), reachable: TypeRef[] = [];
+  for (let fuel = refs.length + graph.nodes.length + edges + 1; fuel > 0 && pending.length; fuel--) {
+    const ref = pending.shift()!, key = typeIdentity(ref);
+    if (seen.has(key)) continue;
+    seen.add(key); reachable.unshift(ref);
+    const node = graph.nodes.find(node => typeIdentity(node.reference) === key);
+    if (node) pending.unshift(...children(node.shape));
+  }
+  return reachable.flatMap(ref => nodeMeaningReasons(graph, ref).map(reason => ({
+    type_ref: ref, origin: { source: ref.source, pointer: ref.pointer }, value_path: [],
+    profile: graph.profile.reference, reason,
+  })));
+}
+function defaultOrigin(ref: TypeRef): OccurrenceRef {
+  return { source: ref.source, pointer: [...ref.pointer, "default"] };
+}
+function typeDefault(shape: TypeShape): ExactJson | undefined {
+  if (shape.tag === "Boolean" && shape.value.default_value !== null) return { tag: "Bool", value: shape.value.default_value };
+  if (shape.tag === "Integer" && shape.value.default_value !== null) return { tag: "Integer", value: shape.value.default_value };
+  if (shape.tag === "String" && shape.value.default_value !== null) return { tag: "String", value: shape.value.default_value };
+  return undefined;
+}
+export function checkDefaultApplications(graph: ValueGraph, before: ExactJson, after: ExactJson, applications: readonly DefaultApplication[]): boolean {
+  return applications.every(application => {
+    const first = projectValue({ tag: "Present", value: before }, application.value_path, graph.profile);
+    const last = projectValue({ tag: "Present", value: after }, application.value_path, graph.profile);
+    const node = graph.nodes.find(node => typeIdentity(node.reference) === typeIdentity(application.type_ref));
+    return first.tag === "Absent" && last.tag === "Present" && same(last.value, application.value)
+      && same(application.origin, defaultOrigin(application.type_ref))
+      && node !== undefined && same(typeDefault(node.shape), application.value);
+  });
+}
+export class DefaultedValue {
+  readonly #value: ExactJson;
+  readonly #applications: readonly DefaultApplication[];
+  private constructor(value: ExactJson, applications: readonly DefaultApplication[]) {
+    this.#value = deepFreeze(structuredClone(value));
+    this.#applications = deepFreeze(structuredClone(applications));
+    Object.freeze(this);
+  }
+  get value(): ExactJson { return this.#value; }
+  get applications(): readonly DefaultApplication[] { return this.#applications; }
+  static checked(context: ValueContext, ref: TypeRef, before: ExactJson, after: ExactJson, applications: readonly DefaultApplication[]): DefaultedValue {
+    context.validate(ref, after);
+    requireEvidence(checkDefaultApplications(context.graph, before, after, applications), "default source, absence, or result");
+    return new DefaultedValue(after, applications);
+  }
+}
 export class ValueContext {
   readonly #nodes = new Map<string, TypeNode>();
   readonly profile: VersionedSemanticProfile;
@@ -749,7 +913,7 @@ export class ValueContext {
   format(name: string): FormatRule | undefined { return this.profile.format_bindings.find(binding => binding.name === name)?.rule; }
   defined(ref: TypeRef): void { const pending = [ref], seen = new Set<string>(); while (pending.length) { const current = pending.pop()!, id = typeIdentity(current); if (seen.has(id)) continue; seen.add(id); const node = this.node(current); requireEvidence(node.extensions.length === 0 && node.shape.tag !== "Opaque", "defined primitive meaning"); pending.push(...children(node.shape)); } }
   validateSlot(contract: SlotContract, value: ExactSlot): ExactSlot { if (value.tag === "Absent" && contract.required) this.reject(contract.type_ref, [], "MissingRequired", "absent"); if (value.tag === "Null" && !contract.nullable) this.reject(contract.type_ref, [], "NullNotAllowed", "null"); if (value.tag === "Present") this.validate(contract.type_ref, value.value); return value; }
-  validate(ref: TypeRef, value: ExactJson): ExactJson { this.defined(ref); this.evaluate(ref, value, [], new Set()); return value; }
+  validate(ref: TypeRef, value: ExactJson): ExactJson { const obligations = meaningObligations(this.graph, [ref]); if (obligations.length) throw new SemanticUnresolvedError(obligations); this.evaluate(ref, value, [], new Set()); return value; }
   accepts(contract: SlotContract, value: ExactSlot): boolean { try { this.validateSlot(contract, value); return true; } catch (error) { if (error instanceof SemanticValueError) return false; throw error; } }
   private reject(ref: TypeRef, path: readonly (string | bigint)[], condition: string, observed: string): never { throw new SemanticValueError({ type: ref, path, condition, observed }); }
   private domain(name: string | null): IntegerDomainBinding { const found = this.profile.integer_domains.find(item => item.name === (name ?? this.profile.default_integer_domain)); requireEvidence(found, "integer domain"); return found; }
@@ -766,10 +930,19 @@ export class ValueContext {
       if (value.tag !== "String") this.reject(ref, path, "WrongValueKind:string", value.tag);
       text = value.value;
     } else {
-      const decoded = wrapDecode(this.profile, spec.wrapper, value);
-      requireEvidence(typeof decoded === "string", "text wrapper");
-      text = decoded;
+      const classification = classOf(this.profile, value);
+      if (classification.tag !== "Wrapper" || classification.value.name !== spec.wrapper) this.reject(ref, path, "WrongValueKind:string wrapper", value.tag);
+      text = this.wrapperText(ref, classification.value, value, path);
     }
+    this.stringText(ref, spec, text, path);
+  }
+  private wrapperText(ref: TypeRef, wrapper: Wrapper, value: ExactJson, path: readonly (string | bigint)[]): string {
+    const result = wrapperPayload(this.profile, wrapper, value);
+    if (result.tag === "Rejected") this.reject(ref, path, result.condition, value.tag);
+    return result.text;
+  }
+  private stringText(ref: TypeRef, spec: StringSpec, text: string, path: readonly (string | bigint)[]): void {
+    if (!unicodeScalarString(text)) this.reject(ref, path, "InvalidDataModel", text);
     if (spec.const_value !== null && text !== spec.const_value) this.reject(ref, path, "ConstMismatch", text);
     if (spec.enum_values !== null && !spec.enum_values.includes(text)) this.reject(ref, path, "EnumMismatch", text);
     for (const bound of spec.lengths) { const length = bound.unit.tag === "Utf8Bytes" ? BigInt(new TextEncoder().encode(text).length) : bound.unit.tag === "UnicodeScalars" ? BigInt([...text].length) : (requireEvidence(this.profile.grapheme_rules, "grapheme rules"), graphemeCount(this.profile.grapheme_rules, text)); if (!bounded(length, bound.minimum, bound.maximum)) this.reject(ref, path, "StringLength", text); }
@@ -804,7 +977,7 @@ export class ValueContext {
       case "String": this.string(ref, shape.value, value, path); break;
       case "Alias": child(shape.fields.target, value); break;
       case "Array": if (value.tag !== "Array") fail("WrongValueKind:array"); else { if (!bounded(BigInt(value.items.length), shape.value.min_length, shape.value.max_length)) fail("ArrayLength"); value.items.forEach((item, index) => this.element(shape.value.item, item, [...path, BigInt(index)], child)); } break;
-      case "Bytes": case "RawBody": { requireEvidence(this.profile.bytes_policy, "bytes policy"); let decodedBytes: Uint8Array | null = null; if (this.profile.bytes_policy.wrapper !== null) { const wrapper = this.profile.wrappers.find(candidate => candidate.name === this.profile.bytes_policy!.wrapper); if (wrapper && value.tag === "Object" && value.members.length === 1) { const payload = member(value, wrapper.key); if (payload?.tag === "String") decodedBytes = base64Decode(payload.value, this.profile.bytes_policy); } } else decodedBytes = value.tag === "String" ? base64Decode(value.value, this.profile.bytes_policy) : null; if (!decodedBytes) return fail("InvalidBytes"); const bytes = decodedBytes; if (shape.tag === "Bytes" && !bounded(BigInt(bytes.length), shape.value.minimum, shape.value.maximum)) fail("BytesLength"); break; }
+      case "Bytes": case "RawBody": { const bytes = decodeBytes(this.profile, value); if (!bytes) return fail("InvalidBytes"); if (shape.tag === "Bytes" && !bounded(BigInt(bytes.length), shape.value.minimum, shape.value.maximum)) fail("BytesLength"); break; }
       case "Product": { if (value.tag !== "Object") return fail("WrongValueKind:object"); this.members(ref, value, path); this.tagMember(ref, value, path); if (classOf(this.profile, value).tag !== "Ordinary") fail("WrongValueKind:plain data object"); for (const field of shape.value.fields) { const item = member(value, field.wire_name); if (item === undefined) { if (field.slot.required) this.reject(field.slot.type_ref, [...path, field.wire_name], "MissingRequired", "absent"); } else if (item.tag === "Null") { if (!field.slot.nullable) this.reject(field.slot.type_ref, [...path, field.wire_name], "NullNotAllowed", "null"); } else child(field.slot.type_ref, item, [...path, field.wire_name]); } for (const item of value.members) if (!shape.value.fields.some(field => field.wire_name === item.key) && item.key !== this.profile.tag?.key) { if (shape.value.extras.tag === "Reject") this.reject(ref, [...path, item.key], `UnexpectedField:${item.key}`, item.key); const extras = shape.value.extras.tag === "Allow" ? shape.value.extras.fields : null; if (extras?.key_format) { const rule = namedRule(this.profile, extras.key_format); if (!rule || !recognizeFormat(rule, item.key)) this.reject(ref, [...path, item.key], `KeyFormat:${item.key}`, item.key); } if (extras) this.element(extras.value, item.value, [...path, item.key], child); } break; }
       case "Unknown": if (shape.value.tag === "OrdinaryObject" && (value.tag !== "Object" || classOf(this.profile, value).tag !== "Ordinary")) fail("WrongValueKind:ordinary object"); this.data(ref, value, path); break;
       case "Sealed": this.sealed(ref, shape.fields.tag, shape.fields.refinements, value, path); break;
@@ -828,9 +1001,110 @@ export class ValueContext {
       this.reject(ref, [...path, this.profile.tag.key], "InvalidTag", tag.tag);
     }
   }
-  private data(ref: TypeRef, value: ExactJson, path: readonly (string | bigint)[]): void { if (value.tag === "Decimal" && !this.profile.numbers.decimals) this.reject(ref, path, "InvalidDataModel", value.text); if (value.tag === "Integer") { const range = this.domain(null).range; if (range.tag === "Inclusive" && !bounded(BigInt(value.value), range.fields.minimum, range.fields.maximum)) this.reject(ref, path, "IntegerDomain", value.value); } if (value.tag === "Array") value.items.forEach((item, i) => this.data(ref, item, [...path, BigInt(i)])); if (value.tag === "Object") { this.members(ref, value, path); this.tagMember(ref, value, path); const classification = classOf(this.profile, value); if (classification.tag === "Wrapper") wrapDecode(this.profile, classification.value.name, value); else if (classification.tag === "Sealed") this.sealed(ref, classification.value.tag, [], value, path); else value.members.forEach(item => this.data(ref, item.value, [...path, item.key])); } }
-  private sealed(ref: TypeRef, tagName: string, refinements: readonly SealedRefinement[], value: ExactJson, path: readonly (string | bigint)[]): void { if (value.tag !== "Object" || !this.profile.tag) this.reject(ref, path, "WrongValueKind:sealed object", value.tag); this.members(ref, value, path); this.tagMember(ref, value, path); const classification = classOf(this.profile, value); if (classification.tag !== "Sealed") this.reject(ref, path, "WrongValueKind:sealed object", value.tag); if (classification.value.tag !== tagName) this.reject(ref, path, "InvalidDataModel", value.tag); const form = classification.value; const fields = form.fields.map(field => refinements.find(item => item.key === field.key) ?? field); for (const field of fields) { const item = member(value, field.key); if (item === undefined) { if ("required" in field && field.required) this.reject(ref, [...path, field.key], "MissingRequired", "absent"); continue; } if (field.leaf.tag === "String") this.string(ref, field.leaf.value, item, [...path, field.key]); else if (this.integer(field.leaf.value, item) === null) this.reject(ref, [...path, field.key], "WrongValueKind:integer", item.tag); } if (form.extras.tag === "Reject") for (const item of value.members) if (item.key !== this.profile.tag.key && !fields.some(field => field.key === item.key)) this.reject(ref, [...path, item.key], `UnexpectedField:${item.key}`, item.key); }
-  defaults(ref: TypeRef, value: ExactJson): ExactJson { return this.validate(ref, value); }
+  private data(ref: TypeRef, value: ExactJson, path: readonly (string | bigint)[]): void {
+    if (value.tag === "Decimal" && !this.profile.numbers.decimals) this.reject(ref, path, "InvalidDataModel", value.text);
+    if (value.tag === "Integer") { const range = this.domain(null).range; if (range.tag === "Inclusive" && !bounded(BigInt(value.value), range.fields.minimum, range.fields.maximum)) this.reject(ref, path, "IntegerDomain", value.value); }
+    if (value.tag === "Array") value.items.forEach((item, i) => this.data(ref, item, [...path, BigInt(i)]));
+    if (value.tag === "Object") {
+      this.members(ref, value, path);
+      this.tagMember(ref, value, path);
+      const classification = classOf(this.profile, value);
+      if (classification.tag === "Wrapper") this.wrapperText(ref, classification.value, value, path);
+      else if (classification.tag === "Sealed") {
+        this.sealed(ref, classification.value.tag, [], value, path);
+        if (classification.value.extras.tag === "Any") {
+          for (const item of value.members) if (item.key !== this.profile.tag?.key && !classification.value.fields.some(field => field.key === item.key)) this.data(ref, item.value, [...path, item.key]);
+        }
+      } else value.members.forEach(item => this.data(ref, item.value, [...path, item.key]));
+    }
+  }
+  private sealedLeaf(ref: TypeRef, leaf: SealedLeaf, value: ExactJson, path: readonly (string | bigint)[]): void {
+    if (leaf.tag === "String") {
+      let text: string;
+      if (value.tag === "String") text = value.value;
+      else {
+        const classification = classOf(this.profile, value);
+        if (classification.tag !== "Wrapper") this.reject(ref, path, "WrongValueKind:string", value.tag);
+        text = this.wrapperText(ref, classification.value, value, path);
+      }
+      this.stringText(ref, leaf.value, text, path);
+      if (leaf.value.format?.tag === "Named" && !this.format(leaf.value.format.value)) this.reject(ref, path, `Format:${leaf.value.format.value}`, text);
+    } else if (this.integer(leaf.value, value) === null) this.reject(ref, path, "WrongValueKind:integer", value.tag);
+  }
+  private sealed(ref: TypeRef, tagName: string, refinements: readonly SealedRefinement[], value: ExactJson, path: readonly (string | bigint)[]): void {
+    if (value.tag !== "Object" || !this.profile.tag) this.reject(ref, path, "WrongValueKind:sealed object", value.tag);
+    this.members(ref, value, path);
+    this.tagMember(ref, value, path);
+    const classification = classOf(this.profile, value);
+    if (classification.tag !== "Sealed") this.reject(ref, path, "WrongValueKind:sealed object", value.tag);
+    if (classification.value.tag !== tagName) this.reject(ref, path, "InvalidDataModel", value.tag);
+    const form = classification.value;
+    for (const field of form.fields) {
+      const item = member(value, field.key);
+      if (item === undefined) { if (field.required) this.reject(ref, [...path, field.key], "MissingRequired", "absent"); }
+      else this.sealedLeaf(ref, field.leaf, item, [...path, field.key]);
+    }
+    for (const refinement of refinements) {
+      const item = member(value, refinement.key);
+      if (item !== undefined) this.sealedLeaf(ref, refinement.leaf, item, [...path, refinement.key]);
+    }
+    if (form.extras.tag === "Reject") for (const item of value.members) if (item.key !== this.profile.tag.key && !form.fields.some(field => field.key === item.key)) this.reject(ref, [...path, item.key], `UnexpectedField:${item.key}`, item.key);
+  }
+  materializeDefaults(ref: TypeRef, value: ExactJson): DefaultedValue {
+    const node = (reference: TypeRef, path: readonly PathStep[], fuel: number): TypeNode => {
+      const found = this.graph.nodes.find(node => typeIdentity(node.reference) === typeIdentity(reference));
+      if (fuel === 0 || found === undefined) throw new SemanticUnresolvedError([{
+        type_ref: reference, origin: { source: reference.source, pointer: reference.pointer },
+        value_path: path, profile: this.profile.reference, reason: { tag: fuel === 0 ? "MembershipBound" : "UnresolvedType" },
+      }]);
+      return found;
+    };
+    const declared = (reference: TypeRef): { ref: TypeRef; value: ExactJson } | undefined => {
+      for (let fuel = this.graph.nodes.length + 1; fuel > 0; fuel--) {
+        const found = this.graph.nodes.find(node => typeIdentity(node.reference) === typeIdentity(reference));
+        if (!found) return undefined;
+        if (found.shape.tag === "Alias") reference = found.shape.fields.target;
+        else { const value = typeDefault(found.shape); return value === undefined ? undefined : { ref: reference, value }; }
+      }
+      return undefined;
+    };
+    const draft = (reference: TypeRef, value: ExactJson, path: readonly PathStep[], fuel: number): { value: ExactJson; applications: DefaultApplication[] } => {
+      const shape = node(reference, path, fuel).shape;
+      if (shape.tag === "Alias") return draft(shape.fields.target, value, path, fuel - 1);
+      if (shape.tag === "TaggedUnion" && value.tag === "Object") {
+        const tag = member(value, this.profile.tag?.key ?? "");
+        const branch = tag?.tag === "String" ? shape.value.branches.find(branch => branch.wire_tag === tag.value) : undefined;
+        if (branch) return draft(branch.target, value, path, fuel - 1);
+      }
+      const applications: DefaultApplication[] = [];
+      if (shape.tag === "Array" && value.tag === "Array") return { value: { tag: "Array", items: value.items.map((item, index) => {
+        const child = draft(shape.value.item.type_ref, item, [...path, { tag: "Index", value: String(index) }], fuel - 1);
+        applications.push(...child.applications); return child.value;
+      }) }, applications };
+      if (shape.tag === "Product" && value.tag === "Object") {
+        const members = value.members.map(item => {
+          const field = shape.value.fields.find(field => field.wire_name === item.key);
+          if (!field || item.value.tag === "Null") return item;
+          const child = draft(field.slot.type_ref, item.value, [...path, { tag: "Field", value: item.key }], fuel - 1);
+          applications.push(...child.applications); return { key: item.key, value: child.value };
+        });
+        for (const field of shape.value.fields) if (member(value, field.wire_name) === undefined) {
+          const found = declared(field.slot.type_ref);
+          if (found) {
+            this.validate(found.ref, found.value);
+            applications.push({ value_path: [...path, { tag: "Field", value: field.wire_name }], type_ref: found.ref, origin: defaultOrigin(found.ref), value: found.value });
+            members.push({ key: field.wire_name, value: found.value });
+          }
+        }
+        return { value: { tag: "Object", members }, applications };
+      }
+      return { value, applications };
+    };
+    const size = (value: ExactJson): number => 1 + (value.tag === "Array" ? value.items.reduce((sum, item) => sum + size(item), 0) : value.tag === "Object" ? value.members.reduce((sum, item) => sum + size(item.value), 0) : 0);
+    const result = draft(ref, value, [], (size(value) + 1) * (this.graph.nodes.length + 1));
+    return DefaultedValue.checked(this, ref, value, result.value, result.applications);
+  }
+  decodeWithDefaults(ref: TypeRef, text: string): DefaultedValue { return this.materializeDefaults(ref, parseExact(text)); }
 }
 export interface Encodable { toExact(): ExactJson; }
 export interface Codec<T extends Encodable> { decodeJson(value: ExactJson): T; }
@@ -845,15 +1119,8 @@ export function bytesExact(value: Uint8Array, profile: VersionedSemanticProfile)
     : wrapEncode(profile, profile.bytes_policy.wrapper, value);
 }
 export function bytesValue(value: ExactJson, context: ValueContext): Uint8Array {
-  requireEvidence(context.profile.bytes_policy, "bytes policy");
-  if (context.profile.bytes_policy.wrapper !== null) {
-    const decoded = wrapDecode(context.profile, context.profile.bytes_policy.wrapper, value);
-    requireEvidence(decoded instanceof Uint8Array, "wrapped bytes");
-    return decoded;
-  }
-  requireEvidence(value.tag === "String", "encoded bytes");
-  const decoded = base64Decode(value.value, context.profile.bytes_policy);
-  requireEvidence(decoded, "canonical base64");
+  const decoded = decodeBytes(context.profile, value);
+  requireEvidence(decoded, "valid encoded bytes");
   return decoded;
 }
 

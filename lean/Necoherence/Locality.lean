@@ -1,28 +1,13 @@
 -- SPDX-FileCopyrightText: 2026 barineco
 -- SPDX-License-Identifier: MIT
 
-/-
-Locality of the effect point.
 
-Applying a command reads and writes exactly one resource. Its outcome and
-the revision that resource ends at depend on that resource's own lookup and
-on the command's basis, and on nothing else the world holds. Everything
-about composing calls follows from that fact together with the requirement
-each call states, so nothing here introduces a syntax of programs to carry
-composition: a chain is safe when each step's requirement is met by what the
-step before it produced, and that is a statement about worlds and commands.
-
-The last section relates this world to the fact set of `Cell`. Overwriting a
-revision loses the earlier one, while the fact image keeps it, so the two are
-not isomorphic. The map is a projection, and what it preserves is the
-judgment: whether a namespace is present, and whether a requirement is met.
--/
 import Necoherence.Core
 import Necoherence.Cell
 
 namespace Necoherence
 
-/-! ### Locality of the effect point -/
+
 
 /--
 Two worlds that agree on a resource's lookup agree on whether a command for
@@ -101,7 +86,7 @@ theorem apply_leaves_others {α : Type} (w : World) (c : Command α)
   rw [hbump]
   exact World.bump_lookup_other w c.basis.resource r hne
 
-/-! ### Composition as a chain of met requirements -/
+
 
 /--
 What a step requires: the resource it names holds the revision its basis
@@ -171,7 +156,7 @@ theorem requires_after_same_resource {α β : Type} (w : World)
   rw [hnext, ← hsame, apply_advances_locally w c₁ v hlook hrev happ]
 
 
-/-! ### The fact image is a projection, not an isomorphism -/
+
 
 /--
 Map a resource identity into Cell's `Namespace`. The namespace carries the same
@@ -268,7 +253,7 @@ theorem revision_not_recovered :
     cases h₁ : decide ((factOf (coreRid 0) 1).identity = f.identity) <;>
       cases h₀ : decide ((factOf (coreRid 0) 0).identity = f.identity) <;> simp_all
 
-/-! ### Writes that do not go through a basis -/
+
 
 theorem contains_append (a b : FactSet) (f : Fact) :
     FactSet.contains (a ++ b) f =

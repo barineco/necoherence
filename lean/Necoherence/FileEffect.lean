@@ -1,21 +1,7 @@
 -- SPDX-FileCopyrightText: 2026 barineco
 -- SPDX-License-Identifier: MIT
 
-/-
-File effect as a pure state transition over an external file world.
 
-`ExternalFileState` stands for the whole of what a real filesystem adapter
-would touch: present files and the paths where an adapter has declared a
-read or write to fail (its own boundary observation, not something this
-module computes). Content digests are likewise values fed in from outside:
-this module never hashes bytes and only compares digests supplied by an
-external adapter.
-
-`track`, `read`, and `replace` are defined as `(ExternalFileState, Request) ->
-(ExternalFileState, Outcome)` with no filesystem access: normalization,
-identity, staleness, and atomic replacement are total functions over the
-values supplied.
--/
 
 import Necoherence.Core
 
@@ -328,7 +314,7 @@ def replace (req : ReplaceReq) : ReplaceResult :=
             ⟨⟨⟨req.path, newContents, newDigest⟩, observation.basis, observation.observedAt⟩,
               world', digests', state'⟩
 
-/-! ### Theorems -/
+
 
 /--
 Folding onto an accumulator that already carries no special segment never

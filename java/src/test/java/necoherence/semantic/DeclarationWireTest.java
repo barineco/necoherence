@@ -5,6 +5,7 @@ package necoherence.semantic;
 
 import static necoherence.semantic.SemanticGeneration.*;
 import static necoherence.semantic.SemanticValues.*;
+import java.math.BigInteger;
 import java.util.List;
 
 public final class DeclarationWireTest {
@@ -80,5 +81,19 @@ public final class DeclarationWireTest {
         try{canonical(str("01"),"n","$test");throw new AssertionError("noncanonical Nat accepted");}catch(GenerationFailure expected){if(!expected.condition().equals("canonical exact natural"))throw expected;}
         WireValue profile=f(SemanticLibraryFixture.library(),"profile");unknownField("ValueProfile",profile,"representation");
     }
-    public static void main(String[] args)throws Exception{declarations();envelopes();oldEntries();System.out.println("Java: @4 declaration, diagnostic, basis and old-entry wire checks passed");}
+    private static void sampleBounds()throws Exception{
+        WireValue bounds=obj("max_expanded_states",str("10000"),"max_binding_candidates",str("100000"),
+                "max_type_obligations",str("10000"),"max_branch_nodes",str("100000"),"resource_bounds",NIL,"max_sample_length",str("59"));
+        WireValue restored=canonicalRoundtrip("SearchBounds",bounds);
+        if(!f(restored,"max_sample_length").equals(str("59")))throw new AssertionError("caller sample bound");
+        for(WireValue invalid:List.of(new IntegerValue(BigInteger.valueOf(59)),str("-1"),str("059"))){
+            try{canonical(TypeSignatures.replace(bounds,"max_sample_length",invalid),"SearchBounds","$test");throw new AssertionError("invalid sample bound accepted");}
+            catch(GenerationFailure expected){}
+        }
+        WireValue missing=new ObjectValue(o(bounds).members().stream().filter(member->!member.key().equals("max_sample_length")).toList());
+        try{canonical(missing,"SearchBounds","$test");throw new AssertionError("missing sample bound accepted");}
+        catch(GenerationFailure expected){}
+        unknownField("SearchBounds",bounds,"extra");
+    }
+    public static void main(String[] args)throws Exception{declarations();envelopes();oldEntries();sampleBounds();System.out.println("Java: @4 declaration, diagnostic, basis and sample-bound wire checks passed");}
 }

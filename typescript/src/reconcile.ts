@@ -1,8 +1,6 @@
 // SPDX-FileCopyrightText: 2026 barineco
 // SPDX-License-Identifier: MIT
 
-// Compare a recorded history against the world it should have produced,
-// in one call.
 
 import {
   type ResourceId,
@@ -41,7 +39,6 @@ function sameResource(a: ResourceId, b: ResourceId): boolean {
   return a.kind === b.kind && a.name === b.name;
 }
 
-// Read whether the reconciliation is free of any gap.
 export function coherent(reconciliation: Reconciliation): boolean {
   return (
     reconciliation.divergences.length === 0 &&
@@ -50,7 +47,6 @@ export function coherent(reconciliation: Reconciliation): boolean {
   );
 }
 
-// Reconcile the highest recorded revision per resource against `world`.
 export function reconcile(
   bases: readonly BasisState[],
   world: World,

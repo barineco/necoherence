@@ -136,11 +136,98 @@ private def changeDiagnostic (derivation : Json) (valid : Bool) : Except String 
   let fields ← replaceMember fields "closure" closure
   replaceMember derivation "selection" (← replaceMember selection "fields" fields)
 
+private def checkSampleBounds (input : Input) : IO Unit := do
+  let adjusted : Except String Input := do
+    let some composition := input.composition | throw "composition required"
+    let problem ← composition.getObjVal? "problem"
+    let bounds ← problem.getObjVal? "bounds"
+    let problem ← replaceMember problem "bounds" (← replaceMember bounds "max_sample_length" (.str "59"))
+    let derivation ← composition.getObjVal? "derivation"
+    let witness ← derivation.getObjVal? "witness"
+    let derivation ← replaceMember derivation "witness" (← replaceMember witness "input_snapshot" problem)
+    let composition ← replaceMember (← replaceMember composition "problem" problem) "derivation" derivation
+    pure { input with composition := some composition, basis := basis input.signatures input.entrypoints (some composition) }
+  let .ok adjusted := adjusted | throw (IO.userError "sample bound input")
+  checkRoundtrip adjusted
+  let some composition := adjusted.composition | throw (IO.userError "composition required")
+  let .ok problemJson := composition.getObjVal? "problem" | throw (IO.userError "problem required")
+  let .ok (problem, causes) := Necoherence.SignatureComposition.decodeProblem input.signatures problemJson | throw (IO.userError "bound problem decode")
+  if problem.bounds.maxSampleLength != 59 then throw (IO.userError "caller sample length lost")
+  let boundsJson := encode problem.bounds
+  let .ok restored := (decode boundsJson : Except WireFailure Necoherence.SemanticComposition.SearchBounds) |
+    throw (IO.userError "bound roundtrip")
+  if restored != problem.bounds then throw (IO.userError "bound roundtrip changed")
+  for invalid in [Json.num 59, .str "-1", .str "059"] do
+    let .ok invalid := replaceMember boundsJson "max_sample_length" invalid | throw (IO.userError "invalid bound mutation")
+    if (decode invalid : Except WireFailure Necoherence.SemanticComposition.SearchBounds).isOk then
+      throw (IO.userError "noncanonical sample bound accepted")
+  let .ok members := boundsJson.getObj? | throw (IO.userError "bounds object")
+  let missing := Json.mkObj (members.toList.filter fun member => member.1 != "max_sample_length")
+  if (decode missing : Except WireFailure Necoherence.SemanticComposition.SearchBounds).isOk then
+    throw (IO.userError "missing sample bound accepted")
+  let .ok prepared := Necoherence.SignatureComposition.prepare input.signatures input.basis.graphSha256 problem causes |
+    throw (IO.userError "bound preparation")
+  let some node := prepared.graph.nodes.head? | throw (IO.userError "sample graph node")
+  for length in [7, 17, 59] do
+    let text := String.ofList (List.replicate length 'x')
+    let graph := { prepared.graph with nodes := [{ node with shape := .string { constValue := some text } }] }
+    let contract : Necoherence.SemanticTypes.SlotContract := { typeRef := node.ref, required := true, nullable := false }
+    for maximum in [length - 1, length] do
+      let bounds : Necoherence.SemanticComposition.SearchBounds := { maxSampleLength := maximum }
+      let finite : Necoherence.SemanticComposition.CompositionInput := { problem with
+        basis := { profile := graph.profile, sources := graph.sourceRefs }
+        signatures := []
+        initialInputs := [{ id := ⟨"finite"⟩, contract, source := .argument, resource := none }]
+        initialResources := []
+        goal := { outputs := [{ id := ⟨"finite"⟩, contract, sourceConstraint := .anyCompatible }], failures := [], finalResources := [] }
+        invocationDomain := { identity := "finite", revision := "1", sites := [], permittedProjections := [], permittedConstructions := [], permittedTransforms := [], guards := [] }
+        allowedEffects := []
+        explicitOrder := []
+        selectionPolicy := some .anyFeasible
+        bounds }
+      let .ok finite := Necoherence.SemanticComposition.prepareDirectComposition graph finite (fun _ _ => .ok ()) (fun _ _ => []) |
+        throw (IO.userError "finite preparation")
+      let sampled := Necoherence.SemanticComposition.slotSamples finite contract
+      match NecoherenceTools.CompositionSearch.derive finite with
+      | .ok (.unknown _ _) =>
+        if maximum == length || sampled.values != [] || !sampled.obligations.contains .sampleBound then
+          throw (IO.userError "lower SampleBound and solver Unknown")
+      | .ok (.solved checked) =>
+        if maximum != length || !sampled.values.contains (.present (.str text)) then
+          throw (IO.userError "accepted finite witness")
+        let raw : Necoherence.SemanticComposition.RawComposition := {
+          plan := checked.candidate.raw.plan, witness := checked.candidate.raw.witness, selection := .anyFeasible }
+        if !(Necoherence.SemanticComposition.verifyComposition finite raw).isOk then
+          throw (IO.userError "finite witness verification")
+      | _ => throw (IO.userError "finite bound solver classification")
+  let profileText ← IO.FS.readFile "../../presets/atproto-data-model/profile.json"
+  let .ok profileJson := Necoherence.SignatureJson.parse profileText | throw (IO.userError "CID profile parse")
+  let .ok profile := (decode profileJson : Except WireFailure Necoherence.TypeSignatures.ValueProfile) |
+    throw (IO.userError "CID profile decode")
+  let library := { input.signatures with profile }
+  let graph := { prepared.graph with
+    profile := library.graph.profile
+    nodes := [{ node with shape := .string { format := some (.named "cid") } }] }
+  let contract : Necoherence.SemanticTypes.SlotContract := { typeRef := node.ref, required := true, nullable := false }
+  for maximum in [32, 58, 59] do
+    let sampled := Necoherence.SemanticComposition.sampleValueFuel graph { maxSampleLength := maximum } (graph.nodes.length + 1) [] contract.typeRef
+    if maximum < 59 then
+      if sampled.values != [] || !sampled.obligations.contains .sampleBound then
+        throw (IO.userError "CID lower SampleBound")
+    else
+      if sampled.values == [] then throw (IO.userError "CID finite sample")
+      for value in sampled.values do
+        let .str text := value | throw (IO.userError "CID string sample")
+        if text.length != 59 then throw (IO.userError "CID sample length")
+        if !(Necoherence.SemanticValidation.acceptsValue graph contract.typeRef value == .accepted) then
+          throw (IO.userError "CID accepted sample")
+
 def runSignatureCompositionWireProperties (input : Input) : IO Unit := do
   checkDiagnosticSchema
   checkRoundtrip input
   checkTampering input
   checkSearchIndependentAdmission input
+  checkSampleBounds input
   let cwd ← IO.currentDir
   let source ← IO.FS.readFile "NecoherenceToolsTests/SignatureClosureProducer.rs"
   IO.FS.withTempDir fun directory => do

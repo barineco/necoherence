@@ -3,7 +3,7 @@
 [プロジェクトの概要](https://github.com/barineco/necoherence/blob/publish/README-ja.md) | [English](README.md)
 
 このパッケージは、Necoherence の Java による実装で、Java 21 で使えます。
-ソースから `build/necoherence-0.1.0.jar` をビルドし、その jar をクラスパスに加えて使います。
+ソースから `build/necoherence-0.2.0.jar` をビルドし、その jar をクラスパスに加えて使います。
 依存するのは JDK だけです。
 
 ## 意味プロファイルの受け入れ
@@ -32,7 +32,7 @@ static WireValue decide(WireValue expected, List<WireValue> sources,
     WireValue exchange = obj("schema", str("ncoh-checked-generation@4"),
         "basis", basis, "signatures", library, "composition", NIL, "entrypoints", entries);
     CheckedGeneration checked = TypeSignatures.admitGeneration(expectedBasis, encodeWire(exchange));
-    checked.valueContext().validate(0, value);
+    checked.valueContext().validate(TypeSignatures.typeReference("root"), value);
     return value;
 }
 ```
@@ -48,7 +48,10 @@ static WireValue decide(WireValue expected, List<WireValue> sources,
 
 - 宣言の検査: 識別子の重複や、宣言にない型や定義への参照など、型と操作の宣言の誤りを検出する
 - 生成したコードのランタイム: 生成した Java のコードが実行時に呼び出す、値の検証とコーデックの共通の処理
-- HTTP アダプター: ネットワーク副作用のリクエストを `java.net.http.HttpClient` で実行し、結果を観測として返す
+
+任意の [HTTP アダプター](../java-http-adapter/) は、独立した jar でネットワーク副作用のコマンドを実行します。
+
+- アダプターの HTTP クライアント: `java.net.http.HttpClient`
 
 ## 付属のツール
 
@@ -58,7 +61,7 @@ static WireValue decide(WireValue expected, List<WireValue> sources,
 ## ビルドとテスト
 
 テストには、JUnit Platform Console Standalone 1.10.2 を使います。
-次のコマンドで、この jar を Maven Central から `lib/` へ取得し、SHA-256 のダイジェストを確かめてから、ビルド、テスト、`build/necoherence-0.1.0.jar` の作成までを行います。
+次のコマンドで、この jar を Maven Central から `lib/` へ取得し、SHA-256 のダイジェストを確かめてから、ビルド、テスト、`build/necoherence-0.2.0.jar` の作成までを行います。
 
 ```bash
 mkdir -p lib build/classes build/test-classes
@@ -76,7 +79,7 @@ find src/test/java -name '*.java' -print0 \
       -d build/test-classes
 java -Duser.language=en -jar lib/junit-platform-console-standalone-1.10.2.jar execute \
   --class-path build/classes:build/test-classes --scan-class-path
-jar --create --file build/necoherence-0.1.0.jar -C build/classes .
+jar --create --file build/necoherence-0.2.0.jar -C build/classes .
 ```
 
 ## ライセンス

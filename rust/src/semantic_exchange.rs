@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 use crate::exact_json::JsonValue as ExchangeJson;
 use crate::semantic_types::*;
+use crate::semantic_validation::DefaultApplication;
 use crate::type_signatures::*;
 use num_bigint::{BigInt, BigUint};
 use num_traits::ToPrimitive;
@@ -747,6 +748,13 @@ wire_record!(SealedRefinement {
     leaf: SealedLeaf
 });
 wire_record!(VersionedSemanticProfile { reference:ProfileRef,source_refs:Vec<SourceIdentity>,integer_domains:Vec<IntegerDomainBinding>,default_integer_domain:String,numbers:NumberModel,grapheme_rules:Option<GraphemeRules>,format_bindings:Vec<FormatBinding>,bytes_policy:Option<BytesPolicy>,wrappers:Vec<Wrapper>,tag:Option<TagModel> });
+wire_record!(SemanticGraph { profile:VersionedSemanticProfile,nodes:Vec<TypeNode>,source_refs:Vec<SourceRef> });
+wire_record!(DefaultApplication {
+    value_path: ValuePath,
+    type_ref: TypeRef,
+    origin: OccurrenceRef,
+    value: JsonValue
+});
 wire_record!(LengthSpec { minimum:Option<BigUint>,maximum:Option<BigUint> });
 wire_enum!(UnknownKind; units [Any,OrdinaryObject]; tuples []; records []);
 wire_enum!(ValueKind; units [Null,Boolean,Number,String,Array,Object]; tuples []; records []);
@@ -896,6 +904,31 @@ pub fn decode_value_profile(s: &str) -> Decoded<ValueSemanticProfile> {
     crate::semantic_validation::check_profile(&v.semantic_profile())
         .map_err(GenerationFailure::Profile)?;
     Ok(v)
+}
+
+pub fn decode_semantic_graph(text: &str) -> Decoded<SemanticGraph> {
+    let graph: SemanticGraph = decode(text)?;
+    crate::semantic_validation::check_profile(&graph.profile)
+        .map_err(GenerationFailure::Profile)?;
+    Ok(graph)
+}
+pub fn encode_semantic_graph(graph: &SemanticGraph) -> Decoded<String> {
+    encode(graph)
+}
+pub fn decode_type_reference(text: &str) -> Decoded<TypeRef> {
+    decode(text)
+}
+pub fn encode_exact_value(value: &JsonValue) -> Decoded<String> {
+    encode(value)
+}
+pub fn decode_exact_value(text: &str) -> Decoded<JsonValue> {
+    decode(text)
+}
+pub fn encode_default_applications(applications: &[DefaultApplication]) -> Decoded<String> {
+    encode(applications)
+}
+pub fn encode_semantic_obligations(obligations: &[SemanticObligation]) -> Decoded<String> {
+    encode(obligations)
 }
 pub fn signature_generation_schema() -> serde_json::Value {
     let mut registry = SchemaRegistry::new();

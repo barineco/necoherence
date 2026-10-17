@@ -407,6 +407,17 @@ export function checkOperationSignature(base: OperationContract, signature: Oper
   for (const o of signature.outcomes) if (!base.outcomes.some(b => b.id === o.id)) { cause(o.cause, library); check(o.cause.tag === "ExternalCondition" && o.form.tag === "DeclaredFailure" && o.value_ports.length > 0, "external outcome supplement"); }
 }
 export interface CheckedSignatureLibrary { readonly library: TypeSignatureLibrary; readonly context: V.ValueContext; readonly refs: ReadonlyMap<TypeId, V.TypeRef>; }
+function definitionReferences(shape: SignatureDefinition["shape"]): readonly TypeId[] {
+  if (shape.tag === "Value" || shape.tag === "Message") return [shape.value];
+  if (shape.tag === "Operation") return [
+    ...shape.value.inputs.map(port => port.contract.type_id),
+    ...shape.value.outcomes.flatMap(outcome => [
+      ...outcome.value_ports.map(port => port.contract.type_id),
+      ...outcome.produced_resources.map(resource => resource.token_type),
+    ]),
+  ];
+  return [];
+}
 function checkLibraryPredicate(library: TypeSignatureLibrary): void {
   const fail = (predicate: LibraryPredicate): never => { throw new PredicateFailure(library.identity, predicate, ["library"]); };
   const uniqueNames = (values: readonly string[]): boolean => values.every(Boolean) && new Set(values).size === values.length;
@@ -414,6 +425,7 @@ function checkLibraryPredicate(library: TypeSignatureLibrary): void {
   if (library.schema !== "ncoh-type-signatures@1" || !library.identity || !library.revision || !uniqueNames(library.nodes.map(node => node.id)) || !uniqueNames(library.definitions.map(definition => definition.id)) || !uniqueNames(library.groups.map(group => group.id))) fail("LB01");
   const referenceIds = (shape: ValueTypeShape): readonly string[] => shape.tag === "Product" ? [...shape.value.fields.map(field => field.slot.type_id), ...(shape.value.extras.tag === "Allow" ? [shape.value.extras.fields.value.type_id] : [])] : shape.tag === "Array" ? [shape.value.item.type_id] : shape.tag === "Alias" ? [shape.fields.target] : shape.tag === "TaggedUnion" ? shape.value.branches.map(branch => branch.target) : [];
   if (library.nodes.some(node => referenceIds(node.shape).some(id => !nodeIds.has(id)))) fail("LB01");
+  if (library.definitions.some(definition => definitionReferences(definition.shape).some(id => !nodeIds.has(id)))) fail("LB01");
   if (library.nodes.some(node => node.shape.tag === "Product" && !uniqueNames(node.shape.value.fields.map(field => field.wire_name)))) fail("LB02");
   if (library.nodes.some(node => node.shape.tag === "Product" && node.shape.value.fields.some(field => library.profile.wrappers.some(wrapper => wrapper.key === field.wire_name)))) fail("LB03");
   if (library.nodes.some(node => node.shape.tag === "TaggedUnion" && new Set(node.shape.value.branches.map(branch => branch.wire_tag)).size !== node.shape.value.branches.length)) fail("LB04");
@@ -444,7 +456,7 @@ function checkLibraryPredicate(library: TypeSignatureLibrary): void {
       || spec.enum_values !== null && !spec.enum_values.includes(branch.wire_tag)
       || spec.format !== null && !V.recognizeFormat(spec.format.tag === "Inline" ? spec.format.value : library.profile.format_bindings.find(binding => binding.name === spec.format!.value)!.rule, branch.wire_tag);
   })))) fail("LB17");
-  if (library.nodes.some(node => node.shape.tag === "TaggedUnion" && new Set(node.shape.value.branches.map(branch => JSON.stringify(branch.selector))).size !== node.shape.value.branches.length)) fail("LB18");
+  if (library.nodes.some(node => node.shape.tag === "TaggedUnion" && new Set(node.shape.value.branches.map(branch => JSON.stringify(branch.selector.tag === "InternalTag" ? [branch.selector, branch.wire_tag] : branch.selector))).size !== node.shape.value.branches.length)) fail("LB18");
   if (library.nodes.some(node => {
     if (node.shape.tag === "String") {
       const spec = node.shape.value;
@@ -527,8 +539,8 @@ export function checkLibrary(value: TypeSignatureLibrary): CheckedSignatureLibra
   const context = new V.ValueContext({ profile, nodes });
   for (const node of nodes) context.defined(node.reference);
   for (const definition of library.definitions) {
-    if (definition.shape.tag === "Value" || definition.shape.tag === "Message") check(refs.has(definition.shape.value), "resolved definition TypeId");
-    else if (definition.shape.tag === "Symbol") identity(definition.shape.value);
+    if (definition.shape.tag === "Value" || definition.shape.tag === "Message") continue;
+    if (definition.shape.tag === "Symbol") identity(definition.shape.value);
     else { check(definition.shape.tag === "Operation", "operation shape"); validateOperation((definition.shape as { readonly tag: "Operation"; readonly value: OperationContract }).value, library, refs); }
   }
   for (const group of library.groups) { unique(group.members); group.members.forEach(id => check(library.definitions.some(definition => definition.id === id), "resolved group member")); }
@@ -583,8 +595,7 @@ export class CheckedSignatureGeneration {
     for (const entry of input.entrypoints) {
       const definition = checked.library.definitions.find(candidate => candidate.id === entry.definition);
       if (!definition) throw new GenerationWireError({ tag: "UnresolvedEntrypoint", value: entry.definition });
-      const roots = definition.shape.tag === "Value" || definition.shape.tag === "Message" ? [definition.shape.value] : definition.shape.tag === "Operation" ? [...definition.shape.value.inputs.map(port => port.contract.type_id), ...definition.shape.value.outcomes.flatMap(outcome => [...outcome.value_ports.map(port => port.contract.type_id), ...outcome.produced_resources.map(resource => resource.token_type)])] : [];
-      roots.forEach(id => checked.context.defined(checked.refs.get(id)!));
+      definitionReferences(definition.shape).forEach(id => checked.context.defined(checked.refs.get(id)!));
     }
     if (input.composition !== null) checkSignatureComposition(checked, input.composition);
     return new CheckedSignatureGeneration(signatureAdmissionToken, V.deepFreeze(structuredClone(input)), checked);
@@ -615,6 +626,7 @@ export class SignatureCodec<T extends V.ExactJson = V.ExactJson> {
   constructor(readonly checked: CheckedSignatureLibrary, readonly typeId: TypeId) { const ref = checked.refs.get(typeId); check(ref, "resolved codec type"); checked.context.defined(ref); this.#ref = ref; }
   decodeJson(value: V.ExactJson): T { validateSemanticWire("ExactJson", value); return V.deepFreeze(this.checked.context.validate(this.#ref, value)) as T; }
   decode(text: string): T { return this.decodeJson(V.parseExact(text)); }
+  decodeWithDefaults(text: string): T { return this.checked.context.decodeWithDefaults(this.#ref, text).value as T; }
   encode(value: T): string { return V.encodeExact(this.decodeJson(value)); }
 }
 export function checkSignatureComposition(checked: CheckedSignatureLibrary, composition: unknown): V.SignatureCompositionEvidence {

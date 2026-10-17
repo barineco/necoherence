@@ -4120,11 +4120,10 @@ def verifyCounterexample (graph : SemanticGraph) (source destination : SlotContr
         rw [hv]
         exact fun member => rejected.rejected (present_has_value_member graph destination value member) }
 
-private def inclusionSamples (graph : SemanticGraph) (source destination : TypeRef)
-    (maxObligations : Nat) : SampleResult JsonValue :=
-  let bounds : SearchBounds := { maxTypeObligations := maxObligations }
+def inclusionSamplesBounded (graph : SemanticGraph) (source destination : TypeRef)
+    (bounds : SearchBounds) : SampleResult JsonValue :=
   let generated := sampleValueFuel graph bounds
-    (min maxObligations (graph.nodes.length + 1)) [] source
+    (min bounds.maxTypeObligations (graph.nodes.length + 1)) [] source
   let candidates := match resolvedShape graph source, resolvedShape graph destination with
     | some (.product source), some (.product destination) =>
       let missingFields := destination.fields.flatMap fun (field : FieldSpec) =>
@@ -4139,7 +4138,7 @@ private def inclusionSamples (graph : SemanticGraph) (source destination : TypeR
         | .allow keyFormat contract =>
           (formatUseSamples graph.profile keyFormat 1).flatMap fun key =>
             (sampleValueFuel graph bounds
-              (min maxObligations (graph.nodes.length + 1)) [] contract.typeRef).values.map
+              (min bounds.maxTypeObligations (graph.nodes.length + 1)) [] contract.typeRef).values.map
               fun value => JsonValue.obj [(key, value)]
       missingFields ++ extraValues
     | _, _ => []
@@ -4150,26 +4149,30 @@ private def inclusionSamples (graph : SemanticGraph) (source destination : TypeR
     obligations := generated.obligations ++
       if additional.length = candidates.length then [] else [.sampleBound] }
 
+def inclusionSamples (graph : SemanticGraph) (source destination : TypeRef)
+    (maxObligations : Nat) : SampleResult JsonValue :=
+  inclusionSamplesBounded graph source destination { maxTypeObligations := maxObligations }
+
 private theorem inclusionSamples_sound (graph : SemanticGraph) (source destination : TypeRef)
-    (maxObligations : Nat) (value : JsonValue)
-    (present : value ∈ (inclusionSamples graph source destination maxObligations).values) :
+    (bounds : SearchBounds) (value : JsonValue)
+    (present : value ∈ (inclusionSamplesBounded graph source destination bounds).values) :
     acceptsValue graph source value = .accepted := by
-  simp only [inclusionSamples, List.mem_append] at present
+  simp only [inclusionSamplesBounded, List.mem_append] at present
   rcases present with generated | additional
-  · exact sampleValueFuel_sound graph { maxTypeObligations := maxObligations }
-      (min maxObligations (graph.nodes.length + 1)) [] source value generated
+  · exact sampleValueFuel_sound graph bounds
+      (min bounds.maxTypeObligations (graph.nodes.length + 1)) [] source value generated
   · have accepted := (List.mem_filter.mp additional).2
     simp only [Bool.and_eq_true] at accepted
     cases decision : acceptsValue graph source value <;>
       simp [decision] at accepted ⊢
 
 private def checkAssignableWithEmpty (graph : SemanticGraph) (emptyRefs : List TypeRef)
-    (source destination : SlotContract) (maxObligations : Nat) : CompatibilityDecision graph source destination :=
-  match structuralAssignable graph emptyRefs source destination maxObligations with
+    (source destination : SlotContract) (bounds : SearchBounds) : CompatibilityDecision graph source destination :=
+  match structuralAssignable graph emptyRefs source destination bounds.maxTypeObligations with
   | .compatible checked => .compatible checked
   | .incompatible checked => .incompatible checked
   | .unknown obligations =>
-    let preparedSamples := inclusionSamples graph source.typeRef destination.typeRef maxObligations
+    let preparedSamples := inclusionSamplesBounded graph source.typeRef destination.typeRef bounds
     let samples := (if !source.required then [SlotValue.absent] else []) ++
       (if source.nullable then [.null] else []) ++ preparedSamples.values.map SlotValue.present
     let rec counterexample : List SlotValue → Option (CheckedCounterexample graph source destination)
@@ -4192,9 +4195,13 @@ private def checkAssignableWithEmpty (graph : SemanticGraph) (emptyRefs : List T
     | some checked => .incompatible checked
     | none => .unknown obligations
 
+def checkAssignableBounded (graph : SemanticGraph) (source destination : SlotContract)
+    (bounds : SearchBounds) : CompatibilityDecision graph source destination :=
+  checkAssignableWithEmpty graph (emptyTypes graph) source destination bounds
+
 def checkAssignable (graph : SemanticGraph) (source destination : SlotContract)
     (maxObligations : Nat := 10000) : CompatibilityDecision graph source destination :=
-  checkAssignableWithEmpty graph (emptyTypes graph) source destination maxObligations
+  checkAssignableBounded graph source destination { maxTypeObligations := maxObligations }
 
 theorem counterexampleWitnessSound (graph : SemanticGraph) (source destination : SlotContract)
     (checked : CheckedCounterexample graph source destination) :
@@ -4915,7 +4922,7 @@ private def enumerateBindingsFuel (prepared : PreparedCompositionInput) (state :
               | .rejected _ => (none, [])
               | .unresolved obligations => (none, [UnresolvedObligation.meaning obligations])
             | none => match checkAssignableWithEmpty prepared.graph prepared.emptyRefs
-                projection.destination destination prepared.input.bounds.maxTypeObligations with
+                projection.destination destination prepared.input.bounds with
               | .compatible included => (some (.source value projection (.inclusion included.certificate)), [])
               | .incompatible _ => (none, [])
               | .unknown obligations => (none, [UnresolvedObligation.type (some value) obligations])
@@ -4971,7 +4978,7 @@ private def enumerateResources (prepared : PreparedCompositionInput) (state : Se
           (requirement.identity == .any || requirement.identity == .exactly declaration.producer) then
         result := { result with cost := result.cost + 1 }
         match checkAssignableWithEmpty prepared.graph prepared.emptyRefs (presentContract declaration.tokenType)
-            (presentContract requirement.tokenType) prepared.input.bounds.maxTypeObligations with
+            (presentContract requirement.tokenType) prepared.input.bounds with
         | .compatible included => result := { result with values := result.values ++
             [{ requirement := requirement.id, lot, inclusion := included.certificate }] }
         | .incompatible _ => pure ()

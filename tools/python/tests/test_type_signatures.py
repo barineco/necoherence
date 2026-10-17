@@ -209,3 +209,50 @@ def test_composition_admission_rejects_incomplete_branch_coverage():
     exchange["basis"]=signature_basis(exchange["signatures"],exchange["entrypoints"],exchange["composition"])
     with pytest.raises(AdmissionFailure,match="IncompleteBranchCoverage"):
         admit_signature_generation(ExpectedSignatureBasis(exchange["basis"]),exchange)
+
+def test_generated_default_decoder_uses_runtime_and_preserves_all_slots():
+    value = library()
+    value["nodes"].append({"id": "flag", "shape": {"tag": "Boolean", "value": {"const_value": None, "default_value": False}}})
+    product = next(node for node in value["nodes"] if node["id"] == "product")
+    product["shape"]["value"]["fields"].append({"wire_name": "flag", "slot": {"type_id": "flag", "required": True, "nullable": False}})
+    entries = [{"identity": "root", "definition": "root"}]
+    basis = signature_basis(value, entries)
+    exchange = {"schema": "ncoh-checked-generation@4", "basis": basis, "signatures": value, "composition": None, "entrypoints": entries}
+    admitted = admit_signature_generation(ExpectedSignatureBasis(basis), exchange)
+    module = types.ModuleType("generated_defaults")
+    exec(render_checked(admitted), module.__dict__)
+    decode, encode = module.CODECS["product"]
+    wire = {"name": {"text": "x"}}
+    with pytest.raises(ValueFailure):
+        decode(wire)
+    default_decode = getattr(module, "decode_with_defaults_" + module.TYPE_NAMES["product"])
+    typed = default_decode('{"name":{"text":"x"}}')
+    assert typed.name == {"text": "x"}
+    assert typed.flag is False
+    assert encode(typed) == {**wire, "flag": False}
+
+def test_generated_defaults_preserve_non_declaration_order_null_and_extras():
+    from necoherence.signature_values import encode_wire_json
+    value = library()
+    value["nodes"].extend([
+        {"id": "flag", "shape": {"tag": "Boolean", "value": {"const_value": None, "default_value": False}}},
+        {"id": "any", "shape": {"tag": "Unknown", "value": {"tag": "Any"}}},
+    ])
+    product = next(node for node in value["nodes"] if node["id"] == "product")["shape"]["value"]
+    product["fields"].extend([
+        {"wire_name": "flag", "slot": {"type_id": "flag", "required": True, "nullable": False}},
+        {"wire_name": "seen", "slot": {"type_id": "flag", "required": False, "nullable": True}},
+    ])
+    product["extras"] = {"tag": "Allow", "fields": {"key_format": None, "value": {"type_id": "any", "nullable": False}}}
+    entries = [{"identity": "root", "definition": "root"}]
+    basis = signature_basis(value, entries)
+    admitted = admit_signature_generation(ExpectedSignatureBasis(basis), {"schema": "ncoh-checked-generation@4", "basis": basis, "signatures": value, "composition": None, "entrypoints": entries})
+    module = types.ModuleType("generated_ordered_defaults")
+    exec(render_checked(admitted), module.__dict__)
+    default_decode = getattr(module, "decode_with_defaults_" + module.TYPE_NAMES["product"])
+    wire = '{"2":false,"seen":null,"name":{"text":"x"},"1":0}'
+    typed = default_decode(wire)
+    assert typed.flag is False
+    assert typed.seen is None
+    assert typed.name == {"text": "x"}
+    assert encode_wire_json(module.CODECS["product"][1](typed)) == wire[:-1] + ',"flag":false}'

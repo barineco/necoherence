@@ -21,14 +21,14 @@ import necoherence/semantic_composition.{
   ResourceTraceCertificate, ResourceUnreachable, Return, ReturnSuccess, Solved,
   StateBoundExhausted, SuppliedValue, TerminalCoverage, TerminalUnknown, Unique,
   UnknownLowering, UnresolvedMeaning, UnresolvedUniqueness, Validate, Witness,
-  add_discriminator, at, candidate_components, candidate_key, check_return,
-  choice_states, collect, decide_ambiguous, decide_unreachable,
-  distinct_candidates, effective_projection, enumerate_state, evaluate_guard_arm,
-  fresh_budget, guard_declaration, index_of, initial_state, lower_resource_trace,
-  merge_choice, prepared_empty, prepared_graph, prepared_initial_obligations,
-  prepared_input, project_owned, replace_at, require, resolved_shape,
-  resource_trace_meaning, samples, slot_empty, slot_samples, unique,
-  verify_acyclic_witness, verify_closure_witness, verify_composition,
+  add_discriminator, at, bounded_slot_samples, candidate_components,
+  candidate_key, check_return, choice_states, collect, decide_ambiguous,
+  decide_unreachable, distinct_candidates, effective_projection, enumerate_state,
+  evaluate_guard_arm, fresh_budget, guard_declaration, index_of, initial_state,
+  lower_resource_trace, merge_choice, prepared_empty, prepared_graph,
+  prepared_initial_obligations, prepared_input, project_owned, replace_at,
+  require, resolved_shape, resource_trace_meaning, sample_value_fuel, slot_empty,
+  unique, verify_acyclic_witness, verify_closure_witness, verify_composition,
   verify_reachability_witness, verify_return_values, verify_value_models,
 }
 import necoherence/semantic_types as types
@@ -143,6 +143,7 @@ pub fn fact_replacements(
   fact: BranchFact,
 ) -> List(types.SlotValue(kdl.JsonValue)) {
   let limit = prepared_input(prepared).bounds.max_type_obligations
+  let maximum = prepared_input(prepared).bounds.max_sample_length
   case
     guard_declaration(prepared_input(prepared), fact.guard),
     effective_projection(prepared, state, fact.inspected)
@@ -154,7 +155,12 @@ pub fn fact_replacements(
         GuardAccepted ->
           case guard.kind {
             Validate(contract) ->
-              slot_samples(prepared_graph(prepared), contract, limit)
+              bounded_slot_samples(
+                prepared_graph(prepared),
+                contract,
+                limit,
+                maximum,
+              ).values
             _ -> []
           }
         GuardVariant(tag) -> {
@@ -170,12 +176,13 @@ pub fn fact_replacements(
                 Some(branch) ->
                   list.map(
                     filter_options(
-                      samples(
+                      sample_value_fuel(
                         prepared_graph(prepared),
                         branch.target,
                         [],
                         limit,
-                      ),
+                        maximum,
+                      ).values,
                       fn(value) {
                         add_discriminator(
                           prepared_graph(prepared).profile.tag,
@@ -190,22 +197,33 @@ pub fn fact_replacements(
             _ -> []
           }
           list.append(
-            slot_samples(prepared_graph(prepared), projected.destination, limit),
+            bounded_slot_samples(
+              prepared_graph(prepared),
+              projected.destination,
+              limit,
+              maximum,
+            ).values,
             branch_values,
           )
         }
         GuardRejected ->
           case guard.kind {
             Validate(_) ->
-              slot_samples(
+              bounded_slot_samples(
                 prepared_graph(prepared),
                 projected.destination,
                 limit,
-              )
+                maximum,
+              ).values
             _ -> []
           }
         _ ->
-          slot_samples(prepared_graph(prepared), projected.destination, limit)
+          bounded_slot_samples(
+            prepared_graph(prepared),
+            projected.destination,
+            limit,
+            maximum,
+          ).values
       }
       list.filter(values, fn(value) {
         evaluate_guard_arm(prepared_graph(prepared), guard, value)
@@ -239,7 +257,13 @@ fn producer_model(
   let limit = prepared_input(prepared).bounds.max_type_obligations
   let candidates = case fixed {
     Some(value) -> [value]
-    None -> slot_samples(prepared_graph(prepared), source.contract, limit)
+    None ->
+      bounded_slot_samples(
+        prepared_graph(prepared),
+        source.contract,
+        limit,
+        prepared_input(prepared).bounds.max_sample_length,
+      ).values
   }
   let facts =
     list.filter(state.facts, fn(fact) {

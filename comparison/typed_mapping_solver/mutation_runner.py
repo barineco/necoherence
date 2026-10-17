@@ -2,26 +2,6 @@
 # SPDX-FileCopyrightText: 2026 barineco
 # SPDX-License-Identifier: MIT
 
-"""Mutation generator, executor and classifier for the typed mapping solver.
-
-Reads the shared fixtures document, derives a mutation family per declared
-coordinate (binding-type, multiplicity, read-consume-mode, identity, index,
-revision, graph-edge, input-binding, token, domain-bound), evaluates every
-mutant through the independently defined oracle (invoked as a separate
-process), and writes the versioned classification to the requested output.
-
-Classification vocabulary:
-
-  invalidating        every operation reports the closed Invalid result
-  meaning-preserving  every operation result equals the unmutated base result
-  bound-exhausted     reachability and well-foundedness report Unknown
-  result-changing     some operation changed without becoming Invalid
-
-The runner refuses to write results when a mutant's observed class differs
-from the class its generator predicted, or when a --require-class name has
-no member. `check.py --mutation-classification` re-verifies the whole
-classification against every engine independently.
-"""
 
 import argparse
 import copy
@@ -47,7 +27,6 @@ def fail(message):
 
 
 def oracle_evaluate(spec):
-    """Evaluate one solver input through the independent oracle process."""
     tmp = tempfile.NamedTemporaryFile("w", suffix=".json",
                                       prefix="tms-mutant-", dir=HERE,
                                       delete=False, encoding="utf-8")
@@ -77,9 +56,9 @@ def classify(observed, base):
     return "result-changing"
 
 
-# ---------------------------------------------------------------------------
-# mutation family
-# ---------------------------------------------------------------------------
+
+
+
 
 
 def _fresh(base):
@@ -129,7 +108,6 @@ def _cycle_input():
                   "max_bindings": 8, "max_search_steps": 8},
     }
 def mutation_family(base):
-    """(id, coordinate, predicted class, mutated input) for the base case."""
     mutants = []
 
     def add(mid, coordinate, expected, input_, description):
@@ -138,7 +116,7 @@ def mutation_family(base):
                         "description": description,
                         "mutated_input": input_})
 
-    # --- binding-type ---------------------------------------------------
+
     m = _fresh(base)
     m["bindings"][0]["token_type"] = "T-OTHER"
     add("mut-binding-type-mismatch", "binding-type", "invalidating", m,
@@ -156,7 +134,7 @@ def mutation_family(base):
         "place and binding token types renamed consistently on the "
         "never-enabled t-dead branch")
 
-    # --- multiplicity ----------------------------------------------------
+
     m = _fresh(base)
     m["bindings"][0]["multiplicity"] = 0
     add("mut-multiplicity-zero", "multiplicity", "invalidating", m,
@@ -167,7 +145,7 @@ def mutation_family(base):
     add("mut-multiplicity-disabled", "multiplicity", "meaning-preserving",
         m, "multiplicity raised on the never-enabled t-dead binding")
 
-    # --- read-consume-mode -------------------------------------------------
+
     m = _fresh(base)
     m["bindings"][1]["mode"] = "read"
     add("mut-mode-disabled", "read-consume-mode", "meaning-preserving", m,
@@ -179,7 +157,7 @@ def mutation_family(base):
         "consume changed to read on the enabled t1 binding: the token is "
         "retained, so firing produces a different marking")
 
-    # --- identity ----------------------------------------------------------
+
     m = _fresh(base)
     m["transitions"][0]["identity"] = "t1-renamed"
     add("mut-identity-unknown-transition", "identity", "invalidating", m,
@@ -196,13 +174,13 @@ def mutation_family(base):
     add("mut-identity-duplicate-transition", "identity", "invalidating", m,
         "a transition identity is declared twice")
 
-    # --- index -------------------------------------------------------------
+
     m = _fresh(base)
     m["marking"]["places"][0]["tokens"][0]["index"] = 7
     add("mut-index-token", "index", "result-changing", m,
         "colored token index changes the exact marking witness")
 
-    # --- revision ------------------------------------------------------------
+
     m = _fresh(base)
     m["marking"]["places"][0]["tokens"][0]["revision"] = 2
     add("mut-revision-token", "revision", "invalidating", m,
@@ -215,7 +193,7 @@ def mutation_family(base):
         "domain bound revision bumped; bound metadata is not part of the "
         "search semantics")
 
-    # --- graph-edge ----------------------------------------------------------
+
     m = _fresh(base)
     m["graph"]["edges"][0] = ["p1", "ghost-node"]
     add("mut-graph-edge-ghost", "graph-edge", "invalidating", m,
@@ -227,7 +205,7 @@ def mutation_family(base):
         "extra edge between two declared nodes; the graph is validated "
         "but not consulted by the search")
 
-    # --- input-binding ---------------------------------------------------------
+
     m = _fresh(base)
     m["bindings"].append(dict(m["bindings"][0]))
     add("mut-input-binding-duplicate", "input-binding", "invalidating", m,
@@ -241,20 +219,20 @@ def mutation_family(base):
     add("mut-input-binding-extra", "input-binding", "meaning-preserving", m,
         "extra binding on the never-enabled t-dead branch")
 
-    # --- input-place-membership -----------------------------------------------
+
     m = _fresh(base)
     m["transitions"][0]["input_places"] = ["GHOST"]
     m["bindings"] = []
     add("mut-input-place-ghost", "input-place-membership", "invalidating", m,
         "an undeclared input place is introduced with no bindings")
 
-    # --- binding-coverage ------------------------------------------------------
+
     m = _fresh(base)
     m["bindings"] = [b for b in m["bindings"] if b["transition_id"] != "t1"]
     add("mut-binding-coverage-missing", "binding-coverage", "invalidating", m,
         "a declared input place loses every binding")
 
-    # --- token -----------------------------------------------------------------
+
     m = _fresh(base)
     m["marking"]["places"][0]["tokens"][0]["kind"] = "observation"
     add("mut-token-kind", "token", "result-changing", m,
@@ -265,7 +243,7 @@ def mutation_family(base):
     add("mut-token-target", "token", "result-changing", m,
         "token target changed; the t1 binding is no longer satisfied")
 
-    # --- domain-bound --------------------------------------------------------------
+
     m = _fresh(base)
     m["bound"]["max_search_steps"] = 0
     add("mut-bound-steps-zero", "domain-bound", "bound-exhausted", m,
@@ -287,7 +265,7 @@ def mutation_family(base):
     add("mut-bound-target", "domain-bound", "meaning-preserving", m,
         "domain bound target identity changed; it is descriptive metadata")
 
-    # --- cycle-closing-decrease -----------------------------------------------
+
     add("mut-cycle-closing-decrease", "cycle-closing-decrease",
         "result-changing", _cycle_input(),
         "an additive edge followed by a consuming edge returns to the "

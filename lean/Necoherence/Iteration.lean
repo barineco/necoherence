@@ -1,33 +1,7 @@
 -- SPDX-FileCopyrightText: 2026 barineco
 -- SPDX-License-Identifier: MIT
 
-/-
-Iterative call forms whose step-count upper bound is readable from the input.
 
-Three declarations, `fold`, `recurse`, `closure`, each realized as an
-`Immediate Req Prd` (the same closed call form `Call.lean` gives every
-declared function): the request itself is what a caller's
-`io` call projects, and `output` is the plain computable function that
-carries out the run. `fold` applies a step a stated number of times;
-`recurse` applies a step until it reports a settled state, requiring the
-measure it also reports to strictly decrease each round; `closure` applies
-a monotone step over a finite carrier until the accumulated list stops
-growing. In all three the bound on how many rounds can happen is readable
-from the request's own fields, or from the first round's own report,
-before any further round runs: `count` for `fold`, the first round's own
-measure for `recurse`, the carrier's length for `closure`. No caller-
-supplied fuel argument exists anywhere in this module; every termination
-argument is carried by the request or by the run itself.
-
-Each round's step is called through `Call.io`, never applied directly, so a
-round whose input fails to project returns as a declared branch of the
-surrounding outcome, naming which round it was, rather than being folded
-into the state itself. The field names a round's own input carries are
-read from the request's own `stepFields`, an input field of every request
-type here, so that the same `Req` a caller assembles for `io fold`,
-`io recurse`, or `io closure` also names what an adapter in another
-language would present on each round's call to `step`.
--/
 
 import Necoherence.Call
 
@@ -42,7 +16,7 @@ structure StageProjectionFailed where
   failure : ProjectionFailed
   deriving Repr
 
-/-! ### fold: the bound is an input field -/
+
 
 /-- Input to `fold`: a step declaration, its seed, how many rounds to run,
 and the field names present on every round's own input to `step`. -/
@@ -117,7 +91,7 @@ theorem foldOutput_trace_bounded (req : FoldReq S)
   simp only [List.length_cons, List.length_nil] at hb
   omega
 
-/-! ### recurse: the bound is the first round's own measure -/
+
 
 /-- Next state together with this round's own measure toward termination,
 or the confirmed final state. -/
@@ -138,10 +112,7 @@ inductive RecurseOutcome (S : Type) where
   | didNotDecrease : Nat → S → Measure → Measure → RecurseOutcome S
   | projectionFailed : S → StageProjectionFailed → RecurseOutcome S
 
-/-- Rounds after the first, once a strictly-decreasing bound is
-established. `bound` is the ceiling this round's own measure must fall
-under; the recursion terminates because `bound : Nat` strictly decreases on
-every recursive call, witnessed by `h` at the call site. -/
+
 private def recurseLoop (step : Immediate S (StepOutcome S)) (stepFields : List String)
     (state : S) (bound : Nat) (position : Nat) : RecurseOutcome S :=
   match io step ⟨state, stepFields⟩ with
@@ -228,7 +199,7 @@ theorem recurseOutput_did_not_decrease_ge (req : RecurseReq S)
       exact recurseLoop_did_not_decrease_ge req.step req.stepFields next measure0 1
         position' s' measure prevMeasure h
 
-/-! ### closure: the bound is the carrier's length -/
+
 
 /-- Input to a closure's step: the current accumulated subset of the
 carrier, given as a list with no meaningful order or duplication. -/
@@ -263,9 +234,7 @@ the closure's termination measure. -/
 def residual (carrier current : List T) : Nat :=
   carrier.countP (fun x => decide (x ∉ current))
 
-/-- Over any list, the count of elements a growing round's input fails to
-accept is at least the count of elements the round's own output fails to
-accept: accepting only ever removes elements from that count. -/
+
 private theorem countP_not_contains_mono (l : List T) {current produced : List T}
     (hsub : current ⊆ produced) :
     l.countP (fun x => decide (x ∉ produced)) ≤ l.countP (fun x => decide (x ∉ current)) := by
@@ -274,9 +243,7 @@ private theorem countP_not_contains_mono (l : List T) {current produced : List T
   simp only [decide_eq_true_eq] at hx ⊢
   exact fun hc => hx (hsub hc)
 
-/-- A witness element that `carrier` holds, that `produced` accepts, and
-that `current` does not, strictly shrinks the not-yet-accepted count from
-`current` to `produced`. -/
+
 private theorem countP_not_contains_lt_of_witness :
     ∀ (carrier : List T) {current produced : List T}, current ⊆ produced →
       ∀ y, y ∈ carrier → y ∈ produced → y ∉ current →
@@ -322,9 +289,7 @@ theorem residual_lt {carrier current produced : List T}
   obtain ⟨y, hyProduced, hyCurrent⟩ := hex
   exact countP_not_contains_lt_of_witness carrier hsub y (hbound hyProduced) hyProduced hyCurrent
 
-/-- A growing round, once accepted by the `if`/`else if` guards below, has
-its residual strictly decrease: this is the proof obligation `closureLoop`
-discharges at every recursive call. -/
+
 private def closureLoop (step : Immediate (ClosureState T) (List T)) (stepFields : List String)
     (carrier : List T) (current : List T) (position : Nat) : ClosureOutcome T :=
   match io step ⟨⟨current⟩, stepFields⟩ with
@@ -358,7 +323,7 @@ subset, and the field names present on every round's own input, calls
 def closure : Immediate (ClosureReq T) (ClosureOutcome T) :=
   immediateOf "necoherence.iteration.closure" ["step", "carrier", "seed", "stepFields"] closureOutput
 
-/-- The round number a `closureLoop` outcome reports. -/
+
 private def closureOutcomePosition : ClosureOutcome T → Nat
   | .fixpoint _ p => p
   | .violation p _ _ => p

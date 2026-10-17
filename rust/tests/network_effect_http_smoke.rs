@@ -153,8 +153,6 @@ impl Drop for LoopPeer {
     }
 }
 
-/// `LoopPeer` accepts repeated connections (unlike `Peer`'s single accept),
-/// letting a retried attempt dispatch against the same real peer as root.
 fn spawn_loop_peer(response: Vec<u8>) -> TestResult<LoopPeer> {
     let listener = TcpListener::bind("127.0.0.1:0")?;
     listener.set_nonblocking(true)?;
@@ -295,6 +293,141 @@ fn assert_causal_identity(started: &StartedAttempt, observation: &AdapterObserva
         .instruction
         .target
         .starts_with("http://127.0.0.1:"));
+}
+
+fn request_header_values(request: &[u8], name: &str) -> TestResult<Vec<String>> {
+    let end = header_terminator(request).ok_or("request headers")?;
+    let head = std::str::from_utf8(request.get(..end).ok_or("request header range")?)?;
+    Ok(head
+        .lines()
+        .filter_map(|line| {
+            let (field, value) = line.split_once(':')?;
+            field
+                .eq_ignore_ascii_case(name)
+                .then(|| value.trim().to_owned())
+        })
+        .collect())
+}
+
+#[test]
+fn repeated_list_headers_reach_peer_in_value_order_with_distinct_headers_and_body() -> TestResult {
+    let peer = spawn_peer(raw_response(200, &[], b""), false)?;
+    let mut request = input(peer.target.clone(), "repeated-headers");
+    request.instruction.method = "POST".to_owned();
+    request.instruction.headers = [
+        ("Accept", "application/json"),
+        ("X-Order", "first"),
+        ("Accept", "application/cbor"),
+        ("x-order", "second"),
+        ("Content-Type", "application/octet-stream"),
+        ("X-ORDER", "third"),
+    ]
+    .into_iter()
+    .map(|(name, value)| RawHeaderField {
+        name: name.to_owned(),
+        value: value.bytes().map(Natural::from).collect(),
+    })
+    .collect();
+    request.instruction.body = [0u8, 128, 255].into_iter().map(Natural::from).collect();
+    let adapter = UreqHttpAdapter::default();
+    let (_, started) = dispatch(&adapter, request)?;
+    let (_, observation) = delivered_parts(wait_delivery(&adapter, &started)?)?;
+    assert_causal_identity(&started, &observation);
+    assert!(matches!(
+        observation,
+        AdapterObservation::ResponseObservation { .. }
+    ));
+    let wire = peer.finish()?;
+    assert_eq!(
+        request_header_values(&wire, "Accept")?,
+        ["application/json", "application/cbor"]
+    );
+    assert_eq!(
+        request_header_values(&wire, "X-Order")?,
+        ["first", "second", "third"]
+    );
+    assert_eq!(
+        request_header_values(&wire, "Content-Type")?,
+        ["application/octet-stream"]
+    );
+    let end = header_terminator(&wire).ok_or("body offset")?;
+    assert_eq!(wire.get(end..).ok_or("request body")?, &[0, 128, 255]);
+    Ok(())
+}
+
+#[test]
+fn duplicate_singleton_headers_are_request_write_failures() -> TestResult {
+    let cases: &[&[(&str, &str)]] = &[
+        &[("Host", "0"), ("Host", "0")],
+        &[("Host", "0"), ("host", "0")],
+        &[("Content-Length", "0"), ("Content-Length", "0")],
+        &[("Content-Length", "0"), ("content-length", "0")],
+        &[("Content-Length", "+42")],
+        &[("Content-Length", "invalid")],
+        &[("Content-Length", "42, 42")],
+        &[("Content-Length", "")],
+        &[("Content-Length", "18446744073709551616")],
+    ];
+    for fields in cases {
+        let mut peer = spawn_loop_peer(raw_response(200, &[], b""))?;
+        let mut request = input(peer.target.clone(), "singleton-header");
+        request.instruction.headers = fields
+            .iter()
+            .map(|(name, value)| RawHeaderField {
+                name: (*name).to_owned(),
+                value: value.bytes().map(Natural::from).collect(),
+            })
+            .collect();
+        let adapter = UreqHttpAdapter::default();
+        let (_, started) = dispatch(&adapter, request.clone())?;
+        let (_, observation) = delivered_parts(wait_delivery(&adapter, &started)?)?;
+        assert_causal_identity(&started, &observation);
+        assert!(matches!(
+            observation,
+            AdapterObservation::FailureObservation {
+                failure: NetworkHostFailure {
+                    stage: HostStage::RequestWrite,
+                    cause: HostFailure::RequestWriteFailed,
+                    ref attempt,
+                    ref configuration,
+                },
+                effect: EffectStatus::Unknown { reason: UnknownEffectReason::HostFailure },
+                ..
+            } if attempt == &request.attempt && configuration == &request.configuration
+        ));
+        peer.shutdown();
+        assert_eq!(peer.received.load(Ordering::SeqCst), 0);
+    }
+    Ok(())
+}
+
+#[test]
+fn redirect_response_is_observed_without_following_location() -> TestResult {
+    let mut destination = spawn_loop_peer(raw_response(200, &[], b"followed"))?;
+    let peer = spawn_peer(
+        raw_response(
+            302,
+            &[("Location", destination.target.as_bytes())],
+            b"redirect",
+        ),
+        false,
+    )?;
+    let adapter = UreqHttpAdapter::default();
+    let (_, started) = dispatch(&adapter, input(peer.target.clone(), "redirect"))?;
+    let (_, observation) = delivered_parts(wait_delivery(&adapter, &started)?)?;
+    assert!(matches!(
+        observation,
+        AdapterObservation::ResponseObservation {
+            response: RawHttpResponse { ref status, ref body, .. },
+            provenance: HeaderProvenance::LibraryObserved,
+            ..
+        } if status == &Natural::from(302u16)
+            && body == &b"redirect".iter().copied().map(Natural::from).collect::<Vec<_>>()
+    ));
+    let _ = peer.finish()?;
+    destination.shutdown();
+    assert_eq!(destination.received.load(Ordering::SeqCst), 0);
+    Ok(())
 }
 
 #[test]
@@ -458,6 +591,22 @@ fn expect_failure(
     ));
     assert_eq!(peer.received.load(Ordering::SeqCst), 1);
     let _ = peer.finish()?;
+    Ok(())
+}
+
+#[test]
+fn malformed_response_content_length_is_a_response_header_failure() -> TestResult {
+    for response in [
+        b"HTTP/1.1 200 OK\r\nContent-Length: 42\r\nContent-Length: 43\r\n\r\n".as_slice(),
+        b"HTTP/1.1 200 OK\r\nContent-Length: +42\r\n\r\n".as_slice(),
+    ] {
+        expect_failure(
+            response.to_vec(),
+            64,
+            HostStage::ResponseHeaders,
+            HostFailure::MalformedResponse,
+        )?;
+    }
     Ok(())
 }
 

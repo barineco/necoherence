@@ -9,7 +9,7 @@ from v4_samples import library, string_spec
 
 def context(value):
     checked=checkLibrary(value)
-    return ValueContext({"profile":checked.value["profile"],"nodes":checked.value["nodes"]})
+    return ValueContext.from_signature_nodes(checked.value["profile"], checked.value["nodes"])
 
 
 def test_incompatible_result_carries_a_valid_counterexample():

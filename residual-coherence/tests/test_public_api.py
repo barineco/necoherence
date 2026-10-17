@@ -44,12 +44,6 @@ def load_schema(name: str) -> dict[str, Any]:
 
 
 def assert_matches_schema(schema_document: dict[str, Any], value: Any, path: str = "$") -> None:
-    """Recursively check value against a JSON Schema document using only the standard library.
-
-    Supports the subset of draft 2020-12 used by the bundled schemas: $ref, $defs, const,
-    enum, object (required/properties/additionalProperties), array (items), and string
-    (pattern/minLength) constraints.
-    """
     defs = schema_document.get("$defs", {})
 
     def check(schema: dict[str, Any], target: Any, target_path: str) -> None:
@@ -118,7 +112,7 @@ def assert_matches_schema(schema_document: dict[str, Any], value: Any, path: str
             if minimum is not None:
                 assert target >= minimum, f"{target_path}: {target!r} below minimum {minimum}"
             return
-        # CanonicalValue-style multi-type or unconstrained schemas accept any JSON value.
+
 
     check({"$ref": schema_document["$ref"]} if "$ref" in schema_document else schema_document, value, path)
 
@@ -161,11 +155,6 @@ def test_roundtrip_permutation_and_preservation() -> None:
 
 
 def artifact_with_cross_type_correspondence() -> dict[str, Any]:
-    """Build an artifact with two declared types where one correspondence row is misscoped.
-
-    The row declares one type but one of its stage values belongs to the other, unrelated
-    type. Closure must be checked per row, not against the union of every constructor.
-    """
     value = artifact()
     first_type = value["finite_closed_type_set"]["finite_set"][0]["type_id"]
     second_type = identifier("type", 30)
@@ -378,7 +367,7 @@ def test_verify_typed_reachability_output_matches_dedicated_schema() -> None:
         assert product["evidence"]["finite_set"], f"{product['product_id']} has empty evidence"
         assert product["status"] == "PROVED"
 
-    # A dedicated type: the typed reachability result does not claim the AnalysisVerification shape.
+
     analysis_verification_schema = load_schema("analysis-verification.schema.json")
     try:
         assert_matches_schema(analysis_verification_schema, result)
@@ -415,7 +404,7 @@ def test_project_independence_witness_accepts_arbitrary_source_revision() -> Non
         assert witness["observed"]["substituted_reduction_region_id"] == "source-revision:" + substituted["revision"]
         assert witness["observed"]["non_revision_structure_preserved"] is True
 
-        # The un-substituted diagnostic and reduction still carry this invocation's own revision.
+
         assert result["diagnostic"]["source_revision"] == {"repository": repository, "revision": revision, "tree_digest": tree_digest}
 
 

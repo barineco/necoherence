@@ -895,16 +895,14 @@ pub fn reference_cycles_preserve_failure_fields_test() {
       [a, b],
       [],
     ),
-    #([named_node("A", recursive_union([#("loop", "A")]))], [a], [
-      types.Variant("loop"),
-    ]),
+    #([named_node("A", recursive_union([#("loop", "A")]))], [a], []),
     #(
       [
         named_node("A", types.AliasShape(u, "U")),
         named_node("U", recursive_union([#("loop", "A")])),
       ],
       [a, u],
-      [types.Variant("loop")],
+      [],
     ),
   ]
   let observed = json.JsonValueObj([#("kind", json.JsonValueStr("loop"))])
@@ -932,4 +930,256 @@ pub fn reference_cycles_preserve_failure_fields_test() {
       let assert True = failure.reference_trace == trace
     })
   })
+}
+
+pub fn defaults_preserve_order_alias_provenance_and_idempotence_test() {
+  let primitive =
+    named_node("flag", types.BooleanShape(types.BooleanSpec(None, Some(False))))
+  let alias =
+    named_node("alias", types.AliasShape(type_reference("flag"), "flag"))
+  let product =
+    named_node(
+      "object",
+      types.ProductShape(types.ProductSpec(
+        [
+          types.FieldSpec(
+            "flag",
+            types.SlotContract(type_reference("alias"), True, False),
+            occurrence(),
+          ),
+        ],
+        types.RejectExtras,
+      )),
+    )
+  let graph =
+    types.SemanticGraph(
+      profile([], types.TagModel("kind", None, [])),
+      [primitive, alias, product],
+      [],
+    )
+  let before = json.JsonValueObj([])
+  let assert Ok(defaulted) =
+    validation.materialize_defaults(graph, type_reference("object"), before)
+  let after = validation.defaulted_value(defaulted)
+  let assert True =
+    after == json.JsonValueObj([#("flag", json.JsonValueBool(False))])
+  let assert [application] = validation.defaulted_value_applications(defaulted)
+  let assert True = application.type_ref == type_reference("flag")
+  let assert True =
+    application.origin == types.occurrence_at(type_reference("flag"), "default")
+  let assert True = application.value_path == [types.Field("flag")]
+  let assert Ok(second) =
+    validation.materialize_defaults(graph, type_reference("object"), after)
+  let assert True = validation.defaulted_value(second) == after
+  let assert True = validation.defaulted_value_applications(second) == []
+  let forged =
+    validation.DefaultApplication(
+      ..application,
+      value: json.JsonValueBool(True),
+    )
+  let assert False =
+    validation.check_default_applications(graph, before, after, [forged])
+  let assert False =
+    validation.check_default_applications(graph, json.JsonValueNull, after, [
+      application,
+    ])
+}
+
+pub fn invalid_default_is_checked_at_resolved_primitive_root_test() {
+  let primitive =
+    named_node(
+      "number",
+      types.IntegerShape(types.IntegerSpec(
+        None,
+        Some(1),
+        None,
+        None,
+        None,
+        Some(0),
+      )),
+    )
+  let alias =
+    named_node("alias", types.AliasShape(type_reference("number"), "number"))
+  let product =
+    named_node(
+      "object",
+      types.ProductShape(types.ProductSpec(
+        [
+          types.FieldSpec(
+            "number",
+            types.SlotContract(type_reference("alias"), True, False),
+            occurrence(),
+          ),
+        ],
+        types.RejectExtras,
+      )),
+    )
+  let graph =
+    types.SemanticGraph(
+      profile([], types.TagModel("kind", None, [])),
+      [primitive, alias, product],
+      [],
+    )
+  let assert Error(validation.Rejected(failure)) =
+    validation.materialize_defaults(
+      graph,
+      type_reference("object"),
+      json.JsonValueObj([]),
+    )
+  let assert True = failure.type_ref == type_reference("number")
+  let assert True = failure.value_path == []
+  let assert True = failure.condition == types.BelowMinimumCondition
+}
+
+pub fn default_alias_cycle_exhausts_lean_fuel_test() {
+  let graph =
+    types.SemanticGraph(
+      profile([], types.TagModel("kind", None, [])),
+      [
+        named_node("cycle", types.AliasShape(type_reference("cycle"), "cycle")),
+      ],
+      [],
+    )
+  let assert Error(validation.Unresolved([
+    types.SemanticObligation(reference, [], types.MembershipBoundReason),
+  ])) =
+    validation.materialize_defaults(
+      graph,
+      type_reference("cycle"),
+      json.JsonValueBool(False),
+    )
+  let assert True = reference == type_reference("cycle")
+}
+
+pub fn materialization_checks_reachable_meaning_at_primitive_and_final_root_test() {
+  let base = profile([], types.TagModel("kind", None, []))
+  let root =
+    named_node(
+      "root",
+      types.ProductShape(types.ProductSpec(
+        [
+          types.FieldSpec(
+            "optional",
+            types.SlotContract(type_reference("gone"), False, False),
+            occurrence(),
+          ),
+        ],
+        types.RejectExtras,
+      )),
+    )
+  let assert Error(validation.Unresolved([
+    types.SemanticObligation(gone, [], types.UnresolvedTypeReason),
+  ])) =
+    validation.materialize_defaults(
+      types.SemanticGraph(base, [root], []),
+      type_reference("root"),
+      json.JsonValueObj([]),
+    )
+  let assert True = gone == type_reference("gone")
+  let text =
+    named_node(
+      "text",
+      types.StringShape(types.StringSpec(
+        Some(types.NamedFormat("missing-format")),
+        [],
+        None,
+        None,
+        None,
+        [],
+        Some(""),
+      )),
+    )
+  let product =
+    named_node(
+      "root",
+      types.ProductShape(types.ProductSpec(
+        [
+          types.FieldSpec(
+            "label",
+            types.SlotContract(type_reference("text"), True, False),
+            occurrence(),
+          ),
+        ],
+        types.RejectExtras,
+      )),
+    )
+  let graph = types.SemanticGraph(base, [text, product], [])
+  list.each(
+    [
+      #(type_reference("root"), json.JsonValueObj([])),
+      #(type_reference("text"), json.JsonValueStr("")),
+    ],
+    fn(input) {
+      let assert Error(validation.Unresolved([
+        types.SemanticObligation(
+          reference,
+          [],
+          types.UnknownFormatReason("missing-format"),
+        ),
+      ])) = validation.materialize_defaults(graph, input.0, input.1)
+      let assert True = reference == type_reference("text")
+    },
+  )
+}
+
+pub fn unknown_nested_wrappers_preserve_payload_condition_and_path_test() {
+  let semantic_profile =
+    types.SemanticProfile(
+      ..profile(
+        [types.Wrapper("text", "text", types.WrapperText(Some("literal")))],
+        types.TagModel("kind", None, []),
+      ),
+      format_bindings: [
+        types.FormatBinding("literal", reference(), types.Literal("accepted")),
+      ],
+    )
+  let any = declared_node(types.UnknownShape(types.AnyValue))
+  let wrapped = json.JsonValueObj([#("text", json.JsonValueStr("wrong"))])
+  let value = json.JsonValueObj([#("items", json.JsonValueArr([wrapped]))])
+  let assert types.RejectedValue(failure) =
+    decision(semantic_profile, [any], "subject", value)
+  let assert types.FormatFailureCondition("literal") = failure.condition
+  let assert [types.Field("items"), types.Index(0)] = failure.value_path
+  let assert True = failure.observed == types.Present(wrapped)
+  let ordinary = declared_node(types.UnknownShape(types.OrdinaryObject))
+  let assert types.RejectedValue(failure) =
+    decision(semantic_profile, [ordinary], "subject", value)
+  let assert types.FormatFailureCondition("literal") = failure.condition
+  let assert [types.Field("items"), types.Index(0)] = failure.value_path
+  let assert types.RejectedValue(failure) =
+    decision(semantic_profile, [ordinary], "subject", wrapped)
+  let assert types.WrongValueKindCondition("ordinary object") =
+    failure.condition
+}
+
+pub fn standalone_wrapper_decode_checks_shared_payload_rules_test() {
+  let semantic_profile =
+    types.SemanticProfile(
+      ..profile(
+        [types.Wrapper("text", "text", types.WrapperText(Some("literal")))],
+        types.TagModel("kind", None, []),
+      ),
+      format_bindings: [
+        types.FormatBinding("literal", reference(), types.Literal("accepted")),
+      ],
+    )
+  let value = json.JsonValueObj([#("text", json.JsonValueStr("accepted"))])
+  let assert Ok(json.JsonValueStr("accepted")) =
+    runtime.wrap_decode(semantic_profile, "text", value)
+  list.each(
+    [
+      json.JsonValueObj([#("text", json.JsonValueStr("wrong"))]),
+      json.JsonValueObj([#("text", json.JsonValueNum(1))]),
+      json.JsonValueObj([
+        #("text", json.JsonValueStr("accepted")),
+        #("extra", json.JsonValueBool(True)),
+      ]),
+    ],
+    fn(value) {
+      let assert types.WrapperObject(_) =
+        runtime.class_of(semantic_profile, value)
+      let assert Error(runtime.WrongWrapperPayload("text")) =
+        runtime.wrap_decode(semantic_profile, "text", value)
+    },
+  )
 }

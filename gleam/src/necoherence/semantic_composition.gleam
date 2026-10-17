@@ -417,6 +417,7 @@ pub type SearchBounds {
     max_type_obligations: Int,
     max_branch_nodes: Int,
     resource_bounds: Option(ResourceBounds),
+    max_sample_length: Int,
   )
 }
 
@@ -444,6 +445,7 @@ pub type CompositionInputFailure {
   UnresolvedFunction(reference: FunctionRef)
   InvalidSignature(function: FunctionRef, reason: String)
   InvalidInitialValue(input: InputId, failure: types.ValueFailure)
+  InvalidInitialCertificate(input: InputId, condition: String)
   InvalidInvocationDomain(reason: String)
   InvalidResourceDeclaration(reason: String)
   InvalidBound(reason: String)
@@ -635,6 +637,7 @@ pub type UnresolvedObligation {
     obligations: List(TypeObligation),
   )
   UnresolvedMeaning(obligations: List(types.SemanticObligation))
+  InvalidValidationCertificate(condition: String)
   Inhabitation(producer: ProducerRef, contract: types.SlotContract)
   BranchInhabitation
   StateBoundExhausted
@@ -802,7 +805,7 @@ pub opaque type CheckedCompositionClosure {
 pub const default_resource_token_bound = 100_000
 
 pub fn default_search_bounds() -> SearchBounds {
-  SearchBounds(10_000, 100_000, 10_000, 100_000, None)
+  SearchBounds(10_000, 100_000, 10_000, 100_000, None, 32)
 }
 
 pub fn semantic_basis(graph: types.SemanticGraph) -> SemanticBasis {
@@ -1789,6 +1792,24 @@ pub fn check_assignable(
   destination: types.SlotContract,
   max_obligations: Int,
 ) -> CompatibilityDecision {
+  check_assignable_bounded(
+    graph,
+    source,
+    destination,
+    SearchBounds(
+      ..default_search_bounds(),
+      max_type_obligations: max_obligations,
+      max_sample_length: max_obligations,
+    ),
+  )
+}
+
+pub fn check_assignable_bounded(
+  graph: types.SemanticGraph,
+  source: types.SlotContract,
+  destination: types.SlotContract,
+  bounds: SearchBounds,
+) -> CompatibilityDecision {
   let root = TypePair(source, destination, None)
   case
     validation.meaning_obligations(graph, [
@@ -1800,7 +1821,16 @@ pub fn check_assignable(
       CompatibilityUnknown([type_obligation(root, TypeMeaning([first, ..rest]))])
     [] -> {
       let empty = empty_types(graph)
-      case build_pair_table(graph, empty, [root], [], 0, max_obligations) {
+      case
+        build_pair_table(
+          graph,
+          empty,
+          [root],
+          [],
+          0,
+          bounds.max_type_obligations,
+        )
+      {
         Ok(entries) ->
           Compatible(InclusionCertificate(
             semantic_basis(graph),
@@ -1811,9 +1841,7 @@ pub fn check_assignable(
             entries,
           ))
         Error(obligation) ->
-          case
-            source_counterexample(graph, source, destination, max_obligations)
-          {
+          case source_counterexample(graph, source, destination, bounds) {
             Some(certificate) -> Incompatible(certificate)
             None -> CompatibilityUnknown([obligation])
           }
@@ -2236,7 +2264,7 @@ fn shape_samples(
         )
       })
     types.SealedShape(tag, refinements) ->
-      sealed_samples(graph.profile, tag, refinements)
+      sealed_samples(graph, tag, refinements)
     types.Never -> []
     types.UnknownShape(_) -> [
       kdl.JsonValueObj([]),
@@ -2330,45 +2358,77 @@ fn select_branch_sample(
 }
 
 fn sealed_samples(
-  profile: types.SemanticProfile,
+  graph: types.SemanticGraph,
   tag: String,
   refinements: List(types.SealedRefinement),
 ) -> List(kdl.JsonValue) {
   case
-    profile.tag,
+    graph.profile.tag,
     find(
-      option.unwrap(option.map(profile.tag, fn(model) { model.sealed }), []),
+      option.unwrap(
+        option.map(graph.profile.tag, fn(model) { model.sealed }),
+        [],
+      ),
       fn(form) { form.tag == tag },
     )
   {
     Some(model), Some(form) -> {
       let members =
-        list.fold(
-          form.fields,
-          [#(model.key, kdl.JsonValueStr(tag))],
-          fn(items, field) {
-            let leaf =
-              option.unwrap(
-                option.map(
-                  find(refinements, fn(item) { item.key == field.key }),
-                  fn(item) { item.leaf },
-                ),
-                field.leaf,
-              )
-            let value = case leaf {
-              types.SealedString(_) -> kdl.JsonValueStr("")
-              types.SealedInteger(_) -> kdl.JsonValueNum(0)
-            }
-            case field.required {
-              True -> [#(field.key, value), ..items]
-              False -> items
-            }
-          },
-        )
-      [kdl.JsonValueObj(members)]
+        form.fields
+        |> list.filter(fn(field) { field.required })
+        |> list.try_map(fn(field) {
+          let leaf =
+            option.unwrap(
+              option.map(
+                find(refinements, fn(item) { item.key == field.key }),
+                fn(item) { item.leaf },
+              ),
+              field.leaf,
+            )
+          sealed_leaf_sample(graph, leaf)
+          |> option.map(fn(value) { #(field.key, value) })
+          |> option.to_result(Nil)
+        })
+      case members {
+        Ok(members) -> [
+          kdl.JsonValueObj([#(model.key, kdl.JsonValueStr(tag)), ..members]),
+        ]
+        Error(Nil) -> []
+      }
     }
     _, _ -> []
   }
+}
+
+fn sealed_leaf_sample(
+  graph: types.SemanticGraph,
+  leaf: types.SealedLeaf,
+) -> Option(kdl.JsonValue) {
+  case leaf {
+    types.SealedString(spec) ->
+      spec.const_value
+      |> option.lazy_or(fn() { option.then(spec.enum_values, list_first) })
+      |> option.lazy_or(fn() { list_first(spec.examples) })
+      |> option.lazy_or(fn() {
+        case spec.format {
+          None -> Some("x")
+          Some(format_use) ->
+            format_rule(graph, format_use)
+            |> option.then(fn(rule) { list_first(format_samples(rule, 1)) })
+        }
+      })
+      |> option.map(kdl.JsonValueStr)
+    types.SealedInteger(spec) ->
+      spec.const_value
+      |> option.lazy_or(fn() { option.then(spec.enum_values, list_first) })
+      |> option.lazy_or(fn() { spec.minimum })
+      |> option.lazy_or(fn() { spec.maximum })
+      |> option.map(kdl.JsonValueNum)
+  }
+}
+
+fn list_first(values: List(a)) -> Option(a) {
+  option.from_result(list.first(values))
 }
 
 fn put_member(
@@ -2501,6 +2561,23 @@ pub fn slot_samples(
   slot_values(contract, samples(graph, contract.type_ref, [], limit))
 }
 
+pub fn bounded_slot_samples(
+  graph: types.SemanticGraph,
+  contract: types.SlotContract,
+  limit: Int,
+  max_sample_length: Int,
+) -> SampleResult(types.SlotValue(kdl.JsonValue)) {
+  let generated =
+    sample_value_fuel(
+      graph,
+      contract.type_ref,
+      [],
+      int.min(limit, list.length(graph.nodes) + 1),
+      max_sample_length,
+    )
+  SampleResult(slot_values(contract, generated.values), generated.obligations)
+}
+
 fn slot_values(
   contract: types.SlotContract,
   values: List(kdl.JsonValue),
@@ -2524,7 +2601,33 @@ pub fn inclusion_samples(
   destination: types.TypeRef,
   limit: Int,
 ) -> List(kdl.JsonValue) {
-  let values = samples(graph, source, [], limit)
+  inclusion_samples_bounded(
+    graph,
+    source,
+    destination,
+    SearchBounds(
+      ..default_search_bounds(),
+      max_type_obligations: limit,
+      max_sample_length: limit,
+    ),
+  ).values
+}
+
+pub fn inclusion_samples_bounded(
+  graph: types.SemanticGraph,
+  source: types.TypeRef,
+  destination: types.TypeRef,
+  bounds: SearchBounds,
+) -> SampleResult(kdl.JsonValue) {
+  let generated =
+    sample_value_fuel(
+      graph,
+      source,
+      [],
+      int.min(bounds.max_type_obligations, list.length(graph.nodes) + 1),
+      bounds.max_sample_length,
+    )
+  let values = generated.values
   let additional = case
     resolved_shape(graph, source),
     resolved_shape(graph, destination)
@@ -2558,7 +2661,21 @@ pub fn inclusion_samples(
       })
     _, _ -> []
   }
-  list.append(values, additional)
+  let accepted =
+    list.filter(additional, fn(value) {
+      sample_measure(value) <= bounds.max_sample_length
+      && validation.accepts_value(graph, source, value)
+    })
+  SampleResult(
+    list.append(values, accepted),
+    list.append(
+      generated.obligations,
+      case list.length(accepted) == list.length(additional) {
+        True -> []
+        False -> [SampleBound]
+      },
+    ),
+  )
 }
 
 pub fn inclusion_slot_samples(
@@ -2577,10 +2694,18 @@ fn source_counterexample(
   graph: types.SemanticGraph,
   source: types.SlotContract,
   destination: types.SlotContract,
-  limit: Int,
+  bounds: SearchBounds,
 ) -> Option(CounterexampleCertificate) {
   list.find_map(
-    inclusion_slot_samples(graph, source, destination.type_ref, limit),
+    slot_values(
+      source,
+      inclusion_samples_bounded(
+        graph,
+        source.type_ref,
+        destination.type_ref,
+        bounds,
+      ).values,
+    ),
     fn(value) {
       case validation.accepts_slot(graph, source, value) {
         False -> Error(Nil)
@@ -2986,7 +3111,8 @@ fn check_bounds(bounds: SearchBounds) -> Result(Nil, CompositionInputFailure) {
     bounds.max_expanded_states >= 0
       && bounds.max_binding_candidates >= 0
       && bounds.max_type_obligations >= 0
-      && bounds.max_branch_nodes >= 0,
+      && bounds.max_branch_nodes >= 0
+      && bounds.max_sample_length >= 0,
     InvalidBound("composition bounds must be natural numbers"),
   ))
   case bounds.resource_bounds {
@@ -3202,6 +3328,8 @@ fn prepare_input(
             Error(validation.Rejected(failure)) ->
               Error(InvalidInitialValue(initial.id, failure))
             Error(validation.Unresolved(obligations)) -> Ok(obligations)
+            Error(validation.CertificateMismatchFailure(condition)) ->
+              Error(InvalidInitialCertificate(initial.id, condition))
           }
       }
     }),
@@ -4559,11 +4687,12 @@ fn ensure_possible(
     Some(exact) -> validation.accepts_slot(prepared.graph, contract, exact)
     None ->
       !slot_empty(contract, prepared.empty)
-      && slot_samples(
+      && bounded_slot_samples(
         prepared.graph,
         contract,
         prepared.input.bounds.max_type_obligations,
-      )
+        prepared.input.bounds.max_sample_length,
+      ).values
       != []
   }
   require(possible, MissingEvidence("no accepted value from producer"))
@@ -5114,6 +5243,8 @@ pub fn evaluate_guard_arm(
         Error(validation.Rejected(_)) -> Ok(GuardRejected)
         Error(validation.Unresolved(reasons)) ->
           Error(types.UnresolvedValue(reasons))
+        Error(validation.CertificateMismatchFailure(condition)) ->
+          Error(types.CertificateMismatchValue(condition))
       }
     Presence ->
       Ok(case inspected {
@@ -5266,11 +5397,11 @@ fn guard_arms(
             True -> Ok([GuardRejected])
             False ->
               case
-                check_assignable(
+                check_assignable_bounded(
                   prepared.graph,
                   projected.destination,
                   destination,
-                  prepared.input.bounds.max_type_obligations,
+                  prepared.input.bounds,
                 )
               {
                 Compatible(_) -> Ok([GuardAccepted])
@@ -5931,11 +6062,11 @@ fn compatibility(
   value: Option(ValueRef),
 ) -> #(Option(InclusionCertificate), EnumerationContext) {
   case
-    check_assignable(
+    check_assignable_bounded(
       context.prepared.graph,
       source,
       destination,
-      context.prepared.input.bounds.max_type_obligations,
+      context.prepared.input.bounds,
     )
   {
     Compatible(certificate) -> #(Some(certificate), context)
@@ -6026,6 +6157,10 @@ fn source_binding(
                   None,
                   add_unknown(context, UnresolvedMeaning(reasons)),
                 )
+                Error(validation.CertificateMismatchFailure(condition)) -> #(
+                  None,
+                  add_unknown(context, InvalidValidationCertificate(condition)),
+                )
               }
           }
         None ->
@@ -6033,11 +6168,12 @@ fn source_binding(
             True -> #(None, context)
             False ->
               case
-                slot_samples(
+                bounded_slot_samples(
                   context.prepared.graph,
                   projection.destination,
                   context.prepared.input.bounds.max_type_obligations,
-                )
+                  context.prepared.input.bounds.max_sample_length,
+                ).values
               {
                 [] -> #(
                   None,
@@ -7598,11 +7734,12 @@ fn initial_membership(
       Argument ->
         option.to_result(
           at(
-            slot_samples(
+            bounded_slot_samples(
               prepared.graph,
               initial.contract,
               prepared.input.bounds.max_type_obligations,
-            ),
+              prepared.input.bounds.max_sample_length,
+            ).values,
             0,
           ),
           ContractViolation("feasible branch omitted initial inhabitation"),

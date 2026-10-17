@@ -123,6 +123,17 @@ it("observes every Lean library predicate and the valid library", () => {
   for (const [expected, library] of cases) predicate(() => S.checkLibrary(library), expected);
 });
 
+it("uses wire tags for InternalTag identity and preserves selector duplicates", () => {
+  const nodes = [unitNode, { id: "tag-value", shape: { tag: "String", value: stringSpec() } } as const,
+    product("a", [field("$type", "tag-value")]), product("b", [field("$type", "tag-value")])];
+  const branches = [branch("a", "com.example.a", { tag: "InternalTag" }), branch("b", "com.example.b", { tag: "InternalTag" })];
+  const subject = { ...libraryWith([...nodes, union(branches)]), profile: { ...libraryProfile, tag: { key: "$type", format: null, sealed: [] } } };
+  expect(S.checkLibrary(subject).library.nodes).toEqual(subject.nodes);
+  for (const selector of [{ tag: "Kind", value: { tag: "Null" } }, { tag: "MemberShape", value: [["key", { tag: "Absent" }]] }] as const) {
+    predicate(() => S.checkLibrary({ ...subject, nodes: [...nodes, union(branches.map(item => ({ ...item, selector })))] }), "LB18");
+  }
+});
+
 it("roundtrips every Lean format, shape, and condition declaration", () => {
   const formats: readonly V.FormatRule[] = [
     { tag: "AsciiDfa", value: { state_count: "1", initial_state: "0", accepting_states: ["0"], transitions: [] } },

@@ -1,7 +1,6 @@
 # SPDX-FileCopyrightText: 2026 barineco
 # SPDX-License-Identifier: MIT
 
-"""Tests for the iterative call forms: fold, recurse, closure."""
 
 from __future__ import annotations
 
@@ -34,14 +33,14 @@ from necoherence.iteration import (
     recurse,
 )
 
-# -- shared step declarations -------------------------------------------------
+
 
 
 def _increment(x: int) -> int:
     return x + 1
 
 
-# A bare int carries no fields, so this step declares no required fields.
+
 increment: Immediate[int, int] = Immediate(identity="test.increment", required=(), output=_increment)
 
 
@@ -80,7 +79,7 @@ def _closure_request(
     return Request(payload=req, fields=("step", "carrier", "seed", "step_fields"))
 
 
-# -- shape checks: Immediate, bound readable from input -----------------------
+
 
 
 def test_fold_is_immediate_and_bound_is_an_input_field() -> None:
@@ -98,7 +97,7 @@ def test_closure_is_immediate_and_bound_is_the_carrier() -> None:
     assert closure.required == ("step", "carrier", "seed", "step_fields")
 
 
-# -- fold -----------------------------------------------------------------
+
 
 
 def test_fold_runs_count_rounds_and_states_has_count_plus_one_entries() -> None:
@@ -118,9 +117,6 @@ class _Pair:
 
 
 def test_fold_reports_the_position_of_a_failing_round() -> None:
-    """``combine`` requires ``a``/``b``; declaring ``step_fields=()`` means
-    no round's own input is declared present, so the very first round's
-    ``io`` call fails to project."""
     req = FoldReq(step=combine, seed=_Pair(a=1, b=2), count=5, step_fields=())  # type: ignore[misc]
     result = io(fold, Request(payload=req, fields=("step", "seed", "count", "step_fields")))
     assert isinstance(result, CallOk)
@@ -137,7 +133,7 @@ def test_fold_outcome_is_a_closed_exclusive_union() -> None:
     assert isinstance(result.value, FoldTrace | FoldStopped)
 
 
-# -- recurse ----------------------------------------------------------------
+
 
 
 def _gcd_step(state: tuple[int, int]) -> StepOutcome[tuple[int, int]]:
@@ -177,10 +173,6 @@ def test_recurse_returns_did_not_decrease_instead_of_waiting() -> None:
 
 
 def test_recurse_reports_a_failing_rounds_projection_failure() -> None:
-    """``combine`` is declared with ``required=("a", "b")``, but this
-    request declares no ``step_fields`` present, so the first round's own
-    ``io`` call fails to project before ``combine``'s ``output`` ever
-    runs."""
     req = RecurseReq(step=combine, seed=_Empty(), step_fields=())  # type: ignore[misc, arg-type]
     result = io(recurse, Request(payload=req, fields=("step", "seed", "step_fields")))
     assert isinstance(result, CallOk)
@@ -196,7 +188,7 @@ def test_recurse_outcome_is_a_closed_exclusive_union() -> None:
     assert isinstance(result.value, RecurseSettled | RecurseDidNotDecrease | RecurseProjectionFailed)
 
 
-# -- closure ------------------------------------------------------------------
+
 
 
 _edges = {1: frozenset({2}), 2: frozenset({3}), 3: frozenset()}
@@ -250,9 +242,6 @@ def test_closure_reports_a_violation_when_the_step_leaves_the_carrier() -> None:
 
 
 def test_closure_reports_a_failing_rounds_projection_failure() -> None:
-    """``combine`` requires ``a``/``b``, which ``ClosureState`` never
-    carries; declaring no ``step_fields`` present fails the first round's
-    own ``io`` call before ``combine``'s ``output`` ever runs."""
     req = ClosureReq(step=combine, carrier=frozenset({1}), seed=frozenset({1}), step_fields=())  # type: ignore[arg-type]
     result = io(closure, Request(payload=req, fields=("step", "carrier", "seed", "step_fields")))
     assert isinstance(result, CallOk)
@@ -267,7 +256,7 @@ def test_closure_outcome_is_a_closed_exclusive_union() -> None:
     assert isinstance(result.value, ClosureFixpoint | ClosureViolation | ClosureProjectionFailed)
 
 
-# -- fold/recurse/closure honor an explicit stepFields on every round ---------
+
 
 
 def test_fold_projects_each_round_using_the_declared_step_fields() -> None:
@@ -286,7 +275,7 @@ def test_fold_missing_a_declared_step_field_fails_the_first_round() -> None:
     assert outcome.stopped.failure == ProjectionFailed(declaration="test.combine", fields=("b",))
 
 
-# -- fold's own io projection can itself fail -----------------------------
+
 
 
 def test_io_fold_itself_projection_fails_when_the_request_is_missing_fields() -> None:

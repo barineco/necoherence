@@ -45,7 +45,16 @@ Necoherence provides an implementation for each of the following six languages.
 
 The Lean implementation is the specification, written as executable definitions.
 The implementations in the other five languages are verified by checking their results against those of the Lean definitions.
-Every implementation is at version `0.1.0`, and each directory's README describes how to build and test it.
+Every implementation is at version `0.2.0`, and each directory's README describes how to build and test it.
+
+HTTP execution is optional. Rust enables it with the `http-adapter` feature. The other runtime implementations provide separate adapter packages:
+
+- [Python HTTP adapter](python-http-adapter/)
+- [TypeScript HTTP adapter](typescript-http-adapter/)
+- [Java HTTP adapter](java-http-adapter/)
+- [Gleam HTTP adapter](gleam-http-adapter/)
+
+The core packages contain the network-effect ledger and accept observations through caller-supplied ports.
 
 ## Verification
 

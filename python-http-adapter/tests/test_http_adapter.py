@@ -15,7 +15,7 @@ from unittest.mock import patch
 from urllib.parse import SplitResult
 
 from necoherence import network_effect as ne
-from necoherence.http_adapter import (
+from necoherence_http_adapter import (
     EventCancellationPort,
     HttpHostAdapter,
 )

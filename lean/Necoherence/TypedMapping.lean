@@ -1,13 +1,7 @@
 -- SPDX-FileCopyrightText: 2026 barineco
 -- SPDX-License-Identifier: MIT
 
-/-
-Typed mapping: finite typed places, transitions, colored tokens, input
-bindings, input validation, one-step transitions and path replay.
 
-All results are closed data; witnesses expose the finite path or closure
-that produced the result.
--/
 
 namespace Necoherence
 
@@ -490,7 +484,7 @@ theorem readConsumeAtomicity (m : Marking) (bindings : List InputBinding) (place
 theorem producedTokenColor (t : TypedTransition) :
     producedToken t = { target := t.identity, index := 0, revision := t.revision, kind := .output } := rfl
 
-/-! Path replay -/
+
 
 def stepAt (input : SolverInput) (m : Marking) (transitionId : String) : Option Marking :=
   match findTransition input.transitions transitionId with

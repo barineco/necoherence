@@ -92,7 +92,6 @@ def verify_input_roundtrip(value: Any) -> dict[str, Any] | TypedFailure:
 def _witness(
     witness_id: str, matched: bool, observed: Any, expected: Any, evidence: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    """Render a witness only from values calculated in this invocation."""
     return {
         "witness_id": witness_id,
         "status": "ok" if matched else "error",
@@ -140,7 +139,6 @@ def _source_evidence(value: dict[str, Any]) -> tuple[dict[str, Any], list[dict[s
 
 
 def _typed_failure_observation(value: dict[str, Any]) -> dict[str, Any]:
-    """Observe a closed failure by mutating this invocation's validated input."""
     invalid = copy.deepcopy(value)
     invalid["declared_reachability"]["point_ids"]["finite_set"].append("unresolved-generated-point")
     failure = validate_analysis_input(invalid)
@@ -212,7 +210,6 @@ def verify(input_value: Any) -> dict[str, Any] | TypedFailure:
 
 
 def _generated_input() -> dict[str, Any]:
-    """Build a closed three-point AnalysisInput from code."""
     point_ids = ["p0", "p1", "p2"]
     colors = ["red", "blue", "green"]
     points = [

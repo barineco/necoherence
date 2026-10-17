@@ -60,8 +60,6 @@ def coherent(r: Reconciliation) -> bool:
 
 
 def _resources_of(bases: tuple[Basis | None, ...]) -> tuple[ResourceId, ...]:
-    """Every resource named by a basis in ``bases``, without duplicates, in
-    the order each resource first appears."""
     acc: list[ResourceId] = []
     for mb in bases:
         if mb is None:
@@ -72,8 +70,6 @@ def _resources_of(bases: tuple[Basis | None, ...]) -> tuple[ResourceId, ...]:
 
 
 def _max_revision(bases: tuple[Basis | None, ...], r: ResourceId) -> Revision | None:
-    """Highest recorded revision for resource ``r`` across all bases, or
-    ``None`` if no basis in ``bases`` names ``r``."""
     acc: Revision | None = None
     for mb in bases:
         if mb is None or mb.resource != r:
@@ -84,8 +80,6 @@ def _max_revision(bases: tuple[Basis | None, ...], r: ResourceId) -> Revision | 
 
 
 def _divergence_at(world: World, r: ResourceId, recorded: Revision) -> Divergence | None:
-    """One resource's divergence between its recorded revision and the world,
-    or ``None`` if the world agrees (equal, or exactly one step ahead)."""
     actual = lookup(world, r)
     if isinstance(actual, UnknownResource):
         return UnknownToWorld(resource=r, recorded=recorded)

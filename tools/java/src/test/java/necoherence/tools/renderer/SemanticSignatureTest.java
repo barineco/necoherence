@@ -22,7 +22,7 @@ public final class SemanticSignatureTest {
     public static void main(String[] args)throws Exception{
         WireValue library=library();var basis=TypeSignatures.basis(encodeWire(library),encodeWire(entries));var checked=admit(library);
         WireValue discriminatorValue=obj("n",num(java.math.BigInteger.ONE),"$type",str("example.value#main"));
-        checked.valueContext().validate(checked.valueContext().index(str("product")),discriminatorValue);
+        checked.valueContext().validate(TypeSignatures.typeReference("product"),discriminatorValue);
         WireValue permuted=replace(replace(library,"nodes",arr(a(f(library,"nodes")).reversed())),"definitions",arr(a(f(library,"definitions")).reversed()));equal(basis.encode(),TypeSignatures.basis(encodeWire(permuted),encodeWire(entries)).encode());admit(permuted);
         WireValue metadata=replace(library,"annotations",arr(List.of(obj("target",variant("Library"),"key",str("description"),"value",toExact(str("changed"))))));WireValue before=readJson(basis.encode()),after=readJson(TypeSignatures.basis(encodeWire(metadata),encodeWire(entries)).encode());equal(f(before,"graph_sha256"),f(after,"graph_sha256"));equal(f(before,"provenance_sha256"),f(after,"provenance_sha256"));if(f(before,"metadata_sha256").equals(f(after,"metadata_sha256")))throw new AssertionError("metadata digest unchanged");invalid(()->TypeSignatures.admitGeneration(basis,encodeWire(exchange(metadata,basis))));
         invalid(()->admit(replace(library,"nodes",arr(List.of(a(f(library,"nodes")).get(0),a(f(library,"nodes")).get(0))))));
@@ -66,8 +66,8 @@ public final class SemanticSignatureTest {
                 Object binding=java.lang.reflect.Proxy.newProxyInstance(loader,new Class<?>[]{bindingType},(proxy,method,arguments)->prepared);
                 OwnerDecoder<Object> httpDecoder=settled->{throw new AssertionError("completed preparation decoded HTTP");};
                 HostAdapter adapter=new HostAdapter() {
-                    public necoherence.network.JavaHttpAdapter.StartResult start(necoherence.network.NetworkEffect.SendCommand command){throw new AssertionError("completed preparation issued HTTP");}
-                    public necoherence.network.JavaHttpAdapter.PollResult observe(necoherence.network.NetworkEffect.StartedAttempt started){throw new AssertionError("completed preparation observed HTTP");}
+                    public necoherence.network.NetworkEffect.StartObservation start(necoherence.network.NetworkEffect.SendCommand command){throw new AssertionError("completed preparation issued HTTP");}
+                    public necoherence.network.NetworkEffect.HostObservation observe(necoherence.network.NetworkEffect.StartedAttempt started){throw new AssertionError("completed preparation observed HTTP");}
                 };
                 Object started=type.getMethod("startOp",necoherence.network.NetworkEffect.NetworkState.class,inputType,bindingType,OwnerDecoder.class,HostAdapter.class)
                     .invoke(null,new necoherence.network.NetworkEffect.NetworkState(List.of()),input,binding,httpDecoder,adapter);

@@ -1,17 +1,21 @@
 // SPDX-FileCopyrightText: 2026 barineco
 // SPDX-License-Identifier: MIT
 
+import gleam/bit_array
+import gleam/dict.{type Dict}
 import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
 import necoherence/exact_json as kdl
+import necoherence/semantic_base64 as base64
 import necoherence/semantic_types as types
 
 pub type ValidationFailure {
   Rejected(failure: types.ValueFailure)
   Unresolved(obligations: List(types.SemanticObligation))
+  CertificateMismatchFailure(condition: String)
 }
 
 pub type MemberProof {
@@ -325,27 +329,250 @@ fn in_codepoint_ranges(
 }
 
 pub fn recognizes(rule: types.FormatRule, text: String) -> Bool {
+  let #(node, _) = compile_format_span(rule, 0)
+  let #(offsets, count, _) =
+    list.fold(
+      string.to_utf_codepoints(text),
+      #(dict.new(), 0, 0),
+      fn(state, point) {
+        let #(offsets, count, bytes) = state
+        #(
+          dict.insert(offsets, count, bytes),
+          count + 1,
+          bytes + string.byte_size(string.from_utf_codepoints([point])),
+        )
+      },
+    )
+  let context =
+    FormatSpanContext(
+      bit_array.from_string(text),
+      dict.insert(offsets, count, string.byte_size(text)),
+    )
+  span_accepts(node, context, 0, count, dict.new()).0
+}
+
+type FormatSpanNode {
+  SpanEpsilon(id: Int)
+  SpanSequence(id: Int, left: FormatSpanNode, right: FormatSpanNode)
+  SpanRule(id: Int, rule: types.FormatRule, children: List(FormatSpanNode))
+}
+
+type FormatSpanContext {
+  FormatSpanContext(source: BitArray, offsets: Dict(Int, Int))
+}
+
+type FormatSpanMemo =
+  Dict(#(Int, Int, Int), Bool)
+
+fn compile_format_span(
+  rule: types.FormatRule,
+  next: Int,
+) -> #(FormatSpanNode, Int) {
+  let parts = case rule {
+    types.Sequence(parts) | types.Choice(parts) -> parts
+    types.Optional(child)
+    | types.Not(child)
+    | types.Bounded(_, _, child)
+    | types.Labels(_, _, _, _, child) -> [child]
+    _ -> []
+  }
+  let #(children, next) = compile_format_children(parts, next)
+  case rule {
+    types.Sequence(_) -> binary_format_sequence(children, next)
+    _ -> #(SpanRule(next, rule, children), next + 1)
+  }
+}
+
+fn compile_format_children(
+  parts: List(types.FormatRule),
+  next: Int,
+) -> #(List(FormatSpanNode), Int) {
+  case parts {
+    [] -> #([], next)
+    [part, ..rest] -> {
+      let #(child, next) = compile_format_span(part, next)
+      let #(children, next) = compile_format_children(rest, next)
+      #([child, ..children], next)
+    }
+  }
+}
+
+fn binary_format_sequence(
+  children: List(FormatSpanNode),
+  next: Int,
+) -> #(FormatSpanNode, Int) {
+  case children {
+    [] -> #(SpanEpsilon(next), next + 1)
+    [child] -> #(child, next)
+    [_, _, ..] -> {
+      let #(left, right) = list.split(children, list.length(children) / 2)
+      let #(left, next) = binary_format_sequence(left, next)
+      let #(right, next) = binary_format_sequence(right, next)
+      #(SpanSequence(next, left, right), next + 1)
+    }
+  }
+}
+
+fn span_text(context: FormatSpanContext, start: Int, end: Int) -> String {
+  let assert Ok(first) = dict.get(context.offsets, start)
+  let assert Ok(last) = dict.get(context.offsets, end)
+  let assert Ok(bytes) = bit_array.slice(context.source, first, last - first)
+  let assert Ok(text) = bit_array.to_string(bytes)
+  text
+}
+
+fn span_accepts(
+  node: FormatSpanNode,
+  context: FormatSpanContext,
+  start: Int,
+  end: Int,
+  memo: FormatSpanMemo,
+) -> #(Bool, FormatSpanMemo) {
+  let id = case node {
+    SpanEpsilon(id) | SpanSequence(id, _, _) | SpanRule(id, _, _) -> id
+  }
+  let key = #(id, start, end)
+  case dict.get(memo, key) {
+    Ok(accepted) -> #(accepted, memo)
+    Error(_) -> {
+      let #(accepted, memo) = case node {
+        SpanEpsilon(_) -> #(start == end, memo)
+        SpanSequence(_, left, right) ->
+          span_sequence(left, right, context, start, end, start, memo)
+        SpanRule(_, rule, children) ->
+          span_rule(rule, children, context, start, end, memo)
+      }
+      #(accepted, dict.insert(memo, key, accepted))
+    }
+  }
+}
+
+fn span_sequence(
+  left: FormatSpanNode,
+  right: FormatSpanNode,
+  context: FormatSpanContext,
+  start: Int,
+  end: Int,
+  split: Int,
+  memo: FormatSpanMemo,
+) -> #(Bool, FormatSpanMemo) {
+  case split > end {
+    True -> #(False, memo)
+    False -> {
+      let #(prefix, memo) = span_accepts(left, context, start, split, memo)
+      let #(accepted, memo) = case prefix {
+        True -> span_accepts(right, context, split, end, memo)
+        False -> #(False, memo)
+      }
+      case accepted {
+        True -> #(True, memo)
+        False ->
+          span_sequence(left, right, context, start, end, split + 1, memo)
+      }
+    }
+  }
+}
+
+fn span_choices(
+  children: List(FormatSpanNode),
+  context: FormatSpanContext,
+  start: Int,
+  end: Int,
+  memo: FormatSpanMemo,
+) -> #(Bool, FormatSpanMemo) {
+  case children {
+    [] -> #(False, memo)
+    [child, ..rest] -> {
+      let #(accepted, memo) = span_accepts(child, context, start, end, memo)
+      case accepted {
+        True -> #(True, memo)
+        False -> span_choices(rest, context, start, end, memo)
+      }
+    }
+  }
+}
+
+fn span_labels(
+  parts: List(String),
+  child: FormatSpanNode,
+  separator_length: Int,
+  context: FormatSpanContext,
+  cursor: Int,
+  memo: FormatSpanMemo,
+) -> #(Bool, FormatSpanMemo) {
+  case parts {
+    [] -> #(True, memo)
+    [part, ..rest] -> {
+      let end = cursor + list.length(string.to_utf_codepoints(part))
+      let #(accepted, memo) = span_accepts(child, context, cursor, end, memo)
+      case accepted {
+        True ->
+          span_labels(
+            rest,
+            child,
+            separator_length,
+            context,
+            end + separator_length,
+            memo,
+          )
+        False -> #(False, memo)
+      }
+    }
+  }
+}
+
+fn span_rule(
+  rule: types.FormatRule,
+  children: List(FormatSpanNode),
+  context: FormatSpanContext,
+  start: Int,
+  end: Int,
+  memo: FormatSpanMemo,
+) -> #(Bool, FormatSpanMemo) {
+  case rule, children {
+    types.Choice(_), _ -> span_choices(children, context, start, end, memo)
+    types.Optional(_), [child] ->
+      case start == end {
+        True -> #(True, memo)
+        False -> span_accepts(child, context, start, end, memo)
+      }
+    types.Not(_), [child] -> {
+      let #(accepted, memo) = span_accepts(child, context, start, end, memo)
+      #(!accepted, memo)
+    }
+    types.Bounded(unit, maximum, _), [child] ->
+      case bounded_length(unit, maximum, span_text(context, start, end)) {
+        True -> span_accepts(child, context, start, end, memo)
+        False -> #(False, memo)
+      }
+    types.Labels(separator, minimum, maximum, total_maximum, _), [child] -> {
+      let parts = string.split(span_text(context, start, end), separator)
+      let count = list.length(parts)
+      case
+        separator != ""
+        && count >= minimum
+        && option_int_ok(maximum, count)
+        && option_int_ok(total_maximum, end - start)
+      {
+        True ->
+          span_labels(
+            parts,
+            child,
+            list.length(string.to_utf_codepoints(separator)),
+            context,
+            start,
+            memo,
+          )
+        False -> #(False, memo)
+      }
+    }
+    _, _ -> #(recognizes_leaf(rule, span_text(context, start, end)), memo)
+  }
+}
+
+fn recognizes_leaf(rule: types.FormatRule, text: String) -> Bool {
   case rule {
     types.Literal(value) -> value == text
-    types.Sequence(parts) -> sequence_recognizes(parts, text)
-    types.Optional(inner) -> text == "" || recognizes(inner, text)
-    types.Labels(separator, minimum, maximum, total_maximum, inner) -> {
-      let labels = string.split(text, separator)
-      let count = list.length(labels)
-      let count_ok = count >= minimum && option_int_ok(maximum, count)
-      let total_ok =
-        option_int_ok(
-          total_maximum,
-          list.length(string.to_utf_codepoints(text)),
-        )
-      separator != ""
-      && count_ok
-      && total_ok
-      && list.all(labels, fn(label) { recognizes(inner, label) })
-    }
-    types.Bounded(unit, maximum, inner) ->
-      bounded_length(unit, maximum, text) && recognizes(inner, text)
-    types.Choice(rules) -> list.any(rules, fn(rule) { recognizes(rule, text) })
     types.Identifier(first, rest, exact, minimum, maximum, forbidden) -> {
       let length = string.byte_size(text)
       let exact_length_valid = case exact {
@@ -354,7 +581,7 @@ pub fn recognizes(rule: types.FormatRule, text: String) -> Bool {
       }
       length == string.length(text)
       && length >= minimum
-      && length <= maximum
+      && option.unwrap(option.map(maximum, fn(upper) { length <= upper }), True)
       && exact_length_valid
       && !list.contains(forbidden, text)
       && ascii_alphabet(text, first, rest)
@@ -364,7 +591,12 @@ pub fn recognizes(rule: types.FormatRule, text: String) -> Bool {
     types.LanguageTag(grandfathered) -> language_tag(grandfathered, text)
     types.AsciiDfa(spec) -> recognize_dfa(spec, text)
     types.Text -> True
-    types.Not(inner) -> !recognizes(inner, text)
+    types.Sequence(_)
+    | types.Optional(_)
+    | types.Labels(_, _, _, _, _)
+    | types.Bounded(_, _, _)
+    | types.Choice(_)
+    | types.Not(_) -> False
   }
 }
 
@@ -386,29 +618,6 @@ fn bounded_length(
       list.length(string.to_utf_codepoints(text)) <= maximum
     types.Graphemes -> list.length(string.to_graphemes(text)) <= maximum
   }
-}
-
-fn sequence_recognizes(parts: List(types.FormatRule), text: String) -> Bool {
-  case parts {
-    [] -> text == ""
-    [part, ..rest] ->
-      list.any(sequence_splits(text), fn(split) {
-        recognizes(part, split.0) && sequence_recognizes(rest, split.1)
-      })
-  }
-}
-
-fn sequence_splits(text: String) -> List(#(String, String)) {
-  let chars =
-    list.map(string.to_utf_codepoints(text), fn(point) {
-      string.from_utf_codepoints([point])
-    })
-  list.index_map([Nil, ..list.map(chars, fn(_) { Nil })], fn(_, index) {
-    #(
-      string.join(list.take(chars, index), ""),
-      string.join(list.drop(chars, index), ""),
-    )
-  })
 }
 
 fn ascii_alphabet(text: String, first: String, rest: String) -> Bool {
@@ -1094,90 +1303,6 @@ fn take_digits_loop(chars: List(String), position: Int) -> Int {
   }
 }
 
-fn base64_decoded_size(
-  text: String,
-  padding_optional: Bool,
-  alphabet: types.BytesAlphabet,
-  strict_pad_bits: Bool,
-) -> Option(Int) {
-  let chars = string.to_graphemes(text)
-  let length = list.length(chars)
-  let padding = case list.reverse(chars) {
-    ["=", "=", ..] -> 2
-    ["=", ..] -> 1
-    _ -> 0
-  }
-  let content = list.take(chars, length - padding)
-  let content_length = list.length(content)
-  let remainder = content_length % 4
-  let padding_valid = case padding {
-    0 ->
-      case padding_optional {
-        True -> remainder == 0 || remainder == 2 || remainder == 3
-        False -> remainder == 0
-      }
-    1 -> length % 4 == 0 && remainder == 3
-    2 -> length % 4 == 0 && remainder == 2
-    _ -> False
-  }
-  let alphabet_valid =
-    list.all(content, fn(char) { base64_value(char, alphabet) != None })
-  let pad_bits_valid = case strict_pad_bits {
-    False -> True
-    True ->
-      case list.reverse(content) {
-        [last, ..] if remainder == 2 ->
-          case base64_value(last, alphabet) {
-            Some(value) -> value % 16 == 0
-            None -> False
-          }
-        [last, ..] if remainder == 3 ->
-          case base64_value(last, alphabet) {
-            Some(value) -> value % 4 == 0
-            None -> False
-          }
-        _ -> True
-      }
-  }
-  case !padding_valid || !alphabet_valid || !pad_bits_valid {
-    True -> None
-    False -> Some(content_length * 6 / 8)
-  }
-}
-
-fn base64_value(char: String, alphabet: types.BytesAlphabet) -> Option(Int) {
-  let common =
-    string.to_graphemes(
-      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789",
-    )
-  case base64_value_at(common, char, 0) {
-    Some(value) -> Some(value)
-    None ->
-      case alphabet, char {
-        types.Standard, "+" | types.Either, "+" | types.Either, "-" -> Some(62)
-        types.Standard, "/" | types.Either, "/" | types.Either, "_" -> Some(63)
-        types.UrlSafe, "-" -> Some(62)
-        types.UrlSafe, "_" -> Some(63)
-        _, _ -> None
-      }
-  }
-}
-
-fn base64_value_at(
-  chars: List(String),
-  expected: String,
-  index: Int,
-) -> Option(Int) {
-  case chars {
-    [] -> None
-    [char, ..rest] ->
-      case char == expected {
-        True -> Some(index)
-        False -> base64_value_at(rest, expected, index + 1)
-      }
-  }
-}
-
 fn nonempty_profile_ref(reference: types.ProfileRef) -> Bool {
   reference.identity != ""
   && reference.revision != ""
@@ -1212,13 +1337,21 @@ fn declared_format_well_formed(rule: types.FormatRule) -> Bool {
       && string.byte_size(first) == string.length(first)
       && string.byte_size(rest) == string.length(rest)
       && minimum >= 0
-      && minimum <= maximum
+      && option.unwrap(
+        option.map(maximum, fn(upper) { minimum <= upper }),
+        True,
+      )
       && list.all(forbidden, fn(value) {
         string.from_utf_codepoints(string.to_utf_codepoints(value)) == value
       })
       && case exact {
         None -> True
-        Some(length) -> length >= minimum && length <= maximum
+        Some(length) ->
+          length >= minimum
+          && option.unwrap(
+            option.map(maximum, fn(upper) { length <= upper }),
+            True,
+          )
       }
     types.AsciiDfa(spec) ->
       spec.state_count > 0
@@ -1681,7 +1814,7 @@ fn meaning_predicate(
     types.IntegerBoundReason -> Some(types.Mo09)
     types.OpaqueTypeReason(_) -> Some(types.Mo10)
     types.MissingTagModelReason -> Some(types.Mo11)
-    types.UnresolvedTypeReason -> None
+    types.UnresolvedTypeReason | types.MembershipBoundReason -> None
   }
 }
 
@@ -2146,6 +2279,166 @@ fn declared_shape_inspects_object(shape: types.TypeShape) -> Bool {
   }
 }
 
+fn declared_eval_data_members(
+  graph: types.SemanticGraph,
+  reference: types.TypeRef,
+  members: List(#(String, kdl.JsonValue)),
+  path: types.ValuePath,
+  trace: List(types.TypeRef),
+) -> Result(Nil, types.ValueFailure) {
+  use _ <- result.try(
+    list.try_map(members, fn(member) {
+      declared_eval_data(
+        graph,
+        reference,
+        member.1,
+        list.append(path, [types.Field(member.0)]),
+        trace,
+      )
+    }),
+  )
+  Ok(Nil)
+}
+
+fn declared_eval_data(
+  graph: types.SemanticGraph,
+  reference: types.TypeRef,
+  value: kdl.JsonValue,
+  path: types.ValuePath,
+  trace: List(types.TypeRef),
+) -> Result(Nil, types.ValueFailure) {
+  case value {
+    kdl.JsonValueNum(_) | kdl.JsonValueDec(_) -> {
+      let spec = types.IntegerSpec(None, None, None, None, None, None)
+      case declared_integer_condition(graph.profile, spec, value) {
+        None -> Ok(Nil)
+        Some(_) ->
+          Error(declared_failure(
+            reference,
+            path,
+            case value {
+              kdl.JsonValueNum(_) -> types.IntegerDomainCondition
+              _ -> types.InvalidDataModelCondition
+            },
+            value,
+            trace,
+          ))
+      }
+    }
+    kdl.JsonValueArr(items) -> {
+      use _ <- result.try(
+        list.try_map(
+          list.index_map(items, fn(item, index) { #(item, index) }),
+          fn(item) {
+            declared_eval_data(
+              graph,
+              reference,
+              item.0,
+              list.append(path, [types.Index(item.1)]),
+              trace,
+            )
+          },
+        ),
+      )
+      Ok(Nil)
+    }
+    kdl.JsonValueObj(members) -> {
+      use _ <- result.try(declared_eval_object_header(
+        graph.profile,
+        reference,
+        members,
+        path,
+        value,
+        trace,
+      ))
+      case declared_object_class(graph.profile, members) {
+        types.WrapperObject(wrapper) ->
+          result.map(wrapper_payload_text(graph.profile, wrapper, value), fn(_) {
+            Nil
+          })
+          |> result.map_error(fn(condition) {
+            declared_failure(reference, path, condition, value, trace)
+          })
+        types.SealedObject(form) -> {
+          use _ <- result.try(declared_eval_sealed_fields(
+            graph,
+            reference,
+            form,
+            [],
+            members,
+            path,
+            trace,
+          ))
+          let extras =
+            list.filter(members, fn(member) {
+              !list.any(form.fields, fn(field) { field.key == member.0 })
+              && case graph.profile.tag {
+                Some(tag) -> member.0 != tag.key
+                None -> True
+              }
+            })
+          declared_eval_data_members(graph, reference, extras, path, trace)
+        }
+        types.OrdinaryObjectClass ->
+          declared_eval_data_members(graph, reference, members, path, trace)
+      }
+    }
+    _ -> Ok(Nil)
+  }
+}
+
+pub fn wrapper_payload_text(
+  profile: types.SemanticProfile,
+  wrapper: types.Wrapper,
+  value: kdl.JsonValue,
+) -> Result(String, types.ValueCondition) {
+  let text = case value {
+    kdl.JsonValueObj([#(key, kdl.JsonValueStr(text))]) if key == wrapper.key ->
+      Some(text)
+    _ -> None
+  }
+  let failure = case wrapper.payload {
+    types.WrapperBytes -> types.InvalidBytesCondition
+    types.WrapperText(None) -> types.WrongValueKindCondition("wrapper text")
+    types.WrapperText(Some(name)) -> types.FormatFailureCondition(name)
+  }
+  case text {
+    None -> Error(failure)
+    Some(text) -> {
+      let accepted = case wrapper.payload {
+        types.WrapperBytes ->
+          case profile.bytes_policy {
+            None -> False
+            Some(policy) ->
+              result.is_ok(base64.decode(
+                text,
+                policy.padding_optional,
+                policy.alphabet,
+                policy.strict_pad_bits,
+              ))
+          }
+        types.WrapperText(None) -> True
+        types.WrapperText(Some(name)) ->
+          declared_format_accepts(profile, types.NamedFormat(name), text)
+      }
+      case accepted {
+        True -> Ok(text)
+        False -> Error(failure)
+      }
+    }
+  }
+}
+
+pub fn object_class(
+  profile: types.SemanticProfile,
+  value: kdl.JsonValue,
+) -> types.ObjectClass {
+  case value {
+    kdl.JsonValueObj(members) -> declared_object_class(profile, members)
+    _ -> types.OrdinaryObjectClass
+  }
+}
+
 fn declared_eval_string(
   graph: types.SemanticGraph,
   reference: types.TypeRef,
@@ -2156,49 +2449,19 @@ fn declared_eval_string(
 ) -> Result(Nil, types.ValueFailure) {
   let text = case spec.wrapper, value {
     None, kdl.JsonValueStr(text) -> Ok(text)
-    Some(name), kdl.JsonValueObj(members) ->
-      case
-        list.find(graph.profile.wrappers, fn(wrapper) { wrapper.name == name })
-      {
-        Ok(wrapper) ->
-          case list.key_find(members, wrapper.key), list.length(members) {
-            Ok(kdl.JsonValueStr(text)), 1 -> Ok(text)
-            _, _ ->
-              Error(declared_failure(
-                reference,
-                path,
-                types.InvalidWrapperCondition(name),
-                value,
-                trace,
-              ))
-          }
-        Error(_) ->
-          Error(declared_failure(
-            reference,
-            path,
-            types.InvalidWrapperCondition(name),
-            value,
-            trace,
-          ))
-      }
+    None, _ -> Error(types.WrongValueKindCondition("string"))
     Some(name), _ ->
-      Error(declared_failure(
-        reference,
-        path,
-        types.InvalidWrapperCondition(name),
-        value,
-        trace,
-      ))
-    None, _ ->
-      Error(declared_failure(
-        reference,
-        path,
-        types.WrongValueKindCondition("string"),
-        value,
-        trace,
-      ))
+      case object_class(graph.profile, value) {
+        types.WrapperObject(wrapper) if wrapper.name == name ->
+          wrapper_payload_text(graph.profile, wrapper, value)
+        _ -> Error(types.WrongValueKindCondition("string wrapper"))
+      }
   }
-  use text <- result.try(text)
+  use text <- result.try(
+    result.map_error(text, fn(condition) {
+      declared_failure(reference, path, condition, value, trace)
+    }),
+  )
   case declared_string_condition(graph.profile, spec, text) {
     None -> Ok(Nil)
     Some(condition) ->
@@ -2214,15 +2477,30 @@ fn declared_eval_leaf(
   path: types.ValuePath,
   trace: List(types.TypeRef),
 ) -> Result(Nil, types.ValueFailure) {
-  case leaf {
-    types.SealedString(spec) ->
-      declared_eval_string(graph, reference, spec, value, path, trace)
-    types.SealedInteger(spec) ->
-      case declared_integer_condition(graph.profile, spec, value) {
-        None -> Ok(Nil)
-        Some(condition) ->
-          Error(declared_failure(reference, path, condition, value, trace))
+  let condition = case leaf, value {
+    types.SealedString(spec), _ -> {
+      let text = case value {
+        kdl.JsonValueStr(text) -> Ok(text)
+        _ ->
+          case object_class(graph.profile, value) {
+            types.WrapperObject(wrapper) ->
+              wrapper_payload_text(graph.profile, wrapper, value)
+            _ -> Error(types.WrongValueKindCondition("string"))
+          }
       }
+      case text {
+        Error(condition) -> Some(condition)
+        Ok(text) -> declared_string_condition(graph.profile, spec, text)
+      }
+    }
+    types.SealedInteger(spec), kdl.JsonValueNum(_) ->
+      declared_integer_condition(graph.profile, spec, value)
+    types.SealedInteger(_), _ -> Some(types.WrongValueKindCondition("integer"))
+  }
+  case condition {
+    None -> Ok(Nil)
+    Some(condition) ->
+      Error(declared_failure(reference, path, condition, value, trace))
   }
 }
 
@@ -2457,17 +2735,18 @@ fn declared_eval_bytes(
     Some(policy) ->
       case policy.wrapper, value {
         None, kdl.JsonValueStr(text) -> Some(text)
-        Some(name), kdl.JsonValueObj(members) ->
+        Some(name), _ ->
           case
             list.find(graph.profile.wrappers, fn(wrapper) {
               wrapper.name == name
             })
           {
             Ok(wrapper) ->
-              case list.key_find(members, wrapper.key), list.length(members) {
-                Ok(kdl.JsonValueStr(text)), 1 -> Some(text)
-                _, _ -> None
-              }
+              option.from_result(wrapper_payload_text(
+                graph.profile,
+                wrapper,
+                value,
+              ))
             Error(_) -> None
           }
         _, _ -> None
@@ -2477,14 +2756,14 @@ fn declared_eval_bytes(
   case graph.profile.bytes_policy, encoded {
     Some(policy), Some(text) ->
       case
-        base64_decoded_size(
+        base64.decode(
           text,
           policy.padding_optional,
           policy.alphabet,
           policy.strict_pad_bits,
         )
       {
-        None ->
+        Error(_) ->
           Error(declared_failure(
             reference,
             path,
@@ -2492,7 +2771,8 @@ fn declared_eval_bytes(
             value,
             trace,
           ))
-        Some(length) ->
+        Ok(bytes) -> {
+          let length = list.length(bytes)
           case
             option.unwrap(
               option.map(spec.minimum, fn(minimum) { length < minimum }),
@@ -2513,6 +2793,7 @@ fn declared_eval_bytes(
               ))
             False, False -> Ok(Nil)
           }
+        }
       }
     _, _ ->
       Error(declared_failure(
@@ -2733,7 +3014,7 @@ fn declared_eval(
                     graph,
                     branch.target,
                     value,
-                    list.append(path, [types.Variant(branch.wire_tag)]),
+                    path,
                     evaluation_path,
                     fuel - 1,
                     [#(reference, evaluation_path), ..active],
@@ -2784,17 +3065,19 @@ fn declared_eval(
                 value,
                 trace,
               ))
-            types.UnknownShape(types.AnyValue) -> Ok(Nil)
+            types.UnknownShape(types.AnyValue) ->
+              declared_eval_data(graph, reference, value, path, trace)
             types.UnknownShape(types.OrdinaryObject) ->
               case value {
                 kdl.JsonValueObj(members) ->
                   case declared_object_class(graph.profile, members) {
-                    types.OrdinaryObjectClass -> Ok(Nil)
+                    types.OrdinaryObjectClass ->
+                      declared_eval_data(graph, reference, value, path, trace)
                     _ ->
                       Error(declared_failure(
                         reference,
                         path,
-                        types.ReservedFormCondition,
+                        types.WrongValueKindCondition("ordinary object"),
                         value,
                         trace,
                       ))
@@ -2803,7 +3086,7 @@ fn declared_eval(
                   Error(declared_failure(
                     reference,
                     path,
-                    types.WrongValueKindCondition("object"),
+                    types.WrongValueKindCondition("ordinary object"),
                     value,
                     trace,
                   ))
@@ -2913,6 +3196,8 @@ pub fn validate_value(
       Ok(ValidatedValue(graph, reference, value, MemberProof([])))
     types.RejectedValue(failure) -> Error(Rejected(failure))
     types.UnresolvedValue(obligations) -> Error(Unresolved(obligations))
+    types.CertificateMismatchValue(condition) ->
+      Error(CertificateMismatchFailure(condition))
   }
 }
 
@@ -2976,6 +3261,7 @@ pub fn value_at_path(
     [] -> types.Present(value)
     [step, ..rest] ->
       case step, value {
+        _, kdl.JsonValueNull -> types.Null
         types.Field(name), kdl.JsonValueObj(members) ->
           case list.key_find(members, name) {
             Error(_) -> types.Absent
@@ -2985,6 +3271,7 @@ pub fn value_at_path(
         types.Index(index), kdl.JsonValueArr(items) ->
           case list_index_nonnegative(items, index) {
             None -> types.Absent
+            Some(kdl.JsonValueNull) -> types.Null
             Some(found) -> value_at_path(tag, found, rest)
           }
         types.Variant(expected), kdl.JsonValueObj(members) ->
@@ -3260,13 +3547,187 @@ pub fn project_value(
   |> result.map_error(Validation)
 }
 
+type DefaultDraft {
+  DefaultDraft(value: kdl.JsonValue, applications: List(DefaultApplication))
+}
+
+fn declared_default(
+  graph: types.SemanticGraph,
+  reference: types.TypeRef,
+  fuel: Int,
+) -> Option(#(types.TypeRef, kdl.JsonValue)) {
+  case fuel <= 0 {
+    True -> None
+    False ->
+      case find_type(graph, reference) {
+        None -> None
+        Some(node) ->
+          case node.shape {
+            types.AliasShape(target, _) ->
+              declared_default(graph, target, fuel - 1)
+            shape ->
+              option.map(type_default(shape), fn(value) { #(reference, value) })
+          }
+      }
+  }
+}
+
+fn default_draft(
+  graph: types.SemanticGraph,
+  reference: types.TypeRef,
+  path: types.ValuePath,
+  value: kdl.JsonValue,
+  fuel: Int,
+) -> Result(DefaultDraft, ValidationFailure) {
+  use _ <- result.try(case fuel <= 0 {
+    True ->
+      Error(
+        Unresolved([
+          types.SemanticObligation(reference, path, types.MembershipBoundReason),
+        ]),
+      )
+    False -> Ok(Nil)
+  })
+  use node <- result.try(case find_type(graph, reference) {
+    None ->
+      Error(
+        Unresolved([
+          types.SemanticObligation(reference, path, types.UnresolvedTypeReason),
+        ]),
+      )
+    Some(node) -> Ok(node)
+  })
+  case node.shape, value {
+    types.AliasShape(target, _), _ ->
+      default_draft(graph, target, path, value, fuel - 1)
+    types.TaggedUnionShape(spec), kdl.JsonValueObj(members) -> {
+      let key =
+        option.unwrap(
+          option.map(graph.profile.tag, fn(model) { model.key }),
+          "",
+        )
+      case list.key_find(members, key) {
+        Ok(kdl.JsonValueStr(tag)) ->
+          case list.find(spec.branches, fn(branch) { branch.wire_tag == tag }) {
+            Ok(branch) ->
+              default_draft(graph, branch.target, path, value, fuel - 1)
+            Error(_) -> Ok(DefaultDraft(value, []))
+          }
+        _ -> Ok(DefaultDraft(value, []))
+      }
+    }
+    types.ArrayShape(spec), kdl.JsonValueArr(items) -> {
+      use output <- result.try(
+        list.try_fold(
+          list.index_map(items, fn(item, index) { #(item, index) }),
+          #([], []),
+          fn(output, item) {
+            use child <- result.try(default_draft(
+              graph,
+              spec.item.type_ref,
+              list.append(path, [types.Index(item.1)]),
+              item.0,
+              fuel - 1,
+            ))
+            Ok(#(
+              list.append(output.0, [child.value]),
+              list.append(output.1, child.applications),
+            ))
+          },
+        ),
+      )
+      Ok(DefaultDraft(kdl.JsonValueArr(output.0), output.1))
+    }
+    types.ProductShape(spec), kdl.JsonValueObj(members) -> {
+      use retained <- result.try(
+        list.try_fold(members, #([], []), fn(output, member) {
+          let #(values, applications) = output
+          case
+            list.find(spec.fields, fn(field) { field.wire_name == member.0 }),
+            member.1
+          {
+            Ok(field), item if item != kdl.JsonValueNull -> {
+              use child <- result.try(default_draft(
+                graph,
+                field.slot.type_ref,
+                list.append(path, [types.Field(member.0)]),
+                item,
+                fuel - 1,
+              ))
+              Ok(#(
+                list.append(values, [#(member.0, child.value)]),
+                list.append(applications, child.applications),
+              ))
+            }
+            _, _ -> Ok(#(list.append(values, [member]), applications))
+          }
+        }),
+      )
+      use inserted <- result.try(
+        list.try_fold(spec.fields, retained, fn(output, field) {
+          let #(values, applications) = output
+          case list.key_find(members, field.wire_name) {
+            Ok(_) -> Ok(output)
+            Error(_) ->
+              case
+                declared_default(
+                  graph,
+                  field.slot.type_ref,
+                  list.length(graph.nodes) + 1,
+                )
+              {
+                None -> Ok(output)
+                Some(#(default_ref, item)) -> {
+                  use _ <- result.try(validate_value(graph, default_ref, item))
+                  let application =
+                    DefaultApplication(
+                      list.append(path, [types.Field(field.wire_name)]),
+                      default_ref,
+                      types.occurrence_at(default_ref, "default"),
+                      item,
+                    )
+                  Ok(#(
+                    list.append(values, [#(field.wire_name, item)]),
+                    list.append(applications, [application]),
+                  ))
+                }
+              }
+          }
+        }),
+      )
+      Ok(DefaultDraft(kdl.JsonValueObj(inserted.0), inserted.1))
+    }
+    _, _ -> Ok(DefaultDraft(value, []))
+  }
+}
+
 pub fn materialize_defaults(
   graph: types.SemanticGraph,
   reference: types.TypeRef,
   value: kdl.JsonValue,
 ) -> Result(DefaultedValue, ValidationFailure) {
-  use checked <- result.try(validate_value(graph, reference, value))
-  Ok(DefaultedValue(graph, reference, value, [], checked.proof))
+  use draft <- result.try(default_draft(
+    graph,
+    reference,
+    [],
+    value,
+    { declared_json_size(value) + 1 } * { list.length(graph.nodes) + 1 },
+  ))
+  use checked <- result.try(validate_value(graph, reference, draft.value))
+  case
+    check_default_applications(graph, value, draft.value, draft.applications)
+  {
+    True ->
+      Ok(DefaultedValue(
+        graph,
+        reference,
+        draft.value,
+        draft.applications,
+        checked.proof,
+      ))
+    False ->
+      Error(CertificateMismatchFailure("default source, absence, or result"))
+  }
 }
 
 pub fn member_certificate(
@@ -3292,11 +3753,35 @@ pub fn check_member_certificate(
   }
 }
 
+fn type_default(shape: types.TypeShape) -> Option(kdl.JsonValue) {
+  case shape {
+    types.BooleanShape(spec) ->
+      option.map(spec.default_value, kdl.JsonValueBool)
+    types.IntegerShape(spec) -> option.map(spec.default_value, kdl.JsonValueNum)
+    types.StringShape(spec) -> option.map(spec.default_value, kdl.JsonValueStr)
+    _ -> None
+  }
+}
+
 pub fn check_default_applications(
-  _graph: types.SemanticGraph,
-  _before: kdl.JsonValue,
-  _after: kdl.JsonValue,
+  graph: types.SemanticGraph,
+  before: kdl.JsonValue,
+  after: kdl.JsonValue,
   applications: List(DefaultApplication),
 ) -> Bool {
-  applications == []
+  list.all(applications, fn(application) {
+    value_at_path(graph.profile.tag, before, application.value_path)
+    == types.Absent
+    && value_at_path(graph.profile.tag, after, application.value_path)
+    == types.Present(application.value)
+    && application.origin
+    == types.OccurrenceRef(
+      application.type_ref.source,
+      list.append(application.type_ref.pointer, ["default"]),
+    )
+    && option.then(find_type(graph, application.type_ref), fn(node) {
+      type_default(node.shape)
+    })
+    == Some(application.value)
+  })
 }

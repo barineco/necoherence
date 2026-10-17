@@ -159,7 +159,7 @@ pub type FormatRule {
     rest_alphabet: String,
     exact_length: Option(Int),
     min_length: Int,
-    max_length: Int,
+    max_length: Option(Int),
     forbidden: List(String),
   )
   Text
@@ -461,6 +461,7 @@ pub type SemanticReason {
   OpaqueTypeReason(name: String)
   MissingTagModelReason
   UnresolvedTypeReason
+  MembershipBoundReason
 }
 
 pub type SemanticObligation {
@@ -567,6 +568,7 @@ pub type ValueDecision {
   AcceptedValue
   RejectedValue(failure: ValueFailure)
   UnresolvedValue(obligations: List(SemanticObligation))
+  CertificateMismatchValue(condition: String)
 }
 
 pub fn child(reference: TypeRef, segments: List(String)) -> TypeRef {

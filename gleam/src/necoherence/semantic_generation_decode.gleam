@@ -1045,7 +1045,10 @@ pub fn decode_format_rule(
       use raw_3 <- result.try(field(members, "min_length"))
       use a3 <- result.try(named("min_length", integer(raw_3, True)))
       use raw_4 <- result.try(field(members, "max_length"))
-      use a4 <- result.try(named("max_length", integer(raw_4, True)))
+      use a4 <- result.try(named(
+        "max_length",
+        optional(raw_4, fn(value) { integer(value, True) }),
+      ))
       use raw_5 <- result.try(field(members, "forbidden"))
       use a5 <- result.try(named(
         "forbidden",
@@ -2789,6 +2792,7 @@ pub fn decode_search_bounds(
       "max_type_obligations",
       "max_branch_nodes",
       "resource_bounds",
+      "max_sample_length",
     ]),
   )
   use raw_0 <- result.try(field(members, "max_expanded_states"))
@@ -2804,7 +2808,9 @@ pub fn decode_search_bounds(
     "resource_bounds",
     optional(raw_4, fn(value) { decode_resource_bounds(value) }),
   ))
-  Ok(composition.SearchBounds(a0, a1, a2, a3, a4))
+  use raw_5 <- result.try(field(members, "max_sample_length"))
+  use a5 <- result.try(named("max_sample_length", integer(raw_5, True)))
+  Ok(composition.SearchBounds(a0, a1, a2, a3, a4, a5))
 }
 
 pub fn decode_search_state(
@@ -2952,6 +2958,7 @@ pub fn decode_semantic_reason(
     "IntegerBound" -> Ok(types.IntegerBoundReason)
     "MissingTagModel" -> Ok(types.MissingTagModelReason)
     "UnresolvedType" -> Ok(types.UnresolvedTypeReason)
+    "MembershipBound" -> Ok(types.MembershipBoundReason)
     "UnknownFormat" -> result.map(payload(), types.UnknownFormatReason)
     "UnknownIntegerDomain" ->
       result.map(payload(), types.UnknownIntegerDomainReason)
@@ -4333,7 +4340,10 @@ pub fn encode_format_rule(
         Some(item) -> Ok(kdl.JsonValueStr(int.to_string(item)))
       })
       use e3 <- result.try(Ok(kdl.JsonValueStr(int.to_string(v3))))
-      use e4 <- result.try(Ok(kdl.JsonValueStr(int.to_string(v4))))
+      use e4 <- result.try(case v4 {
+        None -> Ok(kdl.JsonValueNull)
+        Some(item) -> Ok(kdl.JsonValueStr(int.to_string(item)))
+      })
       use e5 <- result.try(result.map(
         list.try_map(v5, fn(item) { Ok(kdl.JsonValueStr(item)) }),
         kdl.JsonValueArr,

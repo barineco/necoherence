@@ -1,21 +1,7 @@
 -- SPDX-FileCopyrightText: 2026 barineco
 -- SPDX-License-Identifier: MIT
 
-/-
-Calls whose declarations state their required input fields.
 
-Projection checks field-name presence only: the request must carry every
-name the declaration requires. Host-language runtime projection details
-are not modeled.
-
-`Immediate Req Prd` and `Deferred Req Slot` keep the input type and the
-output type distinct in the declaration itself, matching the two-type-
-parameter form of the host-language declarations. `Request Req` keeps the
-dynamic field-presence projection: it carries a payload of the declared
-input type together with the field names actually present, so `io` and
-`issue` can match declared and present names before applying `output` to
-the payload.
--/
 
 namespace Necoherence
 

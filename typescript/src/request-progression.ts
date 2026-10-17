@@ -1,8 +1,6 @@
 // SPDX-FileCopyrightText: 2026 barineco
 // SPDX-License-Identifier: MIT
 
-// Request progression: the state source for identity, phase,
-// footprint, demand, permission, cost selection, and execution handle.
 
 export type RequestPolicy = "LatestWins" | "Fifo" | "AllExecute";
 export type RequestPhase = "Pending" | "Preparing" | "Publishing" | "Published" | "Superseded" | "Cancelled" | "Failed";

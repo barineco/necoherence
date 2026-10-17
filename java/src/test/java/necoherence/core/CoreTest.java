@@ -15,7 +15,7 @@ import java.util.Set;
 import java.util.TreeSet;
 import org.junit.jupiter.api.Test;
 
-/** Tests translating python/tests/test_core.py. */
+
 final class CoreTest {
 
     private static ResourceId rid(int name) {
@@ -142,10 +142,6 @@ final class CoreTest {
 
     @Test
     void recordsAreImmutableByConstruction() {
-        // records have no setters at all: this is a compile-time property,
-        // demonstrated here by the absence of any mutator to call. World's
-        // entries list is defensively copied in its canonical constructor
-        // (see World.java), so a caller-held mutable list cannot reach in.
         java.util.ArrayList<World.Entry> mutable = new java.util.ArrayList<>();
         mutable.add(new World.Entry(rid(0), rev(1)));
         World w = new World(mutable);
@@ -155,11 +151,7 @@ final class CoreTest {
                 UnsupportedOperationException.class, () -> w.entries().add(new World.Entry(rid(2), rev(1))));
     }
 
-    /**
-     * Property-based check matching
-     * {@code test_apply_disjoint_comm_property} in python/tests/test_core.py,
-     * run as a fixed-seed randomized loop.
-     */
+
     @Test
     void applyDisjointCommProperty() {
         Random random = new Random(20260806);

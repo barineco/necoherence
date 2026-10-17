@@ -159,7 +159,10 @@ lake exe semantic_generation <input.json> <trusted-basis.json> <output.lean>
 // 生成器
 necoherence_tools::renderer::render_signature_exchange(
     expected: &SignatureGenerationBasis, text: &str) -> Result<String, RenderFailure>
-necoherence_tools::renderer::render(checked: &CheckedGeneration) -> Result<String, RenderFailure>
+necoherence_tools::renderer::render_signature_composition(
+    expected: &SignatureGenerationBasis, text: &str) -> Result<String, RenderFailure>
+necoherence_tools::renderer::render_checked(checked: &CheckedLibrary) -> Result<String, RenderFailure>
+necoherence_tools::renderer::render_generation(input: &SignatureGenerationInput) -> Result<String, RenderFailure>
 
 // ソルバー
 necoherence_tools::typed_mapping_solver::check_reachability(input: &SolverInput) -> Result<ReachabilityResult, SolverFailure>
@@ -168,7 +171,125 @@ necoherence_tools::typed_mapping_solver::check_well_foundedness(input: &SolverIn
 necoherence_tools::composition_search::derive(prepared: &PreparedCompositionInput) -> Result<CompositionDecision, CompositionEngineFailure>
 ```
 
-`render` の引数は、検査済みの入力文書です。
+`render_checked` は、`check_library` が検査済みの型ライブラリを受け取り、その型とコーデックを生成します。
+`render_generation` は `SignatureGenerationInput` 型の入力を受け取り、
+`check_library` でその型ライブラリを検査し、型・コーデック・操作を含む出力を生成します。
+入力の `composition` フィールドがある場合は、
+`admit_signature_generation` で入力自身が宣言する検査の基準 ( `basis` ) に対して入力を受理し、関数構成の断片を出力へ追加します。
+
+`render_signature_composition` は `render_signature_exchange` と同じ 2 つの入力を取り、
+`composition` フィールドを持つ入力文書に対して、関数構成の断片だけを生成します。
+断片は、同じ宣言集合に対して事前の `render_library` または `render_checked` の
+呼び出しが生成した生成先の具象型と `Context` 型を再利用します。
+この生成先の具象型のモジュールの生成は、1 回だけです。
+
+呼び出し側は、断片のテキスト全体をそのまま、構成ごとの名前を持つ自分のモジュールの中へ入れ子にし、そのモジュールを生成先の具象型の 1 つのモジュールの中に置きます。
+断片自身は内部に `composed` という名前のモジュールと `pub use` をそのまま保ち、呼び出し側のモジュールはそれを包む外側の層として加わります。
+
+```rust
+pub mod recipe_a {
+    use super::*;
+    // render_signature_composition が返す断片のテキストを、そのまま貼る
+    // 断片の内部は pub mod composed { ... } と pub use composed::*; のまま
+}
+```
+
+`render_library`/`render_checked` は、
+`Context` 型と、受理済みの `GenerationContext` を受け取る構築子を生成します。
+`render_generation` は、これに加えて用意済みの `generation_context()` 生成関数を出力の一部として生成します。
+型と関数構成の断片を別々に生成する呼び出し側は、ランタイムの関数 `necoherence::semantic_exchange::signature_generation_context` を使って、`GenerationContext` を自分で組み立てます。
+
+```rust
+Context::new(generation: &GenerationContext) -> Self
+necoherence::semantic_exchange::signature_generation_context(
+    expected: &SignatureGenerationBasis, text: &str,
+) -> Result<GenerationContext, GenerationFailure>
+```
+
+関数構成の断片が公開する要素:
+
+```rust
+pub struct CompositionInput { /* 引数の入力ポートごとに 1 フィールド */ }
+pub struct CompositionOutput { /* 目標の出力ポートごとに 1 フィールド */ }
+pub enum DeclaredFailure { /* 宣言した失敗の埋め込み先ごとに 1 つの選択肢 */ }
+pub enum CompositionOutcome {
+    Success(CompositionOutput),
+    DeclaredFailure(DeclaredFailure),
+}
+```
+
+`CompositionInput`・`CompositionOutput` の各フィールドと、
+各 `DeclaredFailure` の値は、ポートの生成先の具象型を、省略可能なポートなら `Option<_>` で、
+nullable なポートなら `rt::Nullable<_>` で包んだ型です。
+両方の性質を持つポートでの扱いは、両方を重ねて包む形です。
+
+`Providers` のメソッド名は、`site_` に続けて、
+呼び出し箇所の識別子と関数の識別子をそれぞれ正規化した文字列を `_` でつないだ名前です。
+
+```rust
+pub trait Providers {
+    type Failure;
+    fn site_first_transform(
+        &mut self, input: site_first_transform_Input, resources: &[BoundResource],
+    ) -> Result<site_first_transform_Outcome, Self::Failure>;
+    // 呼び出し箇所ごとに、ポートに固有の入力と結果の型を持つ method を 1 個持つ
+}
+```
+
+正規化は、ASCII の英数字以外の文字を `_` へ置き換え、先頭が数字の場合は `_` を前置します。
+箇所の識別子や関数の識別子に含まれる `.` などの文字も、この正規化の対象に含めます。
+
+```rust
+pub struct BoundResource {
+    pub reference: ResourceLotRef,
+    pub lot: ResourceLot,
+    pub requirement: ResourceRequirement,
+}
+pub enum CompositionFailure<E> {
+    Runtime { cause: rt::RuntimeFailure, provenance: BindingProvenance },
+    Provider { site: SiteId, function: FunctionRef, cause: E },
+}
+pub fn execute<P: Providers>(
+    cx: &Context<'_>, input: CompositionInput, providers: &mut P,
+) -> Result<CompositionOutcome, CompositionFailure<P::Failure>>
+```
+
+`BoundResource` の中身は、`semantic_composition` が既に宣言している次の型であり、読み取り専用の宣言値です。
+
+```rust
+pub struct ResourceLot {
+    pub id: LotId,
+    pub token_type: TypeRef,
+    pub producer: ResourceProducer,
+    pub revision: Nat,
+    pub quantity: Nat,
+    pub provenance: String,
+}
+pub struct ResourceRequirement {
+    pub id: RequirementId,
+    pub token_type: TypeRef,
+    pub mode: BindingMode,
+    pub multiplicity: Nat,
+    pub required_revision: Nat,
+    pub identity: ResourceIdentityConstraint,
+}
+```
+
+同じ `execute` 呼び出し内で先行する手順が資源を消費すると、
+`ResourceLot` の `quantity` はその分だけ減ります。
+
+`CompositionFailure::Runtime` は、生成コード自身の実行が起こす検査・表現の失敗を運びます。
+`CompositionFailure::Provider` は、呼び出し側の実装自身の失敗値をそのまま運びます。
+
+Bytes と raw body のポートは、生成された `Vec<u8>` を包む具象型を使います。
+生成コードは、値をそのまま保つ crate のコーデックを内部で呼び出します。
+この生成先の具象型を使う形の適用範囲は、関数構成のポート自身の最上位のフィールドです。
+
+`render_checked` が `Shape::Product` の型に対して生成する型定義は、
+自身のフィールドを `Option<rt::JsonValue>` のまま持ちます。
+生成先の具象型が Product 型である関数構成のポートは、その内部に同じ表現を運びます。
+
+生成コードをコンパイルして実行する利用例のテストが、実際の呼び出し側全体を検証します: [`tools/rust/tests/semantic_composition_execution.rs`](rust/tests/semantic_composition_execution.rs)。
 
 ### Gleam
 

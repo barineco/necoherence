@@ -7,6 +7,7 @@ import pytest
 
 from necoherence.signature_values import ValueContext, ValueFailure, variant
 from v4_samples import integer_spec, profile, string_spec
+from necoherence.type_signatures import _graph
 
 
 def representative_graph(alphabet="Either"):
@@ -77,7 +78,7 @@ def representative_graph(alphabet="Either"):
         ]))},
         {"id": "bytes", "shape": variant("Bytes", {"minimum": None, "maximum": None})},
     ]
-    return {"profile": value_profile, "nodes": nodes}
+    return _graph({"profile": value_profile, "nodes": nodes, "definitions": []})
 
 
 CASES = [

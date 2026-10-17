@@ -92,11 +92,21 @@ public final class ProfileLibraryPredicateTest {
         expectLibrary("LB18",library(List.of(unit,node("union",union(arr(List.of(branch("unit","first",variant("Kind",variant("Null"))),branch("unit","second",variant("Kind",variant("Null"))))))))));
         expectLibrary("LB19",library(List.of(unit,node("string",variant("String",stringSpec(variant("Named",str("only-ok")),NIL,str("bad")))))));
         TypeSignatures.checkLibrary(library(List.of(unit)));
+        WireValue tagProfile=TypeSignatures.replace(profile(),"tag",obj("key",str("$type"),"format",NIL,"sealed",arr(List.of())));
+        List<WireValue> base=List.of(unit,node("tag-value",variant("String",stringSpec(NIL,NIL,NIL))),node("a",product(arr(List.of(field("$type","tag-value"))),variant("Reject"))),node("b",product(arr(List.of(field("$type","tag-value"))),variant("Reject"))));
+        java.util.ArrayList<WireValue> distinct=new java.util.ArrayList<>(base);
+        distinct.add(node("union",union(arr(List.of(branch("a","com.example.a",variant("InternalTag")),branch("b","com.example.b",variant("InternalTag")))))));
+        TypeSignatures.checkLibrary(library(tagProfile,distinct));
+        for(WireValue selector:List.of(variant("Kind",variant("Null")),variant("MemberShape",arr(List.of(obj("key",str("key"),"test",variant("Absent"))))))) {
+            java.util.ArrayList<WireValue> duplicate=new java.util.ArrayList<>(base);
+            duplicate.add(node("union",union(arr(List.of(branch("a","com.example.a",selector),branch("b","com.example.b",selector))))));
+            expectLibrary("LB18",library(tagProfile,duplicate));
+        }
     }
     private static void meaning(String id,WireValue p,WireValue shape)throws Exception{
-        WireValue graph=obj("profile",p,"nodes",arr(List.of(obj("reference",str("subject"),"shape",shape))));
+        WireValue graph=obj("profile",p,"nodes",arr(List.of(obj("reference",TypeSignatures.typeReference("subject"),"shape",shape))));
         Context context=new Context(graph);
-        try{context.validate(0,NIL);throw new AssertionError(id+" accepted");}catch(ValueFailure failure){if(!id.equals(failure.condition()))throw new AssertionError(id+" observed "+failure.condition(),failure);if(failure.observed()==null)throw new AssertionError(id+" lacks observed");}
+        try{context.validate(context.reference(0),NIL);throw new AssertionError(id+" accepted");}catch(ValueFailure failure){if(!id.equals(failure.condition()))throw new AssertionError(id+" observed "+failure.condition(),failure);if(failure.observed()==null)throw new AssertionError(id+" lacks observed");}
     }
     private static void meanings()throws Exception{
         WireValue p=profile();
@@ -109,8 +119,8 @@ public final class ProfileLibraryPredicateTest {
         meaning("MO07",p,fields("Sealed",obj("tag",str("missing"),"refinements",arr(List.of()))));
         meaning("MO08",replace(p,"numbers",obj("decimals",FALSE)),variant("Decimal",obj("minimum",NIL,"maximum",NIL)));
         meaning("MO09",p,variant("Integer",integerSpec(str("integer"),str("-2"),NIL)));
-        meaning("MO10",p,variant("Opaque",str("external")));
-        WireValue union=variant("TaggedUnion",obj("branches",arr(List.of(obj("target",str("subject"),"wire_tag",str("other"),"selector",variant("InternalTag"),"origin",obj("source",SOURCE,"pointer",arr(List.of())))))));
+        meaning("MO10",p,fields("Opaque",obj("type_name",str("external"))));
+        WireValue union=variant("TaggedUnion",obj("branches",arr(List.of(obj("target",TypeSignatures.typeReference("subject"),"wire_tag",str("other"),"selector",variant("InternalTag"),"origin",obj("source",SOURCE,"pointer",arr(List.of())))))));
         meaning("MO11",replace(p,"tag",NIL),union);
     }
     public static void main(String[] args)throws Exception{profiles();meanings();libraries();System.out.println("Java: PR01-16, MO01-11 and LB01-19 passed");}

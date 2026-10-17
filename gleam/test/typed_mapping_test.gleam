@@ -3,9 +3,6 @@
 
 import necoherence/typed_mapping as solver
 
-// Scenario A: one transition t1 consuming a res-a token at p1 and
-// producing a token at `p2`; the goal asks for a token at `p2`.
-
 fn place(identity: String) -> solver.TypedPlace {
   solver.TypedPlace(identity: identity, token_type: "tok", revision: 1)
 }
@@ -95,9 +92,6 @@ pub fn derive_enabled_reports_enabled_transition_test() {
   assert enabled.bindings == input.bindings
 }
 
-/// Multiset atomicity is by occurrence count: removing one of two
-/// identical tokens retains exactly one; removing every occurrence does
-/// not satisfy the atomicity count for a single consumed token.
 pub fn read_consume_atomicity_counts_occurrences_test() {
   let before = [token("res-a", 0, 1), token("res-a", 0, 1)]
   let consumed = [token("res-a", 0, 1)]

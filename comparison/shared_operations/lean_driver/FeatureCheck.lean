@@ -1,30 +1,7 @@
 -- SPDX-FileCopyrightText: 2026 barineco
 -- SPDX-License-Identifier: MIT
 
-/-
-Test adapter: reads one generated query from stdin, evaluates it
-against `Necoherence`'s computable definitions, and writes one normalized
-JSON result to stdout.
 
-Protocol:
-- `{"kind":"surface"}` -> `{"kind":"surface","features":[...]}`, the finite
-  feature/operation inventory in a fixed order.
-- `{"kind":"evaluate","requests":[{"feature":..,"operation":..,"input":..},...]}`
-  -> `{"kind":"results","results":[{"feature":..,"operation":..,"result":..},...]}`
-  in input order.
-- Any JSON syntax failure, unrecognized query shape, unknown feature or
-  operation, or per-request input shape failure closes the whole reply as
-  `{"kind":"invalid","failure":{"kind":"...","detail":"..."}}`. Logical
-  domain failures (rejected, conflicted, boundary-failed, and the like) are
-  carried inside a request's own `result` value instead.
-- Every operation named on the surface evaluates the matching Necoherence
-  definition; the dispatcher has no unimplemented branch for a known
-  feature/operation pair.
-
-Non-negative integers are exchanged as decimal-digit JSON strings. Negative
-signs, decimal points, non-decimal characters, and the empty string are all
-input-shape failures.
--/
 import Necoherence
 import Lean.Data.Json
 
@@ -33,7 +10,7 @@ open Lean (Json)
 
 namespace FeatureCheck
 
-/-! ### Decode failure classification -/
+
 
 inductive FailureKind where
   | jsonSyntax
@@ -62,7 +39,7 @@ def liftShape (r : Except String α) : D α :=
   | .ok v => .ok v
   | .error msg => .error (failShape msg)
 
-/-! ### JSON accessors -/
+
 
 def objVal (j : Json) (k : String) : D Json := liftShape (j.getObjVal? k)
 
@@ -99,7 +76,7 @@ def arrField (j : Json) (k : String) : D (Array Json) := do
 
 def natToJson (n : Nat) : Json := Json.str (toString n)
 
-/-! ### Core encoders/decoders -/
+
 
 def decodeResourceId (j : Json) : D ResourceId := do
   let kind ← strField j "kind"
@@ -159,7 +136,7 @@ def encodeApplyOutcome : Outcome (Json × World) UnknownResource StaleBasis Empt
         ("expected", encodeRevision k.expected), ("actual", encodeRevision k.actual)]
   | .boundaryFailed f => f.elim
 
-/-! ### Core operations -/
+
 
 def opCoreLookup (input : Json) : D Json := do
   let world ← decodeWorld (← objVal input "world")
@@ -185,7 +162,7 @@ def opCoreApply (input : Json) : D Json := do
   let command ← decodeCommand (← objVal input "command")
   return encodeApplyOutcome (World.apply world command)
 
-/-! ### Call encoders/decoders -/
+
 
 inductive FunctionForm where
   | identity
@@ -240,7 +217,7 @@ def encodeCallResult : CallResult Json → Json
       Json.mkObj [("tag", Json.str "failed"), ("declaration", Json.str f.declaration),
         ("fields", Json.arr (f.fields.map Json.str).toArray)]
 
-/-! ### Call operations -/
+
 
 def opCallImmediateOf (input : Json) : D Json := do
   let decl ← decodeImmediate input
@@ -262,7 +239,7 @@ def opCallIssue (input : Json) : D Json := do
   let req ← decodeRequest (← objVal input "request")
   return encodeCallResult (issue decl req)
 
-/-! ### Step transition encoders/decoders -/
+
 
 inductive AdvanceForm where
   | consumeImmediately (outputs : List Json)
@@ -284,7 +261,7 @@ def decodeAdvanceForm (j : Json) : D AdvanceForm := do
       return .consumeAfter rounds arr.toList
   | other => throw (failShape s!"unknown advance mode {other}")
 
-/-- Round counter carried inside the opaque JSON state between calls. -/
+
 def roundOf (state : Json) : Nat :=
   match state.getObjValD "round" with
   | .str s => s.toNat?.getD 0
@@ -316,7 +293,7 @@ def encodeStepTransition : StepTransition Json Json → Json
       Json.mkObj [("tag", Json.str "failed"), ("state", s),
         ("outputs", Json.arr o.toArray), ("failure", encodeStepFailure f)]
 
-/-! ### Step transition operation -/
+
 
 def opStepTransitionStep (input : Json) : D Json := do
   let state ← objVal input "state"
@@ -331,21 +308,14 @@ def opStepTransitionStep (input : Json) : D Json := do
   else
     throw (failShape "limit must be positive")
 
-/-! ### Iteration encoders/decoders
 
-Each round's step is given as a finite `FunctionForm` on top of a decorated
-carrier so the same declarative language can express every branch a round
-can take: settling, advancing with a chosen measure, or failing projection
-by omitting a required field.
--/
 
 def encodeStageProjectionFailed (s : StageProjectionFailed) : Json :=
   Json.mkObj [("position", natToJson s.position),
     ("declaration", Json.str s.failure.declaration),
     ("fields", Json.arr (s.failure.fields.map Json.str).toArray)]
 
-/-- `fold`'s step declaration, decoded as an `Immediate` over the opaque
-carrier; `stepFields` names the fields present on every round's request. -/
+
 def decodeFoldReq (j : Json) : D (FoldReq Json × List String) := do
   let step ← decodeImmediate (← objVal j "step")
   let seed ← objVal j "seed"
@@ -360,9 +330,7 @@ def encodeFoldOutcome : FoldOutcome Json → Json
       Json.mkObj [("tag", Json.str "stopped"), ("states", Json.arr states.toArray),
         ("stopped", encodeStageProjectionFailed stopped)]
 
-/-- `recurse`'s step declaration reports either `advance` with a measure or
-`settled` with a final state; the form carries that decision explicitly so
-a strict-decrease violation can be constructed by the caller. -/
+
 inductive StepOutcomeForm where
   | settled
   | advance (measure : Nat)
@@ -374,10 +342,7 @@ def decodeStepOutcomeForm (j : Json) : D StepOutcomeForm := do
   | "advance" => return .advance (← natField j "measure")
   | other => throw (failShape s!"unknown step outcome tag {other}")
 
-/-- Table mapping a round's own request payload to its declared
-`StepOutcome`, matched by payload equality against `Json.beq`. Unmatched
-payloads settle on themselves, so a finite table with no entry for a state
-still yields a closed run rather than an unbounded search. -/
+
 def decodeRecurseTable (j : Json) : D (List (Json × StepOutcomeForm)) := do
   let arr ← asArr j
   arr.toList.mapM (fun entry => do
@@ -415,24 +380,18 @@ def encodeRecurseOutcome : RecurseOutcome Json → Json
       Json.mkObj [("tag", Json.str "projection_failed"), ("lastState", lastState),
         ("stopped", encodeStageProjectionFailed stopped)]
 
-/-- Elements a `FunctionForm`-shaped closure step produced, read back from a
-JSON array; any other shape produces no elements. -/
+
 def jsonElements (j : Json) : List Json :=
   match j with
   | .arr a => a.toList
   | _ => []
 
-/-- `closure`'s carrier requires `DecidableEq`, which `Json` itself does not
-have; elements are carried internally as their compressed JSON rendering
-(injective for values decoded from well-formed JSON), and decoded back to
-the original shape wherever they are encoded into a result. -/
+
 def closureElemToJson (s : String) : Json := (Json.parse s).toOption.getD Json.null
 
 def closureElemOfJson (j : Json) : String := j.compress
 
-/-- `closure`'s step declaration is a `FunctionForm` applied to the current
-accumulated subset, presented as a JSON array; `carrier` bounds every
-round's produced elements. -/
+
 def decodeClosureReq (j : Json) : D (ClosureReq String × List String) := do
   let identity ← strField (← objVal j "step") "identity"
   let requiredArr ← arrField (← objVal j "step") "required"
@@ -464,7 +423,7 @@ def encodeClosureOutcome : ClosureOutcome String → Json
       Json.mkObj [("tag", Json.str "projection_failed"), ("current", encodeClosureElems current),
         ("stopped", encodeStageProjectionFailed stopped)]
 
-/-! ### Iteration operations -/
+
 
 def opIterationFold (input : Json) : D Json := do
   let (req, _) ← decodeFoldReq input
@@ -478,7 +437,7 @@ def opIterationClosure (input : Json) : D Json := do
   let (req, _) ← decodeClosureReq input
   return encodeClosureOutcome (closureOutput req)
 
-/-! ### Store encoders/decoders -/
+
 
 def decodeStoreEntry (j : Json) : D (ResourceId × Revision × Json) := do
   let resource ← decodeResourceId (← objVal j "resource")
@@ -508,7 +467,7 @@ def encodeStoreApplyOutcome : Outcome (Json × Store Json) UnknownResource Stale
         ("expected", encodeRevision k.expected), ("actual", encodeRevision k.actual)]
   | .boundaryFailed f => f.elim
 
-/-! ### Store operations -/
+
 
 def opStoreStoreOf (input : Json) : D Json := do
   let s ← decodeStore input
@@ -532,7 +491,7 @@ def opStoreWorldOf (input : Json) : D Json := do
   let s ← decodeStore input
   return encodeWorld (Store.worldOf s)
 
-/-! ### Record encoders/decoders -/
+
 
 def decodeCallRecord (j : Json) : D (CallRecord Json Json) := do
   let declaration ← strField j "declaration"
@@ -549,7 +508,7 @@ def encodeCallRecord (r : CallRecord Json Json) : Json :=
   Json.mkObj [("declaration", Json.str r.declaration), ("input", r.input), ("product", r.product),
     ("basis", match r.basis with | none => Json.null | some b => encodeBasis b)]
 
-/-! ### Record operations -/
+
 
 def opRecordRecordOf (input : Json) : D Json := do
   let declaration ← strField input "declaration"
@@ -573,11 +532,9 @@ def opRecordHasEdge (input : Json) : D Json := do
     | _, _ => false
   return Json.mkObj [("holds", Json.bool holds)]
 
-/-! ### Reconcile encoders/decoders -/
 
-/-- Lexicographic order on `(kind, name)`, used only to render `divergences`
-in a language-independent set order; `reconcile`'s own recorded order over
-`bases` is preserved wherever the caller reads it directly. -/
+
+
 def resourceIdLe (a b : ResourceId) : Bool :=
   match compare a.kind b.kind with
   | .lt => true
@@ -610,7 +567,7 @@ def decodeOptionBasis (j : Json) : D (Option Basis) := do
   | .null => pure none
   | _ => pure (some (← decodeBasis j))
 
-/-! ### Reconcile operations -/
+
 
 def opReconcileReconcile (input : Json) : D Json := do
   let basesArr ← arrField input "bases"
@@ -639,7 +596,7 @@ def opReconcileCoherent (input : Json) : D Json := do
   let r : Reconciliation := ⟨divergences, unbased, dropped⟩
   return Json.mkObj [("coherent", Json.bool (Necoherence.coherent r))]
 
-/-! ### Request progression encoders/decoders -/
+
 
 def decodeRequestPolicy (j : Json) : D RequestPolicy := do
   let s ← asStr j
@@ -903,9 +860,7 @@ def decodeStarting (j : Json) : D Starting := do
 def encodeStarting (s : Starting) : Json :=
   Json.mkObj [("identity", encodeRequestIdentity s.identity), ("command", encodeAdapterCommand s.command)]
 
-/-- Observed adapter signal or failure. `Result` is fixed to `Json` so a
-caller supplies its own completion payload without this adapter inventing
-one. -/
+
 def decodeAdapterSignal (j : Json) : D (AdapterSignal Json) := do
   let tag ← strField j "tag"
   match tag with
@@ -1075,7 +1030,7 @@ def encodeCancelDecisionResult : CancelDecisionResult → Json
       Json.mkObj [("tag", Json.str "rejected"), ("snapshot", encodeRequestProgressionSnapshot snapshot),
         ("failure", encodeCancelFailure failure)]
 
-/-! ### Request progression operations -/
+
 
 def opRequestProgressionEmpty (input : Json) : D Json := do
   let policy ← decodeRequestPolicy (← objVal input "policy")
@@ -1122,7 +1077,7 @@ def opRequestProgressionDeriveConcurrent (input : Json) : D Json := do
   let snapshot ← decodeRequestProgressionSnapshot (← objVal input "snapshot")
   return encodeResourceDemand (deriveConcurrent snapshot)
 
-/-! ### Dynamic admission encoders/decoders -/
+
 
 def decodeEnvironmentSpecification (j : Json) : D EnvironmentSpecification := do
   let maxObservationAge ← natField j "maxObservationAge"
@@ -1266,7 +1221,7 @@ def encodeElisionOutcome :
   | .conflicted f => f.elim
   | .boundaryFailed f => f.elim
 
-/-! ### Dynamic admission operations -/
+
 
 def opDynamicAdmissionElideAdmissionProvenance (input : Json) : D Json := do
   let state ← decodeDynamicAdmissionState (← objVal input "state")
@@ -1277,7 +1232,7 @@ def opDynamicAdmissionAdmitDynamicRequest (input : Json) : D Json := do
   let admissionInput ← decodeDynamicAdmissionInput input
   return encodeDynamicAdmissionOutcome (admitDynamicRequest admissionInput)
 
-/-! ### File effect encoders/decoders -/
+
 
 def decodeNormalizedPath (j : Json) : D NormalizedPath := do
   let root ←
@@ -1409,7 +1364,7 @@ def encodeReplaceResult : ReplaceResult → Json
   | .conflicted c => Json.mkObj [("tag", Json.str "conflicted"), ("conflict", encodeReplaceConflict c)]
   | .boundaryFailed f => Json.mkObj [("tag", Json.str "boundaryFailed"), ("path", encodeNormalizedPath f.path)]
 
-/-! ### File effect operations -/
+
 
 def opFileEffectNormalizePath (input : Json) : D Json := do
   let root ←
@@ -1456,7 +1411,7 @@ def opFileEffectReplace (input : Json) : D Json := do
   let observedAt ← natField input "observedAt"
   return encodeReplaceResult (replace ⟨command, path, world, digests, state, observedAt⟩)
 
-/-! ### Surface inventory -/
+
 
 def surfaceEntries : List (String × List String) :=
   [("core", ["lookup", "bump", "commandOf", "apply"]),
@@ -1483,7 +1438,7 @@ def surfaceJson : Json :=
       Json.mkObj [("feature", Json.str feature),
         ("operations", Json.arr (ops.map Json.str).toArray)])).toArray)]
 
-/-! ### Dispatch -/
+
 
 def dispatch (feature operation : String) (input : Json) : D Json :=
   match feature, operation with
@@ -1539,7 +1494,7 @@ def processRequest (j : Json) : D Json := do
   let result ← dispatch feature operation input
   return Json.mkObj [("feature", Json.str feature), ("operation", Json.str operation), ("result", result)]
 
-/-! ### Query decoding -/
+
 
 def topKind (j : Json) : D String :=
   match j.getObjVal? "kind" with

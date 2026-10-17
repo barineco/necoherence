@@ -48,7 +48,7 @@ fn formatted(rule: types.FormatRule) -> List(String) {
 }
 
 fn label() -> types.FormatRule {
-  types.Identifier("abc", "abc", None, 1, 3, [])
+  types.Identifier("abc", "abc", None, 1, Some(3), [])
 }
 
 pub fn labels_with_a_multi_character_separator_have_samples_test() {
@@ -97,7 +97,7 @@ pub fn dfa_sample_is_the_shortest_accepted_word_test() {
 
 pub fn identifier_sample_is_the_first_accepted_candidate_test() {
   let assert ["ad"] =
-    formatted(types.Identifier("ab", "cd", Some(2), 1, 3, ["ac"]))
+    formatted(types.Identifier("ab", "cd", Some(2), 1, Some(3), ["ac"]))
 }
 
 pub fn sequence_samples_vary_each_part_in_order_test() {

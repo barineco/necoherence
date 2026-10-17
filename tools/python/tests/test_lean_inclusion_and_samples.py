@@ -63,7 +63,7 @@ def profile():
 
 
 def context(nodes):
-    return ValueContext({"profile": profile(), "nodes": nodes})
+    return ValueContext.from_signature_nodes(profile(), nodes)
 
 
 def assert_incompatible(values, source, destination, witness):

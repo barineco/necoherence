@@ -75,14 +75,19 @@ function decodeCarrier(reference: V.TypeRef, value: V.ExactJson): unknown {
   if (shape.tag === "Unknown") return V.immutableDynamic(value);
   if (shape.tag === "Array") return (value as Extract<V.ExactJson, { readonly tag: "Array" }>).items.map(item => item.tag === "Null" && shape.value.item.nullable ? null : decodeCarrier(shape.value.item.type_ref, item));
   if (shape.tag === "Product") {
-    const result: Record<string, unknown> = {};
+    const result: Record<string, unknown> = Object.create(null);
     const object = value as Extract<V.ExactJson, { readonly tag: "Object" }>;
     for (const field of shape.value.fields) {
       const item = V.member(object, field.wire_name);
       if (item !== undefined) result[field.wire_name] = item.tag === "Null" && field.slot.nullable ? null : decodeCarrier(field.slot.type_ref, item);
     }
     if (shape.value.extras.tag === "Allow") for (const item of object.members) if (!shape.value.fields.some(field => field.wire_name === item.key) && item.key !== context.profile.tag?.key) result[item.key] = item.value.tag === "Null" && shape.value.extras.fields.value.nullable ? null : decodeCarrier(shape.value.extras.fields.value.type_ref, item.value);
-    return V.deepFreeze(result);
+    const tagKey = context.profile.tag?.key;
+    if (tagKey !== undefined && !Object.hasOwn(result, tagKey)) {
+      const tag = V.member(object, tagKey);
+      if (tag !== undefined) result[tagKey] = V.immutableDynamic(tag);
+    }
+    return V.deepFreeze(V.preserveObjectOrder(result, object.members.map(item => item.key)));
   }
   if (shape.tag === "Sealed") {
     const form = context.profile.tag!.sealed.find(candidate => candidate.tag === shape.fields.tag)!;
@@ -117,8 +122,10 @@ function encodeCarrier(reference: V.TypeRef, carrier: unknown): V.ExactJson {
   if (shape.tag === "Product") {
     const record = carrier as Record<string, unknown>, members: { key: string; value: V.ExactJson }[] = [];
     for (const field of shape.value.fields) if (record[field.wire_name] !== undefined) members.push({ key: field.wire_name, value: record[field.wire_name] === null && field.slot.nullable ? { tag: "Null" } : encodeCarrier(field.slot.type_ref, record[field.wire_name]) });
-    if (shape.value.extras.tag === "Allow") for (const key of Object.keys(record)) if (!shape.value.fields.some(field => field.wire_name === key)) members.push({ key, value: record[key] === null && shape.value.extras.fields.value.nullable ? { tag: "Null" } : encodeCarrier(shape.value.extras.fields.value.type_ref, record[key]) });
-    return { tag: "Object", members };
+    if (shape.value.extras.tag === "Allow") for (const key of Object.keys(record)) if (!shape.value.fields.some(field => field.wire_name === key) && key !== context.profile.tag?.key) members.push({ key, value: record[key] === null && shape.value.extras.fields.value.nullable ? { tag: "Null" } : encodeCarrier(shape.value.extras.fields.value.type_ref, record[key]) });
+    const tagKey = context.profile.tag?.key;
+    if (tagKey !== undefined && !members.some(item => item.key === tagKey) && Object.hasOwn(record, tagKey)) members.push({ key: tagKey, value: { tag: "String", value: record[tagKey] as string } });
+    return V.orderedObject(members, record);
   }
   if (shape.tag === "Sealed") {
     const record = carrier as Record<string, unknown>, form = context.profile.tag!.sealed.find(candidate => candidate.tag === shape.fields.tag)!, members: { key: string; value: V.ExactJson }[] = [];
@@ -138,8 +145,8 @@ function encodeCarrier(reference: V.TypeRef, carrier: unknown): V.ExactJson {
   }
   return carrier as V.ExactJson;
 }
-function carrierCodec<T>(reference: V.TypeRef) { return Object.freeze({ decode(value: V.ExactJson): T { return decodeCarrier(reference, context.validate(reference, value)) as T; }, encode(value: T): V.ExactJson { return context.validate(reference, encodeCarrier(reference, value)); } }); }
-function unreachableCodec(reference: V.TypeRef) { return Object.freeze({ decode(_value: V.ExactJson): never { throw new V.SemanticValueError({ type: reference, path: [], condition: "Uninhabited", observed: "value" }); }, encode(value: never): V.ExactJson { return value; } }); }
+function carrierCodec<T>(reference: V.TypeRef) { return Object.freeze({ decode(value: V.ExactJson): T { return decodeCarrier(reference, context.validate(reference, value)) as T; }, decodeWithDefaults(text: string): T { return decodeCarrier(reference, context.decodeWithDefaults(reference, text).value) as T; }, encode(value: T): V.ExactJson { return context.validate(reference, encodeCarrier(reference, value)); } }); }
+function unreachableCodec(reference: V.TypeRef) { return Object.freeze({ decode(_value: V.ExactJson): never { throw new V.SemanticValueError({ type: reference, path: [], condition: "Uninhabited", observed: "value" }); }, decodeWithDefaults(text: string): never { context.decodeWithDefaults(reference, text); throw new V.SemanticValueError({ type: reference, path: [], condition: "Uninhabited", observed: "value" }); }, encode(value: never): V.ExactJson { return value; } }); }
 ${types.map(declaration).join("\n\n")}
 
 export interface NetworkAdapter {

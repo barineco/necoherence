@@ -75,11 +75,6 @@ def _index(items: list[Any], field: str, path: str) -> tuple[dict[str, dict[str,
 def _correspondence_row_closed(
     row: Any, type_constructors: dict[str, set[str]], spans: Any,
 ) -> bool:
-    """True when a correspondence row's constructors are scoped to its own type_id and its spans exist.
-
-    Shared by validate_typed_reachability and verify_typed_reachability so the two never diverge:
-    ``spans`` may be any container supporting ``in`` (a dict keyed by span_id, or a set of span_ids).
-    """
     type_id = row.get("type_id") if isinstance(row, dict) else None
     if type_id not in type_constructors:
         return False
@@ -260,12 +255,6 @@ def diagnose_typed_reachability(value: Any) -> dict[str, Any] | ReachabilityRedu
 
 
 def _independent_source_revision(source_revision: dict[str, Any]) -> dict[str, str]:
-    """Build a deterministic, non-empty source revision distinct from the input's own values.
-
-    The prefix carries no private or project-specific meaning; it only guarantees the
-    substituted value differs from whatever repository, revision, and tree_digest text the
-    artifact under test happens to declare.
-    """
     return {
         field: "independent-check:" + str(source_revision.get(field, ""))
         for field in ("repository", "revision", "tree_digest")
@@ -279,7 +268,6 @@ def _without_source_revision(value: dict[str, Any]) -> dict[str, Any]:
 def _typed_witness(
     witness_id: str, matched: bool, observed: Any, expected: Any, evidence: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    """Render a typed reachability witness only from values calculated in this invocation."""
     return {
         "witness_id": witness_id,
         "status": "ok" if matched else "error",

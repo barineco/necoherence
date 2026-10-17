@@ -1,7 +1,6 @@
 # SPDX-FileCopyrightText: 2026 barineco
 # SPDX-License-Identifier: MIT
 
-"""Tests for provenance-as-data: ``CallRecord``, ``NoBasis``, and ``has_edge``."""
 
 from __future__ import annotations
 

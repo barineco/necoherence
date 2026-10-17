@@ -1,13 +1,7 @@
 -- SPDX-FileCopyrightText: 2026 barineco
 -- SPDX-License-Identifier: MIT
 
-/-
-Closed bounded single-owner transition.
 
-One input is evaluated to a closed result in a single call. The caller's
-`advance` function may ask for the same input again, but only a positive
-number of times, and accumulated outputs never exceed a declared capacity.
--/
 
 namespace Necoherence
 

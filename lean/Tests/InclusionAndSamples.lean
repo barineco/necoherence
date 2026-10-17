@@ -378,7 +378,91 @@ private structure Check where
   result : Bool
   actual : String
 
+private def cidRule : FormatRule :=
+  .choice (["bafkrei", "bafyrei"].map fun leading => .sequence [
+    .literal leading, .identifier "abcdefgh" "abcdefgh" (some 1) 1 (some 1) [],
+    .identifier "abcdefghijklmnopqrstuvwxyz234567" "abcdefghijklmnopqrstuvwxyz234567" (some 50) 50 (some 50) [],
+    .identifier "aeimquy4" "aeimquy4" (some 1) 1 (some 1) []])
+
+private def boundedGraph (rule : FormatRule) : SemanticGraph :=
+  graph [
+    node "scalar" (.string { format := some (.inline rule) }),
+    node "getRecord-parameters" (.product {
+      fields := [field "repo" "scalar", field "collection" "scalar",
+        field "rkey" "scalar", field "cid" "scalar" false], extras := .reject }),
+    node "errorBody" (.product {
+      fields := [field "error" "scalar", field "message" "scalar" false], extras := .reject }),
+    node "cid-holder" (.product { fields := [field "cid" "scalar"], extras := .reject })]
+
+private def boundedInput (g : SemanticGraph) (maximum : Nat) : CompositionInput :=
+  { identity := "bounded", revision := "1", basis := SemanticBasis.of g, signatures := []
+    initialInputs := [{ id := ⟨"initial"⟩, contract := contract "scalar", source := .argument, resource := none }]
+    initialResources := []
+    goal := {
+      outputs := ["getRecord-parameters", "errorBody"].map fun name =>
+        { id := ⟨name⟩, contract := contract name, sourceConstraint := .anyCompatible }
+      failures := []
+      finalResources := [] }
+    invocationDomain := {
+      identity := "domain", revision := "1", sites := []
+      permittedProjections := [], permittedConstructions := [], permittedTransforms := [], guards := [] }
+    allowedEffects := [], explicitOrder := [], bounds := { maxSampleLength := maximum } }
+
+private def boundedComparison (rule : FormatRule) (text : String) : Bool :=
+  let g := boundedGraph rule
+  [text.length - 1, text.length].all fun maximum =>
+    let bounds : SearchBounds := { maxSampleLength := maximum }
+    let comparisons := ["getRecord-parameters", "errorBody"].all fun name =>
+      let samples := inclusionSamplesBounded g (typeRef "scalar") (typeRef name) bounds
+      let decision := checkAssignableBounded g (contract "scalar") (contract name) bounds
+      if maximum < text.length then
+        samples.values.isEmpty && samples.obligations.contains .sampleBound &&
+          match decision with | .unknown _ => true | _ => false
+      else
+        samples.values.contains (.str text) &&
+          match decision with
+          | .incompatible checked => match checked.certificate.value with
+            | .present (.str value) => value.length == text.length &&
+              isAccepted (acceptsValue g (typeRef "scalar") (.str value)) &&
+              checked.certificate.destinationFailure.condition == .wrongValueKind "object"
+            | _ => false
+          | _ => false
+    let control := match projectSlot g (contract "cid-holder") [.field "cid"] with
+      | .ok checked => match checkAssignableBounded g checked.destination (contract "scalar") bounds with
+        | .compatible _ => true | _ => false
+      | _ => false
+    let excluded := match prepareDirectComposition g (boundedInput g maximum) (fun _ _ => .ok ()) (fun _ _ => []) with
+      | .ok prepared =>
+        let candidates := enumerateReturns prepared (initialState prepared)
+        candidates.values.isEmpty &&
+          if maximum < text.length then !candidates.obligations.isEmpty else candidates.obligations.isEmpty
+      | _ => false
+    comparisons && control && excluded
+
+private def boundedProductCandidates : Bool :=
+  let g := graph [
+    node "boolean" (.boolean {}),
+    node "source" (.product {
+      fields := []
+      extras := .allow none { typeRef := typeRef "boolean" } }),
+    node "destination" (.product { fields := [field "long-key" "boolean" false], extras := .reject })]
+  [0, 1].all fun maximum =>
+    let samples := inclusionSamplesBounded g (typeRef "source") (typeRef "destination")
+      { maxSampleLength := maximum }
+    let present := samples.values.any fun value => match value with
+      | .obj members => members.any fun (key, _) => key == "long-key"
+      | _ => false
+    present == (maximum == 1) &&
+      (maximum == 1 || samples.obligations.contains .sampleBound) &&
+      samples.values.all fun value => isAccepted (acceptsValue g (typeRef "source") value)
+
 private def checks : List Check := [
+  { name := "Product-additional-candidates-bound", result := boundedProductCandidates,
+    actual := "additional object member omitted at 0 and sampled at 1" },
+  { name := "generic-scalar-product-L-minus-one-L", result := boundedComparison (.literal "generic") "generic",
+    actual := "bounded inclusion, typed counterexample, cid field and composition" },
+  { name := "CID-two-Products-58-59", result := boundedComparison cidRule ("bafkrei" ++ String.ofList (List.replicate 52 'a')),
+    actual := "canonical CID rule, getRecord parameters and errorBody" },
   { name := "format-inclusion-sound", result := formatInclusionSound,
     actual := "text and choice rules" },
   { name := "C1-compatible-no-counterexample", result := c1,

@@ -146,9 +146,9 @@ SignatureGenerationInput schema:=ncoh-checked-generation@4;basis:SignatureGenera
             for(WireValue row:a(f(library,"provenance"))){target(f(row,"target"),nodes,definitions,groups);for(WireValue item:a(f(row,"origins")))origin(item,sources);}
             Set<WireValue> annotationKeys=new HashSet<>();for(WireValue row:a(f(library,"annotations"))){target(f(row,"target"),nodes,definitions,groups);require(!s(f(row,"key")).isEmpty()&&annotationKeys.add(arr(List.of(f(row,"target"),f(row,"key")))),"$annotations","unique annotation key per target");exact(f(row,"value"));}
             WireValue profile=internalProfile(f(library,"profile"));
-            List<WireValue> internalNodes=new ArrayList<>();for(WireValue node:sorted(f(library,"nodes"),"id")) internalNodes.add(obj("reference",f(node,"id"),"shape",internalShape(f(node,"shape"))));
+            List<WireValue> internalNodes=new ArrayList<>();for(WireValue node:sorted(f(library,"nodes"),"id")) internalNodes.add(obj("reference",typeReference(s(f(node,"id"))),"shape",internalShape(f(node,"shape"))));
             Context context=new Context(obj("profile",profile,"nodes",arr(internalNodes),"definitions",f(library,"definitions")));
-            for(int i=0;i<internalNodes.size();i++){for(WireValue child:Context.children(context.shape(i)))require(nodes.containsKey(s(child)),"$nodes","resolved type identity");checkShape(context,i);context.meaning(i);}
+            for(int i=0;i<internalNodes.size();i++){for(WireValue child:Context.children(context.shape(i)))require(context.indices.containsKey(child),"$nodes","resolved type identity");checkShape(context,i);context.meaning(i);}
             List<WireValue> providers=new ArrayList<>();for(WireValue definition:definitions.values()){WireValue shape=f(definition,"shape");String kind=tag(shape);if(kind.equals("Value")||kind.equals("Message"))require(nodes.containsKey(s(payload(shape))),"$definitions","resolved type");else if(kind.equals("Operation")){WireValue operation=payload(shape);checkOperation(operation,nodes,sources);providers.add(operation);}}
             index(f(input,"entrypoints"),"identity","$entrypoints");require(!a(f(input,"entrypoints")).isEmpty(),"$entrypoints","entrypoint required");List<WireValue> selected=new ArrayList<>();for(WireValue entry:a(f(input,"entrypoints"))){WireValue definition=definitions.get(s(f(entry,"definition")));require(definition!=null,"$entrypoints","resolved definition");selected.add(definition);}
             WireValue composition=f(input,"composition");
@@ -170,7 +170,12 @@ SignatureGenerationInput schema:=ncoh-checked-generation@4;basis:SignatureGenera
         origin(f(payload(cause),kind.equals("ExternalCondition")?"specification":"origin"),a(f(library,"sources")));
         if(kind.equals("ExternalCondition"))require(tag(f(outcome,"form")).equals("DeclaredFailure")&&!a(f(outcome,"value_ports")).isEmpty(),"$outcomes","typed external declared failure");
     }
-    public static WireValue internalSlot(WireValue slot){return obj("type_ref",f(slot,"type_id"),"required",f(slot,"required"),"nullable",f(slot,"nullable"));}
+    public static WireValue typeReference(String id) {
+        return obj("source", obj("repository", str("ncoh-type-signatures"), "revision", str("1"), "path", str(""),
+                "content_digest", str(""), "document_id", str(""), "declared_revision", NIL),
+                "definition_name", str(id), "pointer", arr(List.of()));
+    }
+    public static WireValue internalSlot(WireValue slot){return obj("type_ref",typeReference(s(f(slot,"type_id"))),"required",f(slot,"required"),"nullable",f(slot,"nullable"));}
     private static WireValue internalShape(WireValue shape) {
         String kind = tag(shape); WireValue spec = o(shape).get("value");
         if (kind.equals("Product")) {
@@ -181,15 +186,18 @@ SignatureGenerationInput schema:=ncoh-checked-generation@4;basis:SignatureGenera
             if (tag(extras).equals("Allow")) {
                 WireValue values = payload(extras), contract = f(values, "value");
                 extras = fields("Allow", obj("key_format", f(values, "key_format"), "value",
-                        obj("type_ref", f(contract, "type_id"), "nullable", f(contract, "nullable"))));
+                        obj("type_ref", typeReference(s(f(contract, "type_id"))), "nullable", f(contract, "nullable"))));
             }
             return variant("Product", obj("fields", arr(converted), "extras", extras));
         }
         if (kind.equals("Array")) {
             WireValue item = f(spec, "item");
-            return variant("Array", obj("item", obj("type_ref", f(item, "type_id"), "nullable", f(item, "nullable")),
+            return variant("Array", obj("item", obj("type_ref", typeReference(s(f(item, "type_id"))), "nullable", f(item, "nullable")),
                     "min_length", f(spec, "min_length"), "max_length", f(spec, "max_length")));
         }
+        if (kind.equals("Alias")) return fields("Alias", obj("target", typeReference(s(f(payload(shape), "target")))));
+        if (kind.equals("TaggedUnion")) return variant("TaggedUnion", obj("branches", arr(a(f(spec, "branches")).stream()
+                .map(branch -> replace(branch, "target", typeReference(s(f(branch, "target"))))).toList())));
         return shape;
     }
     private static void checkShape(Context context,int type)throws GenerationFailure,ValueFailure {
@@ -211,7 +219,7 @@ SignatureGenerationInput schema:=ncoh-checked-generation@4;basis:SignatureGenera
     public static WireValue replace(WireValue object,String key,WireValue value) { return new ObjectValue(o(object).members().stream().map(m->m.key().equals(key)?new Member(key,value):m).toList()); }
     static WireValue problemBasis(WireValue basis) { return replace(replace(basis,"problem_sha256",NIL),"entrypoints_sha256",str(hash(arr(List.of())))); }
     public static WireValue internalComposition(WireValue value) {
-        if(value instanceof ObjectValue object) return new ObjectValue(object.members().stream().map(m->new Member(m.key().equals("type_id")?"type_ref":m.key(),Set.of("source_shape","destination_shape").contains(m.key())?internalShape(m.value()):internalComposition(m.value()))).toList());
+        if(value instanceof ObjectValue object) return new ObjectValue(object.members().stream().map(m->new Member(m.key().equals("type_id")?"type_ref":m.key(),m.key().equals("type_id") || m.key().equals("source_type") || m.key().equals("token_type") && object.get("id") != null ? typeReference(s(m.value())) : m.key().equals("empty_types") ? arr(a(m.value()).stream().map(v->typeReference(s(v))).toList()) : Set.of("source_shape","destination_shape").contains(m.key())?internalShape(m.value()):internalComposition(m.value()))).toList());
         if(value instanceof ArrayValue array) return arr(array.items().stream().map(TypeSignatures::internalComposition).toList());
         return value;
     }
@@ -316,7 +324,7 @@ SignatureGenerationInput schema:=ncoh-checked-generation@4;basis:SignatureGenera
         if(nodes.stream().anyMatch(node->tag(f(node,"shape")).equals("Decimal")&&!decimalSpecValid(payload(f(node,"shape"))))) declarationFailure("LB15",library,"library");
         if(nodes.stream().anyMatch(node->Set.of("Array","Bytes").contains(tag(f(node,"shape")))&&!nodeBoundsValid(f(node,"shape")))) declarationFailure("LB16",library,"library");
         if(nodes.stream().anyMatch(node->tag(f(node,"shape")).equals("TaggedUnion")&&!tagFieldAgreement(nodes,profile,tagModel,node))) declarationFailure("LB17",library,"library");
-        if(nodes.stream().anyMatch(node->tag(f(node,"shape")).equals("TaggedUnion")&&!uniqueValues(a(f(payload(f(node,"shape")),"branches")).stream().map(branch->f(branch,"selector")).toList()))) declarationFailure("LB18",library,"library");
+        if(nodes.stream().anyMatch(node->tag(f(node,"shape")).equals("TaggedUnion")&&!uniqueValues(a(f(payload(f(node,"shape")),"branches")).stream().map(branch->tag(f(branch,"selector")).equals("InternalTag")?arr(List.of(f(branch,"selector"),f(branch,"wire_tag"))):f(branch,"selector")).toList()))) declarationFailure("LB18",library,"library");
         if(nodes.stream().anyMatch(node -> defaultInvalid(profile,node))) declarationFailure("LB19",library,"library");
         return new CheckedLibrary(library,checked);
     }

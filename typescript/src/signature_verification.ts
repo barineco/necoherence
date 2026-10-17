@@ -513,8 +513,7 @@ function sealedLeafSample(context: ValueContext, leaf: X.SealedLeaf): X.ExactJso
   const spec = leaf.value;
   const value = spec.const_value ?? spec.enum_values?.[0] ?? spec.examples[0]
     ?? formatUseSamples(context, spec.format, 1n)[0];
-  return value === undefined ? null : spec.wrapper === null
-    ? { tag: "String", value } : X.wrapEncode(context.profile, spec.wrapper, value);
+  return value === undefined ? null : { tag: "String", value };
 }
 
 function sampleValueCandidatesFuel(context: ValueContext, fuel: bigint, seen: ReadonlySet<string>, reference: X.TypeRef): readonly X.ExactJson[] {

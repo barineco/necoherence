@@ -1,35 +1,6 @@
 # SPDX-FileCopyrightText: 2026 barineco
 # SPDX-License-Identifier: MIT
 
-"""Stdin inspection adapter, for testing only.
-
-Reads one generated query from stdin, evaluates it against
-``necoherence``'s public computable definitions, and writes one normalized
-JSON result to stdout. Mirrors ``lean_driver/FeatureCheck.lean``'s protocol
-exactly.
-
-Protocol:
-- ``{"kind":"surface"}`` -> ``{"kind":"surface","features":[...]}``, the
-  finite feature/operation inventory in a fixed order.
-- ``{"kind":"evaluate","requests":[{"feature":..,"operation":..,"input":..},...]}``
-  -> ``{"kind":"results","results":[{"feature":..,"operation":..,"result":..},...]}``
-  in input order.
-- Any JSON syntax failure, unrecognized query shape, unknown feature or
-  operation, or per-request input shape failure closes the whole reply as
-  ``{"kind":"invalid","failure":{"kind":"...","detail":"..."}}``. Logical
-  domain failures (rejected, conflicted, boundary-failed, and the like) are
-  carried inside a request's own ``result`` value instead.
-- Every operation named on the surface evaluates the matching necoherence
-  definition; the dispatcher has no unimplemented branch for a known
-  feature/operation pair.
-
-Non-negative integers are exchanged as decimal-digit JSON strings. Negative
-signs, decimal points, non-decimal characters, and the empty string are all
-input-shape failures.
-
-This module is a test-only inspection surface. It is not part of the
-package's public export.
-"""
 
 from __future__ import annotations
 
@@ -41,7 +12,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "python" / "src"))
 
-# Bypass the root export, which shadows some submodule names with functions.
+
 _call = importlib.import_module("necoherence.call")
 _core = importlib.import_module("necoherence.core")
 _admission = importlib.import_module("necoherence.dynamic_admission")
@@ -65,7 +36,7 @@ def fail_shape(detail: str) -> DecodeFailure:
     return DecodeFailure("input_shape", detail)
 
 
-# --- JSON accessors ---------------------------------------------------------
+
 
 
 def obj_val(j: Any, k: str) -> Any:
@@ -115,7 +86,7 @@ def nat_to_json(n: int) -> str:
     return str(n)
 
 
-# --- Core encoders/decoders --------------------------------------------------
+
 
 
 def decode_resource_id(j: Any) -> _core.ResourceId:
@@ -191,7 +162,7 @@ def encode_apply_outcome(o: Any) -> dict[str, Any]:
     raise AssertionError("apply never boundary-fails")
 
 
-# --- Core operations ---------------------------------------------------------
+
 
 
 def op_core_lookup(input: Any) -> Any:
@@ -222,7 +193,7 @@ def op_core_apply(input: Any) -> Any:
     return encode_apply_outcome(_core.apply(world, command))
 
 
-# --- Call encoders/decoders --------------------------------------------------
+
 
 
 def decode_function_form(j: Any) -> Any:
@@ -287,7 +258,7 @@ def encode_call_result(r: _call.CallResult[Any]) -> dict[str, Any]:
     return {"tag": "ok", "value": r.value}
 
 
-# --- Call operations ----------------------------------------------------
+
 
 
 def op_call_immediate_of(input: Any) -> Any:
@@ -312,7 +283,7 @@ def op_call_issue(input: Any) -> Any:
     return encode_call_result(_call.issue(decl, req))
 
 
-# --- Step transition encoders/decoders --------------------------------------
+
 
 
 def decode_advance_form(j: Any) -> Any:
@@ -380,7 +351,7 @@ def encode_step_transition(r: Any) -> dict[str, Any]:
     }
 
 
-# --- Step transition operation -----------------------------------------
+
 
 
 def op_step_transition_step(input: Any) -> Any:
@@ -398,7 +369,7 @@ def op_step_transition_step(input: Any) -> Any:
     )
 
 
-# --- Iteration encoders/decoders --------------------------------------------
+
 
 
 def encode_stage_projection_failed(s: _iteration.StageProjectionFailed) -> dict[str, Any]:
@@ -551,7 +522,7 @@ def encode_closure_outcome(o: Any) -> dict[str, Any]:
     }
 
 
-# --- Iteration operations -----------------------------------------------
+
 
 
 _ITERATION_FOLD_FIELDS = ("step", "seed", "count", "step_fields")
@@ -584,7 +555,7 @@ def op_iteration_closure(input: Any) -> Any:
     return encode_closure_outcome(result.value)
 
 
-# --- Store encoders/decoders -------------------------------------------
+
 
 
 def decode_store_entry(j: Any) -> tuple[_core.ResourceId, _core.Revision, Any]:
@@ -626,7 +597,7 @@ def encode_store_apply_outcome(o: Any) -> dict[str, Any]:
     }
 
 
-# --- Store operations -----------------------------------------------------
+
 
 
 def op_store_store_of(input: Any) -> Any:
@@ -653,7 +624,7 @@ def op_store_world_of(input: Any) -> Any:
     return encode_world(_store.world_of_store(decode_store(input)))
 
 
-# --- Record encoders/decoders -----------------------------------------
+
 
 
 def decode_call_record(j: Any) -> _record.CallRecord[Any, Any]:
@@ -670,7 +641,7 @@ def encode_call_record(r: _record.CallRecord[Any, Any]) -> dict[str, Any]:
     return {"declaration": r.declaration, "input": r.input, "product": r.product, "basis": basis}
 
 
-# --- Record operations ------------------------------------------------
+
 
 
 def op_record_record_of(input: Any) -> Any:
@@ -694,7 +665,7 @@ def op_record_has_edge(input: Any) -> Any:
     return {"holds": _record.has_edge(earlier, later)}
 
 
-# --- Reconcile encoders/decoders ---------------------------------------
+
 
 
 def _divergence_resource(d: Any) -> _core.ResourceId:
@@ -738,7 +709,7 @@ def decode_option_basis(j: Any) -> _core.Basis | None:
     return None if j is None else decode_basis(j)
 
 
-# --- Reconcile operations ------------------------------------------------
+
 
 
 def op_reconcile_reconcile(input: Any) -> Any:
@@ -783,7 +754,7 @@ def op_reconcile_coherent(input: Any) -> Any:
     return {"coherent": _reconcile.coherent(r)}
 
 
-# --- Request progression encoders/decoders ----------------------------
+
 
 
 def decode_request_policy(j: Any) -> _rp.RequestPolicy:
@@ -1255,7 +1226,7 @@ def encode_cancel_decision_result(r: _rp.CancelDecisionResult) -> dict[str, Any]
     return {"tag": "rejected", "snapshot": encode_snapshot(r.snapshot), "failure": encode_cancel_failure(r.failure)}
 
 
-# --- Request progression operations -------------------------------------
+
 
 
 def op_request_progression_empty(input: Any) -> Any:
@@ -1312,7 +1283,7 @@ def op_request_progression_derive_concurrent(input: Any) -> Any:
     return encode_resource_demand(_rp.derive_concurrent(snapshot))
 
 
-# --- Dynamic admission encoders/decoders --------------------------------
+
 
 
 def decode_environment_specification(j: Any) -> _admission.EnvironmentSpecification:
@@ -1487,7 +1458,7 @@ def encode_elision_outcome(o: Any) -> dict[str, Any]:
     return {"tag": "rejected", "failure": encode_dynamic_admission_failure(o.reason)}
 
 
-# --- Dynamic admission operations ----------------------------------------
+
 
 
 def op_dynamic_admission_elide_admission_provenance(input: Any) -> Any:
@@ -1501,7 +1472,7 @@ def op_dynamic_admission_admit_dynamic_request(input: Any) -> Any:
     return encode_dynamic_admission_outcome(_admission.admit_dynamic_request(admission_input))
 
 
-# --- File effect encoders/decoders --------------------------------------
+
 
 
 def decode_normalized_path(j: Any) -> _files.NormalizedPath:
@@ -1658,7 +1629,7 @@ def encode_replace_result(r: Any) -> dict[str, Any]:
     return {"tag": "boundaryFailed", "path": encode_normalized_path(r.failure.path)}
 
 
-# --- File effect operations -----------------------------------------------
+
 
 
 def op_file_effect_normalize_path(input: Any) -> Any:
@@ -1728,7 +1699,7 @@ def op_file_effect_replace(input: Any) -> Any:
     return encode_replace_result(result.value)
 
 
-# --- Surface inventory -------------------------------------------------
+
 
 
 SURFACE_ENTRIES: list[tuple[str, list[str]]] = [

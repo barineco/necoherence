@@ -1,10 +1,7 @@
 -- SPDX-FileCopyrightText: 2026 barineco
 -- SPDX-License-Identifier: MIT
 
-/-
-Self-contained Cell semantics: Fact-set extension, requirement
-satisfaction with production, and Identity = (Namespace, one-hop Provenance).
--/
+
 
 import Necoherence.Core
 
@@ -94,7 +91,7 @@ def fire (facts : FactSet) (rule : CellRule) : FactSet :=
 def derive (facts : FactSet) (rules : List CellRule) : FactSet :=
   rules.foldl fire facts
 
-/-! ### Auxiliary lemmas -/
+
 
 theorem contains_append_left (facts extra : FactSet) (f : Fact)
     (h : FactSet.contains facts f = true) :
@@ -164,7 +161,7 @@ theorem producedFact_append (facts extra : FactSet) (rule : CellRule)
     producedFact (facts ++ extra) rule = producedFact facts rule := by
   simp only [producedFact, triggerIds_append facts extra rule.requirements h]
 
-/-! ### Theorems -/
+
 
 theorem fire_monotone (facts : FactSet) (rule : CellRule) (f : Fact)
     (h : FactSet.contains facts f = true) :
@@ -210,8 +207,8 @@ theorem fire_idempotent (facts : FactSet) (rule : CellRule) :
           facts ++ [producedFact facts rule] := by
         simp [fire, hs, hc]
       rw [hfire]
-      -- After appending, the same identity is present, so the second
-      -- fire leaves the set unchanged.
+
+
       have hs' : satisfied (facts ++ [producedFact facts rule])
           rule.requirements = true :=
         satisfied_append_left facts [producedFact facts rule]

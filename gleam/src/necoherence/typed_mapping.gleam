@@ -351,9 +351,6 @@ fn duplicate_binding_name(input: SolverInput, b: InputBinding) -> Bool {
   1 < count
 }
 
-/// Structural validity of one binding: declared transition and place,
-/// input-place membership, declared type, positive multiplicity and no
-/// duplicate name within the transition.
 fn check_binding_structure(
   input: SolverInput,
   b: InputBinding,
@@ -404,9 +401,6 @@ fn check_binding_type(
   }
 }
 
-/// A token present at a binding's place, sharing the binding's target
-/// identity, whose revision differs from the binding's declared required
-/// revision is a colored-token mismatch.
 fn check_binding_revision(
   input: SolverInput,
   b: InputBinding,
@@ -445,8 +439,6 @@ fn check_graph_transitions(input: SolverInput) -> Result(Nil, InvalidReason) {
   }
 }
 
-/// An edge endpoint is valid when it names a declared place or a declared
-/// transition of the dependency graph.
 fn is_graph_node(input: SolverInput, id: String) -> Bool {
   list.contains(input.graph.places, id)
   || list.contains(input.graph.transitions, id)
@@ -463,8 +455,6 @@ fn check_graph_edges(input: SolverInput) -> Result(Nil, InvalidReason) {
   }
 }
 
-/// The first Error produced by check over items; `Ok(Nil)` when every
-/// item passes.
 fn first_error(
   items: List(a),
   check: fn(a) -> Result(Nil, InvalidReason),
@@ -479,9 +469,6 @@ fn first_error(
   }
 }
 
-/// Every output place and failure place a transition declares must belong
-/// to the declared place set; a branch place outside it would let
-/// `apply_branch_at` mint markings outside the declared finite domain.
 fn check_branch_places(input: SolverInput) -> Result(Nil, InvalidReason) {
   first_error(input.transitions, fn(t) {
     first_error(list.append(t.output_places, t.failure_places), fn(p) {
@@ -527,8 +514,6 @@ pub fn bindings_for(
   list.filter(input.bindings, fn(b) { b.transition_id == transition_id })
 }
 
-/// Whether a marking carries enough matching, correctly-revisioned tokens
-/// to satisfy one binding.
 fn binding_satisfied_at(marking: Marking, b: InputBinding) -> Bool {
   let matching =
     tokens_at(marking, b.place)
@@ -547,9 +532,6 @@ pub fn transition_enabled_at(
   list.all(bindings, binding_satisfied_at(marking, _))
 }
 
-/// The candidate input bindings enumerated while scanning the declared
-/// transitions for enabledness at a marking: every declared binding of
-/// every declared transition is a candidate the solver must consider.
 fn candidate_binding_count(input: SolverInput) -> Int {
   list.fold(input.transitions, 0, fn(acc, t) {
     acc + list.length(bindings_for(input, t.identity))
@@ -594,8 +576,6 @@ fn select_matching(
   |> list.take(b.multiplicity)
 }
 
-/// The tokens one transition's `Consume` bindings actually remove from one
-/// place, given a marking.
 fn consumed_at(
   bindings: List(InputBinding),
   marking: Marking,
@@ -608,8 +588,6 @@ fn consumed_at(
   })
 }
 
-/// Remove the first occurrence of `t` from `tokens`; the list itself when
-/// `t` does not occur.
 fn erase_first(
   tokens: List(ColoredToken),
   t: ColoredToken,
@@ -624,8 +602,6 @@ fn erase_first(
   }
 }
 
-/// Remove exactly the occurrences in `to_remove` from `tokens`:
-/// multiset subtraction preserving duplicates beyond the selected count.
 fn remove_all_tokens(
   tokens: List(ColoredToken),
   to_remove: List(ColoredToken),
@@ -633,9 +609,6 @@ fn remove_all_tokens(
   list.fold(to_remove, tokens, fn(acc, t) { erase_first(acc, t) })
 }
 
-/// Apply the consume side of one declared branch: every place keeps its
-/// tokens except the occurrences its transition's `Consume` bindings
-/// selected.
 fn apply_consumption(
   marking: Marking,
   bindings: List(InputBinding),
@@ -670,8 +643,6 @@ fn add_tokens(
   list.fold(places, marking, fn(acc, place) { add_token(acc, place, tok) })
 }
 
-/// The token produced at each of a transition's declared output places:
-/// its own identity, index zero, its own revision, kind `TokenOutput`.
 fn produced_token(t: TypedTransition) -> ColoredToken {
   ColoredToken(
     target: t.identity,
@@ -705,8 +676,6 @@ pub fn check_token_color_preserved(
   list.all(after, fn(t) { list.contains(before, t) })
 }
 
-/// The occurrences of `t` in `tokens`: the multiset count of one token
-/// identity.
 fn count_of(tokens: List(ColoredToken), t: ColoredToken) -> Int {
   list.length(list.filter(tokens, fn(u) { u == t }))
 }

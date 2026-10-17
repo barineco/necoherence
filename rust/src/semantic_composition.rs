@@ -501,6 +501,61 @@ fn shape<'a>(g: &'a SemanticGraph, r: &TypeRef) -> Option<&'a TypeShape> {
         }
     }
 }
+fn sealed_leaf_sample(profile: &VersionedSemanticProfile, leaf: &SealedLeaf) -> Option<JsonValue> {
+    match leaf {
+        SealedLeaf::String(spec) => spec
+            .const_value
+            .clone()
+            .or_else(|| {
+                spec.enum_values
+                    .as_ref()
+                    .and_then(|values| values.first().cloned())
+            })
+            .or_else(|| spec.examples.first().cloned())
+            .or_else(|| match &spec.format {
+                None => Some("x".into()),
+                Some(format) => format_use_rule(profile, format)
+                    .and_then(|rule| format_samples(rule, 1).into_iter().next()),
+            })
+            .map(JsonValue::Str),
+        SealedLeaf::Integer(spec) => spec
+            .const_value
+            .clone()
+            .or_else(|| {
+                spec.enum_values
+                    .as_ref()
+                    .and_then(|values| values.first().cloned())
+            })
+            .or_else(|| spec.minimum.clone())
+            .or_else(|| spec.maximum.clone())
+            .map(JsonValue::Num),
+    }
+}
+fn sealed_sample(
+    profile: &VersionedSemanticProfile,
+    tag: &str,
+    refinements: &[SealedRefinement],
+) -> Option<JsonValue> {
+    let tag_model = profile.tag.as_ref()?;
+    let form = tag_model.sealed.iter().find(|form| form.tag == tag)?;
+    let fields = form
+        .fields
+        .iter()
+        .filter(|field| field.required)
+        .map(|field| {
+            let leaf = refinements
+                .iter()
+                .find(|refinement| refinement.key == field.key)
+                .map_or(&field.leaf, |refinement| &refinement.leaf);
+            sealed_leaf_sample(profile, leaf).map(|value| (field.key.clone(), value))
+        })
+        .collect::<Option<Vec<_>>>()?;
+    Some(JsonValue::Obj(
+        std::iter::once((tag_model.key.clone(), JsonValue::Str(tag.to_owned())))
+            .chain(fields)
+            .collect(),
+    ))
+}
 fn format_use_rule<'a>(
     profile: &'a VersionedSemanticProfile,
     format: &'a FormatUse,
@@ -761,6 +816,24 @@ pub fn check_assignable(
     d: &SlotContract,
     max: usize,
 ) -> CompatibilityDecision {
+    check_assignable_bounded(
+        g,
+        s,
+        d,
+        &SearchBounds {
+            max_type_obligations: max,
+            max_sample_length: 32,
+            ..SearchBounds::default()
+        },
+    )
+}
+
+pub fn check_assignable_bounded(
+    g: &SemanticGraph,
+    s: &SlotContract,
+    d: &SlotContract,
+    bounds: &SearchBounds,
+) -> CompatibilityDecision {
     if (!s.required && d.required) || (s.nullable && !d.nullable) {
         let value = if !s.required {
             SlotValue::Absent
@@ -788,7 +861,7 @@ pub fn check_assignable(
             rule,
         });
     }
-    let samples = inclusion_samples(g, &s.type_ref, &d.type_ref, max);
+    let samples = inclusion_samples_bounded(g, &s.type_ref, &d.type_ref, bounds);
     for value in samples.values {
         if matches!(
             accepts_value(g, &s.type_ref, &value),
@@ -883,99 +956,444 @@ fn format_samples(r: &FormatRule, limit: usize) -> Vec<String> {
     out.truncate(limit);
     out
 }
-fn value_samples(
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum CandidateOrder {
+    Collection,
+    FirstWitness,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SlotCandidateControl {
+    Accept,
+    Continue,
+    StopNoEvidence,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum SlotCandidateSearch {
+    AcceptedWithinBound(SlotValue),
+    AcceptedBeyondSampleBound(SlotValue),
+    NoEvidence,
+}
+
+fn visit_product_field_options(
     g: &SemanticGraph,
-    r: &TypeRef,
+    field: &FieldSpec,
     fuel: usize,
     seen: &mut Vec<TypeRef>,
-) -> SampleResult<JsonValue> {
-    if fuel == 0 {
-        return SampleResult {
-            values: vec![],
-            obligations: vec![],
-        };
+    order: CandidateOrder,
+    emit: &mut impl FnMut(Option<JsonValue>) -> bool,
+    obligations: &mut Vec<SampleObligation>,
+) -> bool {
+    if !field.slot.required && emit(None) {
+        return true;
     }
-    if seen.contains(r) {
-        return SampleResult {
-            values: vec![],
-            obligations: vec![],
-        };
+    if order == CandidateOrder::FirstWitness && field.slot.nullable && emit(Some(JsonValue::Null)) {
+        return true;
     }
-    let Some(s) = shape(g, r) else {
-        return SampleResult {
-            values: vec![],
-            obligations: vec![],
-        };
+    if visit_value_candidates(
+        g,
+        &field.slot.type_ref,
+        fuel.saturating_sub(1),
+        seen,
+        order,
+        &mut |value| {
+            if matches!(
+                accepts_value(g, &field.slot.type_ref, &value),
+                ValueDecision::Accepted
+            ) {
+                emit(Some(value))
+            } else {
+                false
+            }
+        },
+        obligations,
+    ) {
+        return true;
+    }
+    order == CandidateOrder::Collection && field.slot.nullable && emit(Some(JsonValue::Null))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn visit_product_prefix(
+    g: &SemanticGraph,
+    fields: &mut [(&FieldSpec, usize)],
+    members: Vec<(String, JsonValue)>,
+    fuel: usize,
+    seen: &mut Vec<TypeRef>,
+    order: CandidateOrder,
+    stage_exhausted: &mut bool,
+    callback_stopped: &mut bool,
+    first_product: &mut Option<Vec<(String, JsonValue)>>,
+    emit: &mut dyn FnMut(JsonValue) -> bool,
+    obligations: &mut Vec<SampleObligation>,
+) {
+    if *stage_exhausted || *callback_stopped {
+        return;
+    }
+    let Some(((field, count), remaining_fields)) = fields.split_first_mut() else {
+        if first_product.is_none() {
+            *first_product = Some(members.clone());
+        }
+        if emit(JsonValue::Obj(members)) {
+            *callback_stopped = true;
+        }
+        return;
     };
-    seen.push(r.clone());
-    let mut obligations = vec![];
-    let mut values = match s {
-        TypeShape::Boolean(x) => x
+    let field = *field;
+    let mut field_seen = seen.clone();
+    let mut field_obligations = Vec::new();
+    let mut emit_option = |value: Option<JsonValue>| {
+        if *stage_exhausted || *callback_stopped {
+            return true;
+        }
+        if *count >= fuel {
+            *stage_exhausted = true;
+            return true;
+        }
+        *count += 1;
+        let mut next = members.clone();
+        if let Some(value) = value {
+            next.push((field.wire_name.clone(), value));
+        }
+        visit_product_prefix(
+            g,
+            remaining_fields,
+            next,
+            fuel,
+            seen,
+            order,
+            stage_exhausted,
+            callback_stopped,
+            first_product,
+            emit,
+            obligations,
+        );
+        if *stage_exhausted || *callback_stopped {
+            return true;
+        }
+        if *count >= fuel {
+            *stage_exhausted = true;
+            return true;
+        }
+        false
+    };
+    visit_product_field_options(
+        g,
+        field,
+        fuel,
+        &mut field_seen,
+        order,
+        &mut emit_option,
+        &mut field_obligations,
+    );
+    obligations.extend(field_obligations);
+}
+
+fn visit_product_candidates(
+    g: &SemanticGraph,
+    product: &ProductSpec,
+    fuel: usize,
+    seen: &mut Vec<TypeRef>,
+    order: CandidateOrder,
+    emit: &mut dyn FnMut(JsonValue) -> bool,
+    obligations: &mut Vec<SampleObligation>,
+) -> bool {
+    let mut fields: Vec<_> = product.fields.iter().map(|field| (field, 0)).collect();
+    let mut stage_exhausted = false;
+    let mut callback_stopped = false;
+    let mut first_product = None;
+    visit_product_prefix(
+        g,
+        &mut fields,
+        Vec::new(),
+        fuel,
+        seen,
+        order,
+        &mut stage_exhausted,
+        &mut callback_stopped,
+        &mut first_product,
+        emit,
+        obligations,
+    );
+    if callback_stopped {
+        return true;
+    }
+    if let ExtraMembers::Allow { key_format, value } = &product.extras {
+        let key = match key_format {
+            Some(FormatUse::Inline(rule)) => format_samples(rule, fuel).into_iter().next(),
+            Some(FormatUse::Named(name)) => g
+                .profile
+                .format(name)
+                .and_then(|binding| format_samples(&binding.rule, fuel).into_iter().next()),
+            None => Some("x".into()),
+        };
+        if let Some(key) = key {
+            if order == CandidateOrder::FirstWitness {
+                let base = first_product.unwrap_or_default();
+                let mut emitted = 0;
+                let mut stopped = false;
+                let mut emit_extra = |extra| {
+                    emitted += 1;
+                    let mut members = base.clone();
+                    members.push((key.clone(), extra));
+                    stopped = emit(JsonValue::Obj(members));
+                    stopped || emitted >= 2
+                };
+                if value.nullable && emit_extra(JsonValue::Null) {
+                    return stopped;
+                }
+                visit_value_candidates(
+                    g,
+                    &value.type_ref,
+                    fuel.saturating_sub(1),
+                    seen,
+                    order,
+                    &mut |candidate| {
+                        if value.nullable && candidate == JsonValue::Null {
+                            return false;
+                        }
+                        matches!(
+                            accepts_value(g, &value.type_ref, &candidate),
+                            ValueDecision::Accepted
+                        ) && emit_extra(candidate)
+                    },
+                    obligations,
+                );
+                return stopped;
+            }
+            let mut extras = Vec::new();
+            let mut contains_null = false;
+            let mut child_obligations = Vec::new();
+            visit_value_candidates(
+                g,
+                &value.type_ref,
+                fuel.saturating_sub(1),
+                seen,
+                order,
+                &mut |candidate| {
+                    if matches!(
+                        accepts_value(g, &value.type_ref, &candidate),
+                        ValueDecision::Accepted
+                    ) {
+                        contains_null |= candidate == JsonValue::Null;
+                        if extras.len() < 2 {
+                            extras.push(candidate);
+                        }
+                    }
+                    false
+                },
+                &mut child_obligations,
+            );
+            obligations.extend(child_obligations);
+            if value.nullable && !contains_null {
+                extras.insert(0, JsonValue::Null);
+            }
+            let base = first_product.unwrap_or_default();
+            for extra in extras.into_iter().take(2) {
+                let mut members = base.clone();
+                members.push((key.clone(), extra));
+                if emit(JsonValue::Obj(members)) {
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
+
+fn visit_array_candidates(
+    g: &SemanticGraph,
+    array: &ArraySpec,
+    fuel: usize,
+    seen: &mut Vec<TypeRef>,
+    order: CandidateOrder,
+    emit: &mut dyn FnMut(JsonValue) -> bool,
+    obligations: &mut Vec<SampleObligation>,
+) -> bool {
+    if order == CandidateOrder::Collection {
+        let mut child = value_samples(g, &array.item.type_ref, fuel.saturating_sub(1), seen);
+        obligations.extend(child.obligations);
+        if array.item.nullable && !child.values.contains(&JsonValue::Null) {
+            child.values.push(JsonValue::Null);
+        }
+        let items = child.values.into_iter().take(2).collect::<Vec<_>>();
+        return [
+            array.min_length.as_ref().and_then(ToPrimitive::to_usize),
+            array.max_length.as_ref().and_then(ToPrimitive::to_usize),
+            Some(0),
+            Some(1),
+        ]
+        .into_iter()
+        .flatten()
+        .flat_map(|length| {
+            items
+                .iter()
+                .map(move |item| JsonValue::Arr(vec![item.clone(); length]))
+        })
+        .any(&mut *emit);
+    }
+    if array
+        .min_length
+        .as_ref()
+        .is_some_and(|minimum| minimum.to_usize().is_none())
+    {
+        return false;
+    }
+    let mut lengths = Vec::new();
+    for length in [
+        array.min_length.as_ref().and_then(ToPrimitive::to_usize),
+        array.max_length.as_ref().and_then(ToPrimitive::to_usize),
+        Some(0),
+        Some(1),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        if !lengths.contains(&length) {
+            lengths.push(length);
+        }
+    }
+    if array
+        .min_length
+        .as_ref()
+        .and_then(ToPrimitive::to_usize)
+        .unwrap_or(0)
+        == 0
+    {
+        if let Some(zero_index) = lengths.iter().position(|length| *length == 0) {
+            lengths.remove(zero_index);
+            lengths.insert(0, 0);
+        }
+    }
+    for length in lengths {
+        if length == 0 {
+            if emit(JsonValue::Arr(vec![])) {
+                return true;
+            }
+            continue;
+        }
+        let mut emitted = 0;
+        let mut stopped = false;
+        let mut emit_item = |item| {
+            emitted += 1;
+            stopped = emit(JsonValue::Arr(vec![item; length]));
+            stopped || emitted >= 2
+        };
+        if array.item.nullable && emit_item(JsonValue::Null) {
+            if stopped {
+                return true;
+            }
+            continue;
+        }
+        visit_value_candidates(
+            g,
+            &array.item.type_ref,
+            fuel.saturating_sub(1),
+            seen,
+            order,
+            &mut |candidate| {
+                if array.item.nullable && candidate == JsonValue::Null {
+                    return false;
+                }
+                matches!(
+                    accepts_value(g, &array.item.type_ref, &candidate),
+                    ValueDecision::Accepted
+                ) && emit_item(candidate)
+            },
+            obligations,
+        );
+        if stopped {
+            return true;
+        }
+    }
+    false
+}
+fn visit_value_candidates(
+    g: &SemanticGraph,
+    reference: &TypeRef,
+    fuel: usize,
+    seen: &mut Vec<TypeRef>,
+    order: CandidateOrder,
+    emit: &mut dyn FnMut(JsonValue) -> bool,
+    obligations: &mut Vec<SampleObligation>,
+) -> bool {
+    if fuel == 0 || seen.contains(reference) {
+        return false;
+    }
+    let Some(shape) = shape(g, reference) else {
+        return false;
+    };
+    seen.push(reference.clone());
+    let stopped = match shape {
+        TypeShape::Boolean(spec) => spec
             .const_value
             .map(JsonValue::Bool)
             .into_iter()
             .chain([JsonValue::Bool(false), JsonValue::Bool(true)])
-            .collect(),
-        TypeShape::Integer(x) => x
+            .any(&mut *emit),
+        TypeShape::Integer(spec) => spec
             .const_value
             .iter()
-            .chain(x.enum_values.iter().flatten())
-            .chain(x.minimum.iter())
-            .chain(x.maximum.iter())
+            .chain(spec.enum_values.iter().flatten())
+            .chain(spec.minimum.iter())
+            .chain(spec.maximum.iter())
             .cloned()
             .chain([BigInt::zero(), BigInt::one()])
             .map(JsonValue::Num)
-            .collect(),
-        TypeShape::Decimal(_) => vec![JsonValue::Dec("0.0".into()), JsonValue::Dec("1.0".into())],
-        TypeShape::String(x) => {
-            let mut v = x
+            .any(&mut *emit),
+        TypeShape::Decimal(_) => [JsonValue::Dec("0.0".into()), JsonValue::Dec("1.0".into())]
+            .into_iter()
+            .any(&mut *emit),
+        TypeShape::String(spec) => {
+            let mut values = spec
                 .const_value
                 .iter()
-                .chain(x.enum_values.iter().flatten())
-                .chain(x.examples.iter())
+                .chain(spec.enum_values.iter().flatten())
+                .chain(spec.examples.iter())
                 .cloned()
-                .collect::<Vec<_>>();
-            if let Some(u) = &x.format {
-                let r = match u {
-                    FormatUse::Inline(r) => Some(r),
-                    FormatUse::Named(n) => g.profile.format(n).map(|x| &x.rule),
-                };
-                if let Some(r) = r {
-                    v.extend(format_samples(r, fuel))
-                }
-            }
-            for bound in &x.lengths {
-                for length in bound
-                    .minimum
-                    .iter()
-                    .chain(bound.maximum.iter())
-                    .filter_map(ToPrimitive::to_usize)
-                {
-                    v.push("a".repeat(length));
-                }
-            }
-            if v.is_empty() {
-                v.push(String::new())
-            }
-            match &x.wrapper {
-                None => v.into_iter().map(JsonValue::Str).collect(),
+                .chain(
+                    spec.format
+                        .iter()
+                        .filter_map(|format_use| match format_use {
+                            FormatUse::Inline(rule) => Some(rule),
+                            FormatUse::Named(name) => {
+                                g.profile.format(name).map(|binding| &binding.rule)
+                            }
+                        })
+                        .flat_map(|rule| format_samples(rule, fuel)),
+                )
+                .chain(spec.lengths.iter().flat_map(|bound| {
+                    bound
+                        .minimum
+                        .iter()
+                        .chain(bound.maximum.iter())
+                        .filter_map(ToPrimitive::to_usize)
+                        .map(|length| "a".repeat(length))
+                }))
+                .peekable();
+            let mut emit_text = |text| match &spec.wrapper {
+                None => emit(JsonValue::Str(text)),
                 Some(name) => g
                     .profile
                     .wrappers
                     .iter()
                     .find(|wrapper| wrapper.name == *name)
-                    .map(|wrapper| {
-                        v.into_iter()
-                            .map(|text| {
-                                JsonValue::Obj(vec![(wrapper.key.clone(), JsonValue::Str(text))])
-                            })
-                            .collect()
-                    })
-                    .unwrap_or_default(),
+                    .is_some_and(|wrapper| {
+                        emit(JsonValue::Obj(vec![(
+                            wrapper.key.clone(),
+                            JsonValue::Str(text),
+                        )]))
+                    }),
+            };
+            if values.peek().is_none() {
+                emit_text(String::new())
+            } else {
+                values.any(&mut emit_text)
             }
         }
         TypeShape::Bytes(_) | TypeShape::RawBody { .. } => {
-            match g
+            let value = match g
                 .profile
                 .bytes_policy
                 .as_ref()
@@ -987,138 +1405,165 @@ fn value_samples(
                     .iter()
                     .find(|wrapper| wrapper.name == *name)
                     .map(|wrapper| {
-                        vec![JsonValue::Obj(vec![(
-                            wrapper.key.clone(),
-                            JsonValue::Str(String::new()),
-                        )])]
-                    })
-                    .unwrap_or_default(),
-                None if g.profile.bytes_policy.is_some() => vec![JsonValue::Str(String::new())],
-                None => vec![],
-            }
+                        JsonValue::Obj(vec![(wrapper.key.clone(), JsonValue::Str(String::new()))])
+                    }),
+                None if g.profile.bytes_policy.is_some() => Some(JsonValue::Str(String::new())),
+                None => None,
+            };
+            value.is_some_and(&mut *emit)
         }
         TypeShape::Product(product) => {
-            let mut products = vec![Vec::new()];
-            for field in &product.fields {
-                let child = value_samples(g, &field.slot.type_ref, fuel - 1, seen);
-                obligations.extend(child.obligations);
-                let mut options = child.values.into_iter().map(Some).collect::<Vec<_>>();
-                if !field.slot.required {
-                    options.insert(0, None)
-                }
-                if field.slot.nullable {
-                    options.push(Some(JsonValue::Null))
-                }
-                products = products
-                    .into_iter()
-                    .flat_map(|base| {
-                        options.iter().map(move |value| {
-                            let mut members = base.clone();
-                            if let Some(value) = value {
-                                members.push((field.wire_name.clone(), value.clone()))
-                            }
-                            members
-                        })
-                    })
-                    .take(fuel)
-                    .collect()
-            }
-            if let ExtraMembers::Allow { key_format, value } = &product.extras {
-                let keys = match key_format {
-                    Some(FormatUse::Inline(rule)) => format_samples(rule, fuel),
-                    Some(FormatUse::Named(name)) => g
-                        .profile
-                        .format(name)
-                        .map(|binding| format_samples(&binding.rule, fuel))
-                        .unwrap_or_default(),
-                    None => vec!["x".into()],
-                };
-                let mut child = value_samples(g, &value.type_ref, fuel - 1, seen);
-                obligations.extend(child.obligations);
-                if value.nullable && !child.values.contains(&JsonValue::Null) {
-                    child.values.insert(0, JsonValue::Null);
-                }
-                if let Some(key) = keys.first() {
-                    let members = products.first().cloned().unwrap_or_default();
-                    products.extend(child.values.into_iter().take(2).map(|extra| {
-                        let mut with_extra = members.clone();
-                        with_extra.push((key.clone(), extra));
-                        with_extra
-                    }));
-                }
-            }
-            products.into_iter().map(JsonValue::Obj).collect()
+            visit_product_candidates(g, product, fuel, seen, order, emit, obligations)
         }
-        TypeShape::Array(a) => {
-            let mut child = value_samples(g, &a.item.type_ref, fuel - 1, seen);
-            obligations.extend(child.obligations);
-            if a.item.nullable && !child.values.contains(&JsonValue::Null) {
-                child.values.push(JsonValue::Null);
-            }
-            let items = child.values.into_iter().take(2).collect::<Vec<_>>();
-            let lengths = [
-                a.min_length.as_ref().and_then(ToPrimitive::to_usize),
-                a.max_length.as_ref().and_then(ToPrimitive::to_usize),
-                Some(0),
-                Some(1),
-            ];
-            lengths
-                .into_iter()
-                .flatten()
-                .flat_map(|length| {
-                    items
-                        .iter()
-                        .map(move |item| JsonValue::Arr(vec![item.clone(); length]))
-                })
-                .collect()
+        TypeShape::Array(array) => {
+            visit_array_candidates(g, array, fuel, seen, order, emit, obligations)
         }
-        TypeShape::TaggedUnion(u) => u
-            .branches
-            .iter()
-            .flat_map(|b| value_samples(g, &b.target, fuel - 1, seen).values)
-            .collect(),
-        TypeShape::Sealed { tag, .. } => g
-            .profile
-            .tag
-            .as_ref()
-            .and_then(|t| {
-                t.sealed.iter().find(|f| f.tag == *tag).map(|f| {
-                    JsonValue::Obj(
-                        std::iter::once((t.key.clone(), JsonValue::Str(tag.clone())))
-                            .chain(f.fields.iter().filter(|x| x.required).map(|x| {
-                                (
-                                    x.key.clone(),
-                                    match x.leaf {
-                                        SealedLeaf::String(_) => JsonValue::Str(String::new()),
-                                        SealedLeaf::Integer(_) => JsonValue::Num(BigInt::zero()),
-                                    },
-                                )
-                            }))
-                            .collect(),
-                    )
-                })
-            })
-            .into_iter()
-            .collect(),
-        TypeShape::Never => vec![],
-        TypeShape::Unknown(UnknownKind::Any) => vec![
+        TypeShape::TaggedUnion(union) => {
+            let mut stopped = false;
+            for branch in &union.branches {
+                let mut branch_obligations = Vec::new();
+                let branch_stopped = visit_value_candidates(
+                    g,
+                    &branch.target,
+                    fuel.saturating_sub(1),
+                    seen,
+                    order,
+                    &mut |candidate| {
+                        matches!(
+                            accepts_value(g, &branch.target, &candidate),
+                            ValueDecision::Accepted
+                        ) && emit(candidate)
+                    },
+                    &mut branch_obligations,
+                );
+                if order == CandidateOrder::FirstWitness {
+                    obligations.extend(branch_obligations);
+                }
+                if branch_stopped {
+                    stopped = true;
+                    break;
+                }
+            }
+            stopped
+        }
+        TypeShape::Sealed { tag, refinements } => {
+            sealed_sample(&g.profile, tag, refinements).is_some_and(&mut *emit)
+        }
+        TypeShape::Never | TypeShape::Opaque { .. } => false,
+        TypeShape::Unknown(UnknownKind::Any) => [
             JsonValue::Null,
             JsonValue::Bool(false),
             JsonValue::Num(BigInt::zero()),
             JsonValue::Str(String::new()),
             JsonValue::Arr(vec![]),
             JsonValue::Obj(vec![]),
-        ],
-        TypeShape::Unknown(UnknownKind::OrdinaryObject) => vec![JsonValue::Obj(vec![])],
-        TypeShape::Unit => vec![JsonValue::Null],
-        TypeShape::Opaque { .. } => vec![],
+        ]
+        .into_iter()
+        .any(&mut *emit),
+        TypeShape::Unknown(UnknownKind::OrdinaryObject) => emit(JsonValue::Obj(vec![])),
+        TypeShape::Unit => emit(JsonValue::Null),
         TypeShape::Alias { .. } => unreachable!(),
     };
     seen.pop();
-    values.retain(|v| matches!(accepts_value(g, r, v), ValueDecision::Accepted));
+    stopped
+}
+
+fn value_samples(
+    g: &SemanticGraph,
+    reference: &TypeRef,
+    fuel: usize,
+    seen: &mut Vec<TypeRef>,
+) -> SampleResult<JsonValue> {
+    let mut values = Vec::new();
+    let mut obligations = Vec::new();
+    visit_value_candidates(
+        g,
+        reference,
+        fuel,
+        seen,
+        CandidateOrder::Collection,
+        &mut |value| {
+            values.push(value);
+            false
+        },
+        &mut obligations,
+    );
+    values.retain(|value| matches!(accepts_value(g, reference, value), ValueDecision::Accepted));
     SampleResult {
         values,
         obligations,
+    }
+}
+
+pub fn find_accepted_slot_candidate(
+    g: &SemanticGraph,
+    bounds: &SearchBounds,
+    contract: &SlotContract,
+    mut inspect: impl FnMut(&SlotValue, bool) -> SlotCandidateControl,
+) -> SlotCandidateSearch {
+    for value in [
+        (!contract.required).then_some(SlotValue::Absent),
+        contract.nullable.then_some(SlotValue::Null),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        if !matches!(
+            validation::accepts_slot(g, contract, borrowed_slot(&value)),
+            ValueDecision::Accepted
+        ) {
+            continue;
+        }
+        match inspect(&value, true) {
+            SlotCandidateControl::Accept => return SlotCandidateSearch::AcceptedWithinBound(value),
+            SlotCandidateControl::Continue => {}
+            SlotCandidateControl::StopNoEvidence => return SlotCandidateSearch::NoEvidence,
+        }
+    }
+    let mut seen = Vec::new();
+    let mut result = None;
+    let mut stopped = false;
+    let mut obligations = Vec::new();
+    visit_value_candidates(
+        g,
+        &contract.type_ref,
+        bounds.max_type_obligations.min(g.nodes.len() + 1),
+        &mut seen,
+        CandidateOrder::FirstWitness,
+        &mut |candidate| {
+            let value = SlotValue::Present(candidate);
+            if !matches!(
+                validation::accepts_slot(g, contract, borrowed_slot(&value)),
+                ValueDecision::Accepted
+            ) {
+                return false;
+            }
+            let within_bound = match &value {
+                SlotValue::Present(value) => max_sample_length(value) <= bounds.max_sample_length,
+                _ => true,
+            };
+            match inspect(&value, within_bound) {
+                SlotCandidateControl::Accept => {
+                    result = Some(if within_bound {
+                        SlotCandidateSearch::AcceptedWithinBound(value)
+                    } else {
+                        SlotCandidateSearch::AcceptedBeyondSampleBound(value)
+                    });
+                    true
+                }
+                SlotCandidateControl::Continue => false,
+                SlotCandidateControl::StopNoEvidence => {
+                    stopped = true;
+                    true
+                }
+            }
+        },
+        &mut obligations,
+    );
+    if stopped {
+        SlotCandidateSearch::NoEvidence
+    } else {
+        result.unwrap_or(SlotCandidateSearch::NoEvidence)
     }
 }
 pub fn sample_value_fuel(
@@ -1167,13 +1612,26 @@ pub fn inclusion_samples(
     destination: &TypeRef,
     maximum: usize,
 ) -> SampleResult<JsonValue> {
-    let bounds = SearchBounds {
-        max_type_obligations: maximum,
-        max_sample_length: 32,
-        ..SearchBounds::default()
-    };
-    let fuel = maximum.min(graph.nodes.len() + 1);
-    let mut generated = sample_value_fuel(graph, &bounds, fuel, &[], source);
+    inclusion_samples_bounded(
+        graph,
+        source,
+        destination,
+        &SearchBounds {
+            max_type_obligations: maximum,
+            max_sample_length: 32,
+            ..SearchBounds::default()
+        },
+    )
+}
+
+pub fn inclusion_samples_bounded(
+    graph: &SemanticGraph,
+    source: &TypeRef,
+    destination: &TypeRef,
+    bounds: &SearchBounds,
+) -> SampleResult<JsonValue> {
+    let fuel = bounds.max_type_obligations.min(graph.nodes.len() + 1);
+    let mut generated = sample_value_fuel(graph, bounds, fuel, &[], source);
     let mut candidates = Vec::new();
     if let (Some(TypeShape::Product(source_spec)), Some(TypeShape::Product(destination_spec))) = (
         resolved_shape(graph, source),
@@ -1212,7 +1670,7 @@ pub fn inclusion_samples(
                     .unwrap_or_default(),
                 None => vec!["x".into()],
             };
-            let mut values = sample_value_fuel(graph, &bounds, fuel, &[], &value.type_ref).values;
+            let mut values = sample_value_fuel(graph, bounds, fuel, &[], &value.type_ref).values;
             if value.nullable && !values.contains(&JsonValue::Null) {
                 values.push(JsonValue::Null);
             }
@@ -3558,9 +4016,16 @@ fn ensure_possible(
             return Ok(());
         }
     } else if !slot_empty(contract, &prepared.empty)
-        && !slot_samples(prepared.graph(), &prepared.input.bounds, contract)
-            .values
-            .is_empty()
+        && matches!(
+            find_accepted_slot_candidate(
+                prepared.graph(),
+                &prepared.input.bounds,
+                contract,
+                |_, _| SlotCandidateControl::Accept,
+            ),
+            SlotCandidateSearch::AcceptedWithinBound(_)
+                | SlotCandidateSearch::AcceptedBeyondSampleBound(_)
+        )
     {
         return Ok(());
     }
@@ -3986,11 +4451,11 @@ fn guard_arms(
             ) {
                 arms.push(GuardArm::Rejected);
             } else if matches!(
-                check_assignable(
+                check_assignable_bounded(
                     prepared.graph(),
                     &projected.destination,
                     destination,
-                    prepared.input.bounds.max_type_obligations
+                    &prepared.input.bounds
                 ),
                 CompatibilityDecision::Compatible(_)
             ) {
@@ -4575,11 +5040,11 @@ impl LocalEnumerator<'_, '_, '_> {
         destination: &SlotContract,
         value: Option<ValueRef>,
     ) -> Option<Arc<InclusionCertificate>> {
-        match check_assignable(
+        match check_assignable_bounded(
             self.prepared.graph(),
             source,
             destination,
-            self.prepared.input.bounds.max_type_obligations,
+            &self.prepared.input.bounds,
         ) {
             CompatibilityDecision::Compatible(certificate) => Some(Arc::new(certificate)),
             CompatibilityDecision::Incompatible(counterexample) => {
@@ -4723,19 +5188,21 @@ impl LocalEnumerator<'_, '_, '_> {
                 if slot_empty(&projection.destination, &self.prepared.empty) {
                     continue;
                 }
-                if slot_samples(
+                match find_accepted_slot_candidate(
                     self.prepared.graph(),
                     &self.prepared.input.bounds,
                     &projection.destination,
-                )
-                .values
-                .is_empty()
-                {
-                    self.unknown.push(UnresolvedObligation::Inhabitation {
-                        producer: value.producer.clone(),
-                        contract: projection.destination,
-                    });
-                    continue;
+                    |_, _| SlotCandidateControl::Accept,
+                ) {
+                    SlotCandidateSearch::AcceptedWithinBound(_)
+                    | SlotCandidateSearch::AcceptedBeyondSampleBound(_) => {}
+                    SlotCandidateSearch::NoEvidence => {
+                        self.unknown.push(UnresolvedObligation::Inhabitation {
+                            producer: value.producer.clone(),
+                            contract: projection.destination.clone(),
+                        });
+                        continue;
+                    }
                 }
                 if let Some(certificate) =
                     self.compatibility(&projection.destination, destination, Some(value.clone()))
@@ -6144,15 +6611,20 @@ pub fn initial_membership(
         let value = match &initial.source {
             InitialSource::SuppliedValue(value) => value.clone(),
             InitialSource::Argument => {
-                slot_samples(prepared.graph(), &prepared.input.bounds, &initial.contract)
-                    .values
-                    .into_iter()
-                    .next()
-                    .ok_or_else(|| {
-                        CompositionEngineFailure::ContractViolation(
+                match find_accepted_slot_candidate(
+                    prepared.graph(),
+                    &prepared.input.bounds,
+                    &initial.contract,
+                    |_, _| SlotCandidateControl::Accept,
+                ) {
+                    SlotCandidateSearch::AcceptedWithinBound(value)
+                    | SlotCandidateSearch::AcceptedBeyondSampleBound(value) => value,
+                    SlotCandidateSearch::NoEvidence => {
+                        return Err(CompositionEngineFailure::ContractViolation(
                             "feasible branch omitted initial inhabitation".to_owned(),
-                        )
-                    })?
+                        ));
+                    }
+                }
             }
         };
         result.push((initial.id.clone(), value));

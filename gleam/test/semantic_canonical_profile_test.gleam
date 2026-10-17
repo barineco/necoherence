@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import gleam/list
-import gleam/option.{None}
+import gleam/option.{None, Some}
 import gleam/string
 import necoherence/exact_json as json
 import necoherence/semantic_generation_decode as decode
@@ -10,7 +10,7 @@ import necoherence/semantic_types as types
 import necoherence/semantic_validation as validation
 import semantic_test_support as support
 
-pub fn canonical_profile_roundtrip_preserves_stage_five_declarations_test() {
+pub fn canonical_profile_roundtrip_preserves_declarations_test() {
   let value = support.profile()
   let assert Ok(encoded) = decode.encode_semantic_profile(value)
   let assert Ok(decoded) = decode.decode_semantic_profile(encoded)
@@ -25,7 +25,7 @@ pub fn canonical_format_wire_roundtrips_every_constructor_test() {
     types.AsciiDfa(types.DfaSpec(1, 0, [0], [])),
     types.Timestamp(types.CalendarRule(False, 0, 9999, True)),
     types.Choice([types.Text]),
-    types.Identifier("a", "a", None, 1, 2, []),
+    types.Identifier("a", "a", None, 1, Some(2), []),
     types.AbsoluteUri(8),
     types.LanguageTag([]),
     types.Literal("x"),
@@ -53,7 +53,7 @@ pub fn canonical_profile_admission_preserves_typed_failure_test() {
     validation.check_profile(invalid)
 }
 
-pub fn canonical_value_failure_roundtrip_preserves_stage_five_wire_test() {
+pub fn canonical_value_failure_roundtrip_preserves_wire_test() {
   let source =
     types.SourceRef(
       "repo",
@@ -79,4 +79,50 @@ pub fn canonical_value_failure_roundtrip_preserves_stage_five_wire_test() {
   let assert True = decoded == value
   let assert Ok(reencoded) = decode.encode_value_failure(decoded)
   let assert True = reencoded == encoded
+}
+
+pub fn identifier_optional_maximum_wire_and_meaning_test() {
+  list.each([None, Some(3)], fn(maximum) {
+    let rule = types.Identifier("ab", "ab", None, 1, maximum, ["ba"])
+    let assert Ok(encoded) = decode.encode_format_rule(rule)
+    let expected_maximum = case maximum {
+      None -> json.JsonValueNull
+      Some(_) -> json.JsonValueStr("3")
+    }
+    let assert json.JsonValueObj(members) = encoded
+    let assert Ok(json.JsonValueObj(fields)) = list.key_find(members, "fields")
+    let assert Ok(observed) = list.key_find(fields, "max_length")
+    let assert True = observed == expected_maximum
+    let assert Ok(decoded) = decode.decode_format_rule(encoded)
+    let assert True = decoded == rule
+    let assert True = validation.recognizes(decoded, "ab")
+    let assert False = validation.recognizes(decoded, "")
+    let assert False = validation.recognizes(decoded, "ba")
+    let assert False = validation.recognizes(decoded, "ac")
+    let assert False = validation.recognizes(decoded, "é")
+    let assert True =
+      validation.recognizes(decoded, "abab") == { maximum == None }
+    let binding =
+      types.FormatBinding("identifier", support.profile().reference, decoded)
+    let profile =
+      types.SemanticProfile(..support.profile(), format_bindings: [binding])
+    let assert Ok(_) = validation.check_profile(profile)
+  })
+  let exact = types.Identifier("ab", "ab", Some(4), 1, None, [])
+  let assert True = validation.recognizes(exact, "abab")
+  let assert False = validation.recognizes(exact, "aba")
+  list.each(
+    [
+      types.Identifier("ab", "ab", None, 4, Some(3), []),
+      types.Identifier("ab", "ab", Some(4), 1, Some(3), []),
+      types.Identifier("ab", "ab", Some(0), 1, None, []),
+    ],
+    fn(rule) {
+      let binding =
+        types.FormatBinding("identifier", support.profile().reference, rule)
+      let profile =
+        types.SemanticProfile(..support.profile(), format_bindings: [binding])
+      let assert Error(_) = validation.check_profile(profile)
+    },
+  )
 }

@@ -1,11 +1,7 @@
 -- SPDX-FileCopyrightText: 2026 barineco
 -- SPDX-License-Identifier: MIT
 
-/-
-Necoherence core vocabulary as Lean 4 structures.
-Outcome closure, basis retention, stale conflict, and observational
-commutativity of disjoint applies.
--/
+
 
 namespace Necoherence
 
@@ -114,7 +110,7 @@ end World
 def commandOf (o : Observation α) (x : β) : Command β :=
   ⟨x, o.basis⟩
 
-/-! ### Theorems -/
+
 
 theorem outcome_closure {α ρ κ φ : Type} :
     ∀ (o : Outcome α ρ κ φ),
@@ -259,7 +255,7 @@ theorem apply_disjoint_comm {α β : Type}
   rw [hw₁₂, hw₁, hw₂₁, hw₂]
   exact World.bump_comm_lookup w c₁.basis.resource c₂.basis.resource hres r
 
-/-! ### Counterexample: discarding basis forfeits stale detection -/
+
 
 /--
 Concrete witness: rebuilding a `Command` from payload alone with a wrong
@@ -270,7 +266,7 @@ example :
     let res : ResourceId := ⟨"core", "0"⟩
     let w : World := [(res, ⟨5⟩)]
     let o : Observation Nat := ⟨42, ⟨res, ⟨5⟩⟩, 0⟩
-    -- payload-only extraction rebuilt with a stale basis (revision 4)
+
     let c : Command Nat := ⟨o.payload, ⟨res, ⟨4⟩⟩⟩
     World.apply w c = .conflicted ⟨⟨4⟩, ⟨5⟩⟩ := by
   simp [World.apply, World.lookup]

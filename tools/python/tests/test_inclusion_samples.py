@@ -12,11 +12,11 @@ from v4_samples import library, string_spec
 def context_with(shape):
     value=library(); value["nodes"].append({"id":"bounded","shape":shape})
     checked=checkLibrary(value)
-    return ValueContext({"profile":checked.value["profile"],"nodes":checked.value["nodes"]})
+    return ValueContext.from_signature_nodes(checked.value["profile"], checked.value["nodes"])
 
 
 def test_samples_are_accepted_by_their_source():
-    checked=checkLibrary(library()); context=ValueContext({"profile":checked.value["profile"],"nodes":checked.value["nodes"]})
+    checked=checkLibrary(library()); context=ValueContext.from_signature_nodes(checked.value["profile"], checked.value["nodes"])
     result=sample_values(context,8,(),"text")
     assert result.possible
     for value in result.values: context.validate("text",value)

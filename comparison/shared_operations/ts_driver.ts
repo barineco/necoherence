@@ -1,9 +1,6 @@
 // SPDX-FileCopyrightText: 2026 barineco
 // SPDX-License-Identifier: MIT
 
-// Inspection adapter: reads one query from stdin, evaluates it
-// against necoherence's TypeScript definitions, and writes one normalized
-// JSON result to stdout. Mirrors lean_driver/FeatureCheck.lean's protocol.
 
 import * as Core from "../../typescript/src/core.js";
 import * as Call from "../../typescript/src/call.js";
@@ -79,7 +76,6 @@ function orNull<T>(j: Json, decode: (v: Json) => T): T | null {
   return j === null ? null : decode(j);
 }
 
-// ---- Core ----
 
 function decodeResourceId(j: Json): Core.ResourceId {
   return Object.freeze({ kind: strField(j, "kind"), name: strField(j, "name") });
@@ -167,7 +163,6 @@ function opCoreApply(input: Json): Json {
   return encodeApplyOutcome(Core.apply(world, command));
 }
 
-// ---- Call ----
 
 type FunctionForm =
   | { readonly kind: "identity" }
@@ -259,7 +254,6 @@ function opCallIssue(input: Json): Json {
   return encodeCallResult(Call.issue(decl, req));
 }
 
-// ---- Iteration ----
 
 type AdvanceForm =
   | { readonly mode: "consumeImmediately"; readonly outputs: readonly Json[] }
@@ -398,7 +392,6 @@ function opIterationClosure(input: Json): Json {
   return encodeClosureOutcome(outcome);
 }
 
-// ---- Store ----
 
 function decodeStore(j: Json): Store.Store<Json> {
   const arr = asArr(j);
@@ -450,7 +443,6 @@ function opStoreWorldOf(input: Json): Json {
   return encodeWorld(Store.worldOfStore(decodeStore(input)));
 }
 
-// ---- Record ----
 
 function decodeCallRecord(j: Json): Record.CallRecord<Json, Json> {
   const declaration = strField(j, "declaration");
@@ -491,7 +483,6 @@ function opRecordHasEdge(input: Json): Json {
   return { holds: Record.hasEdge(earlier, later) };
 }
 
-// ---- Reconcile ----
 
 function decodeOptionBasis(j: Json): Record.BasisState {
   return j === null ? Record.noBasis() : Record.withBasis(decodeBasis(j));
@@ -544,7 +535,6 @@ function opReconcileCoherent(input: Json): Json {
   return { coherent: Reconcile.coherent(r) };
 }
 
-// ---- Request progression ----
 
 function decodeRequestPolicy(j: Json): Progression.RequestPolicy {
   const s = asStr(j);
@@ -935,7 +925,6 @@ function opRequestProgressionDeriveConcurrent(input: Json): Json {
   return encodeResourceDemand(Progression.deriveConcurrent(snapshot));
 }
 
-// ---- Dynamic admission ----
 
 function decodeEnvironmentSpecification(j: Json): Admission.EnvironmentSpecification {
   return { maxObservationAge: natField(j, "maxObservationAge") };
@@ -1087,7 +1076,6 @@ function opDynamicAdmissionAdmitDynamicRequest(input: Json): Json {
   return encodeDynamicAdmissionOutcome(Admission.admitDynamicRequest(admissionInput));
 }
 
-// ---- Step transition ----
 
 type AdvanceEval = (state: Json, input: Json) => Transition.Consumption<Json, Json>;
 
@@ -1142,7 +1130,6 @@ function opStepTransitionStep(input: Json): Json {
   return encodeStepTransition(Transition.step(state, inp, advanceEval(form), limit as Transition.PositiveLimit, cap as Transition.Capacity));
 }
 
-// ---- File effect ----
 
 function decodeNormalizedPath(j: Json): FileEffect.NormalizedPath {
   const root = asBool(objVal(j, "root"));
@@ -1321,7 +1308,6 @@ function opFileEffectReplace(input: Json): Json {
   return encodeReplaceResult(FileEffect.replace({ command, path, world, digests, state, observedAt }));
 }
 
-// ---- Surface inventory ----
 
 const surfaceEntries: readonly (readonly [string, readonly string[]])[] = [
   ["core", ["lookup", "bump", "commandOf", "apply"]],
@@ -1345,7 +1331,6 @@ function surfaceJson(): Json {
   };
 }
 
-// ---- Dispatch ----
 
 function dispatch(feature: string, operation: string, input: Json): Json {
   const key = `${feature}.${operation}`;

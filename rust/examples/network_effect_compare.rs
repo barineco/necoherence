@@ -205,8 +205,6 @@ fn dispatch(invocation: Value) -> Result<Value, String> {
     }
 }
 
-/// Lean replaces lone (unpaired) UTF-16 surrogate escapes with `\ufffd`
-/// before decoding; rewrite them the same way here so this lane matches.
 fn is_high_surrogate(code: u32) -> bool {
     (0xD800..=0xDBFF).contains(&code)
 }

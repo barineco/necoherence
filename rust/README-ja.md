@@ -55,7 +55,7 @@ fn decide(
 
 - 宣言の検査: 識別子の重複や、宣言にない型や定義への参照など、型と操作の宣言の誤りを検出する
 - 生成したコードのランタイム: 生成した Rust のコードが実行時に呼び出す、値の検証とコーデックの共通の処理
-- HTTP アダプター: ネットワーク副作用のリクエストを `ureq` で実行し、結果を観測として返す
+- HTTP アダプター: 任意の `http-adapter` feature が、ネットワーク副作用のリクエストを `ureq` で実行し、結果を観測として返す
 
 ## 型付きの遷移モデル
 
@@ -80,6 +80,20 @@ fn decide(
 cargo add necoherence
 ```
 
+既定の feature には、核のモデル、検証、コーデックが含まれます。
+純粋な `network_effect` のモデルは、既定の feature で利用できます。
+ネイティブの HTTP アダプターと、その通信の依存は、明示して有効にします。
+
+```bash
+cargo add necoherence --features http-adapter
+```
+
+WebAssembly で核を使う場合は、既定の feature のまま、次のコマンドでターゲットを検査します。
+
+```bash
+cargo check --lib --target wasm32-unknown-unknown --no-default-features
+```
+
 ## 開発時の検査
 
 次のコマンドで、フォーマットの検査、静的検査、テストを実行します。
@@ -88,6 +102,9 @@ cargo add necoherence
 cargo fmt --all -- --check
 cargo clippy --all-targets -- -D warnings
 cargo test --all-targets
+cargo clippy --all-targets --features http-adapter -- -D warnings
+cargo test --all-targets --features http-adapter
+cargo check --lib --target wasm32-unknown-unknown --no-default-features
 ```
 
 ## ライセンス

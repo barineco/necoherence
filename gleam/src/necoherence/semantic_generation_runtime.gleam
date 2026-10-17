@@ -5,8 +5,8 @@ import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/result
 import necoherence/exact_json as kdl
-import necoherence/http_adapter as adapter
 import necoherence/network_effect as network
+import necoherence/network_host as adapter
 import necoherence/semantic_composition as composition
 import necoherence/semantic_generation_values as values
 import necoherence/semantic_types as types
@@ -173,6 +173,7 @@ pub type FailureCause {
   BindingValue(condition: String)
   GuardMeaning(obligations: List(types.SemanticObligation))
   InvalidGuard(failure: types.ValueFailure)
+  GuardCertificateMismatch(condition: String)
   MissingGuard(guard: composition.GuardId)
   MissingProducer(producer: composition.ProducerRef)
   MissingBranch(condition: String)
@@ -674,6 +675,8 @@ fn guard_arm(
     Ok(arm) -> Ok(arm)
     Error(types.UnresolvedValue(obligations)) -> fail(GuardMeaning(obligations))
     Error(types.RejectedValue(failure)) -> fail(InvalidGuard(failure))
+    Error(types.CertificateMismatchValue(condition)) ->
+      fail(GuardCertificateMismatch(condition))
     Error(types.AcceptedValue) ->
       fail(BindingValue("guard returned no branch decision"))
   }
@@ -1028,16 +1031,22 @@ pub fn wrap_decode(
   {
     Error(_) -> Error(UnknownWrapper(wrapper_name))
     Ok(wrapper) ->
-      case value {
-        kdl.JsonValueObj([#(key, payload)]) if key == wrapper.key ->
-          case payload {
-            kdl.JsonValueStr(_) -> Ok(payload)
-            _ -> Error(WrongWrapperPayload(wrapper_name))
-          }
-        kdl.JsonValueObj(_) -> Error(MissingMember(wrapper.key))
-        _ -> Error(WrongValueKind("object"))
-      }
+      validation.wrapper_payload_text(profile, wrapper, value)
+      |> result.map(kdl.JsonValueStr)
+      |> result.map_error(fn(_) { WrongWrapperPayload(wrapper_name) })
   }
+}
+
+pub fn ordered_members(
+  members: List(#(String, kdl.JsonValue)),
+  member_order: List(String),
+) -> List(#(String, kdl.JsonValue)) {
+  list.append(
+    list.flat_map(list.unique(member_order), fn(key) {
+      list.filter(members, fn(member) { member.0 == key })
+    }),
+    list.filter(members, fn(member) { !list.contains(member_order, member.0) }),
+  )
 }
 
 pub fn with_member(
@@ -1061,36 +1070,7 @@ pub fn class_of(
   profile: types.SemanticProfile,
   value: kdl.JsonValue,
 ) -> types.ObjectClass {
-  case value, profile.tag {
-    kdl.JsonValueObj(members), Some(tag) ->
-      case list.key_find(members, tag.key) {
-        Ok(kdl.JsonValueStr(value)) ->
-          case list.find(tag.sealed, fn(form) { form.tag == value }) {
-            Ok(form) -> types.SealedObject(form)
-            Error(_) -> wrapper_or_ordinary(profile, members)
-          }
-        _ -> wrapper_or_ordinary(profile, members)
-      }
-    kdl.JsonValueObj(members), None -> wrapper_or_ordinary(profile, members)
-    _, _ -> types.OrdinaryObjectClass
-  }
-}
-
-fn wrapper_or_ordinary(
-  profile: types.SemanticProfile,
-  members: List(#(String, kdl.JsonValue)),
-) -> types.ObjectClass {
-  case
-    list.find(profile.wrappers, fn(wrapper) {
-      case members {
-        [#(key, _)] -> key == wrapper.key
-        _ -> False
-      }
-    })
-  {
-    Ok(wrapper) -> types.WrapperObject(wrapper)
-    Error(_) -> types.OrdinaryObjectClass
-  }
+  validation.object_class(profile, value)
 }
 
 fn value_kind(value: kdl.JsonValue) -> types.ValueKind {

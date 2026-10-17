@@ -12,7 +12,7 @@ pub fn labels_accept_multicharacter_separator_test() {
       2,
       Some(3),
       None,
-      types.Identifier("ab", "ab", None, 1, 2, []),
+      types.Identifier("ab", "ab", None, 1, Some(2), []),
     )
   let assert True = validation.recognizes(rule, "a::bb")
   let assert False = validation.recognizes(rule, "a:bb")

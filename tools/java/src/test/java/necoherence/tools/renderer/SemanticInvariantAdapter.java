@@ -48,33 +48,13 @@ public final class SemanticInvariantAdapter implements AutoCloseable {
     }
 
     private static WireValue contract(WireValue input) {
-        return obj("type_ref", f(input, "type_id"), "required", f(input, "required"), "nullable", f(input, "nullable"));
+        return obj("type_ref", typeReference(input), "required", f(input, "required"), "nullable", f(input, "nullable"));
     }
 
+    private static WireValue typeReference(WireValue input) { return TypeSignatures.typeReference(s(f(input, "type_id"))); }
+
     private static WireValue path(Context context, WireValue reference, WireValue value, ValueFailure failure) {
-        List<WireValue> result = new ArrayList<>();
-        for (String step : failure.path()) {
-            WireValue shape = reference == null ? null : context.resolve(reference);
-            while (shape != null && tag(shape).equals("TaggedUnion")) {
-                int branchIndex=context.selectBranch(context.index(reference),value);
-                reference=branchIndex<0?null:f(a(f(payload(shape),"branches")).get(branchIndex),"target");
-                shape = reference == null ? null : context.resolve(reference);
-            }
-            if (shape != null && tag(shape).equals("Array") || value instanceof ArrayValue) {
-                int index = Integer.parseInt(step);
-                result.add(num(BigInteger.valueOf(index)));
-                reference = shape != null && tag(shape).equals("Array") ? f(f(payload(shape), "item"),"type_ref") : null;
-                value = value instanceof ArrayValue array && index < array.items().size() ? array.items().get(index) : null;
-            } else {
-                result.add(str(step));
-                reference = null;
-                if (shape != null && tag(shape).equals("Product"))
-                    for (WireValue field : a(f(payload(shape), "fields")))
-                        if (s(f(field, "wire_name")).equals(step)) reference = f(f(field, "slot"), "type_ref");
-                value = value instanceof ObjectValue object ? object.get(step) : null;
-            }
-        }
-        return arr(result);
+        return arr(failure.path().stream().map(step -> tag(step).equals("Index") ? num(n(payload(step))) : payload(step)).toList());
     }
 
     private static WireValue condition(ValueFailure failure) {
@@ -207,9 +187,9 @@ public final class SemanticInvariantAdapter implements AutoCloseable {
         int maximum = n(f(input, "max_sample_length")).intValueExact();
         int fuel = n(f(input, "max_type_obligations")).intValueExact();
         int boundedFuel = Math.min(fuel, a(f(f(input, "library"), "nodes")).size() + 1);
-        SampleResult result = sampleValueFuel(context, f(input, "type_id"), boundedFuel, maximum);
+        SampleResult result = sampleValueFuel(context, typeReference(input), boundedFuel, maximum);
         boolean accepted = true;
-        int type = context.index(f(input, "type_id"));
+        WireValue type = typeReference(input);
         for (WireValue value : result.values()) {
             try { context.validate(type, value); }
             catch (ValueFailure failure) { accepted = false; break; }
@@ -220,7 +200,7 @@ public final class SemanticInvariantAdapter implements AutoCloseable {
     }
 
     private static String valueStatus(Context context, WireValue input) {
-        try { context.validate(context.index(f(input, "type_id")), f(input, "value")); return "Accepted"; }
+        try { context.validate(typeReference(input), f(input, "value")); return "Accepted"; }
         catch (ValueFailure failure) { return "Rejected"; }
     }
 
@@ -260,7 +240,7 @@ public final class SemanticInvariantAdapter implements AutoCloseable {
             case "samples" -> samples(context, input);
             case "projection" -> projection(context, input);
             case "value" -> {
-                int type = context.index(f(input, "type_id"));
+                WireValue type = typeReference(input);
                 WireValue value = f(input, "value");
                 try {
                     context.validate(type, value);
@@ -272,7 +252,7 @@ public final class SemanticInvariantAdapter implements AutoCloseable {
                     yield obj("id", id, "status", str("Rejected"),
                             "type_ref", failure.typeRef(),
                             "path", path(context, f(input, "type_id"), value, failure),
-                            "condition", condition(failure), "trace", arr(failure.referenceTrace()));
+                            "condition", condition(failure), "trace", arr(failure.referenceTrace().stream().map(ref -> f(ref, "definition_name")).toList()));
                 }
             }
             case "grapheme" -> {

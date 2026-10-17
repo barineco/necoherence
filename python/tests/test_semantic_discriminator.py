@@ -3,13 +3,13 @@
 
 import pytest
 
-from necoherence.signature_values import ValueFailure, selectBranch
+from necoherence.signature_values import ValueContext, ValueFailure, selectBranch
 from necoherence.type_signatures import checkLibrary
 from v4_samples import library
 
 
 def test_internal_tag_selects_the_declared_branch():
-    checked=checkLibrary(library()); graph={"profile":checked.value["profile"],"nodes":checked.value["nodes"]}
+    checked=checkLibrary(library()); graph=ValueContext.from_signature_nodes(checked.value["profile"],checked.value["nodes"])
     assert selectBranch(graph,"union",{"kind":"sealed","label":"x"})==0
     with pytest.raises(ValueFailure) as caught: selectBranch(graph,"union",{"kind":"other"})
     assert caught.value.condition=="NoBranchSelected"

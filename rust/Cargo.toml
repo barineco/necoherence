@@ -3,7 +3,7 @@
 
 [package]
 name = "necoherence"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 license = "MIT"
 description = "Revision-aware state transition utilities"
@@ -12,10 +12,15 @@ rust-version = "1.88"
 [lib]
 path = "src/lib.rs"
 
+[features]
+default = []
+http-adapter = ["dep:ureq", "dep:ureq-proto"]
+
 [dependencies]
 num-bigint = "0.4"
 num-traits = "0.2"
-ureq = "2.12"
+ureq = { version = "3.4", features = ["platform-verifier"], optional = true }
+ureq-proto = { version = "0.6", optional = true }
 serde_json = { version = "1", features = ["arbitrary_precision"] }
 serde = { version = "1", features = ["derive"] }
 sha2 = "0.10"
@@ -23,6 +28,18 @@ sha2 = "0.10"
 [dev-dependencies]
 proptest = "1"
 tempfile = "3"
+
+[[test]]
+name = "http_adapter_framing"
+required-features = ["http-adapter"]
+
+[[test]]
+name = "network_effect_http_smoke"
+required-features = ["http-adapter"]
+
+[[test]]
+name = "network_effect_progression"
+required-features = ["http-adapter"]
 
 [lints.rust]
 unsafe_code = "forbid"

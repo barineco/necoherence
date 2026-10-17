@@ -1,8 +1,6 @@
 // SPDX-FileCopyrightText: 2026 barineco
 // SPDX-License-Identifier: MIT
 
-// Calls whose declarations state their required input fields. Projection checks
-// field-name presence only against a Request<Req>'s carried field names.
 
 export interface Request<Req> {
   readonly payload: Req;

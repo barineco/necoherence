@@ -42,6 +42,5 @@ export {
   worldOfStore,
 } from "./store.js";
 export * as networkEffect from "./network-effect.js";
-export * as httpAdapter from "./http-adapter.js";
 export * as semanticSignatures from "./semantic_signatures.js";
 export * as semanticValues from "./semantic_values.js";

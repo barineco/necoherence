@@ -56,7 +56,50 @@ public final class SemanticJavaTargetTest {
         } finally {
             try (var paths = Files.walk(temp)) { for (Path path : paths.sorted(Comparator.reverseOrder()).toList()) Files.delete(path); }
         }
+        verifyRuntimeName("_Runtime", "n");
+        verifyRuntimeName("FieldDeclarations", "_Runtime");
+        verifyRuntimeName("_Runtime", "_Runtime_");
         System.out.println("Java target: named-package consumer compiled and executed; invalid targets and collisions rejected");
+    }
+
+    private static void verifyRuntimeName(String targetName, String fieldName) throws Exception {
+        WireValue library = necoherence.semantic.SemanticLibraryFixture.library();
+        var nodes = new java.util.ArrayList<WireValue>();
+        for (WireValue node : a(f(library, "nodes"))) {
+            if (s(f(node, "id")).equals("product")) {
+                WireValue product = payload(f(node, "shape"));
+                var fields = new java.util.ArrayList<WireValue>();
+                for (WireValue field : a(f(product, "fields"))) {
+                    fields.add(s(f(field, "wire_name")).equals("n") ? TypeSignatures.replace(field, "wire_name", str(fieldName)) : field);
+                }
+                node = TypeSignatures.replace(node, "shape", variant("Product", TypeSignatures.replace(product, "fields", arr(fields))));
+            }
+            nodes.add(node);
+        }
+        library = TypeSignatures.replace(library, "nodes", arr(nodes));
+        var basis = TypeSignatures.basis(encodeWire(library), encodeWire(necoherence.semantic.SemanticLibraryFixture.entries));
+        var result = Renderer.render(basis, encodeWire(SemanticSignatureTest.exchange(library, basis)),
+                new Renderer.JavaTarget("example.app.generated", targetName));
+        if (!(result instanceof Renderer.Rendered rendered)) throw new AssertionError(result);
+        Path temp = Files.createTempDirectory("semantic-java-name-");
+        try {
+            Path source = temp.resolve(targetName + ".java");
+            Files.writeString(source, rendered.source());
+            GeneratedJavaTestSupport.compile(temp, source);
+            String wire = "{\"" + fieldName + "\":1}";
+            String literal = encodeWire(str(wire));
+            Path consumer = temp.resolve("Consumer.java");
+            Files.writeString(consumer, "package example.app.consumer;\nimport example.app.generated." + targetName + ";\n"
+                    + "public final class Consumer { public static void main(String[] args) throws Exception { "
+                    + "var value=" + targetName + ".TypeProduct.decode(" + literal + "); "
+                    + "if(!value." + fieldName + "().equals(java.math.BigInteger.ONE) || !value.encode().equals(" + literal + ")) throw new AssertionError(\"name-preserving codec\"); } }\n");
+            GeneratedJavaTestSupport.compile(temp, consumer);
+            try (var loader = new URLClassLoader(new java.net.URL[]{temp.toUri().toURL()}, SemanticJavaTargetTest.class.getClassLoader())) {
+                Class.forName("example.app.consumer.Consumer", true, loader).getMethod("main", String[].class).invoke(null, (Object)new String[0]);
+            }
+        } finally {
+            try (var paths = Files.walk(temp)) { for (Path path : paths.sorted(Comparator.reverseOrder()).toList()) Files.delete(path); }
+        }
     }
 
     private static void reject(Renderer.RenderResult result, String path) {

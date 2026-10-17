@@ -1,11 +1,6 @@
 # SPDX-FileCopyrightText: 2026 barineco
 # SPDX-License-Identifier: MIT
 
-"""Runtime-generated invariant inputs and implementation-independent checks.
-
-Every request and permutation is constructed on each invocation. The public
-functions accept an ``Implementation`` from ``implementations``.
-"""
 from __future__ import annotations
 
 import itertools
@@ -33,7 +28,6 @@ def require(property_name: str, condition: bool, generated_input: Any, detail: s
 
 
 def permutations_upto4(values: Sequence[Any]) -> list[tuple[Any, ...]]:
-    """Return every order and assert the bounded factorial cardinality."""
     require("permutation_bound", len(values) <= 4, list(values), "more than four elements")
     result = list(itertools.permutations(values))
     require("permutation_count", len(result) == math.factorial(len(values)), list(values),
@@ -64,11 +58,6 @@ def _request(feature: str, operation: str, predicate: Callable[[Req], bool] | No
 
 
 def _run(impl: Any, property_name: str, requests: list[Req]) -> list[Any]:
-    """Evaluate independent invariant requests in ordered bounded queries.
-
-    Callers that model a state-threaded program invoke this once per dependent
-    request, so no dependency is separated from its preceding observation.
-    """
     values: list[Any] = []
     chunks = generator.contiguous_request_chunks(requests)
     for chunk_number, (start, chunk) in enumerate(chunks, start=1):
@@ -110,12 +99,6 @@ def _world(value: Any) -> list[dict[str, Any]] | None:
 
 
 def generated_sequences() -> list[list[Req]]:
-    """Finite state-threaded Core operation programs, including lengths zero–six.
-
-    Each following apply request receives the prior applied world's output as
-    its input world.  Reject/conflict cases deliberately retain their prior
-    world, which is also the closed-state transition for those outcomes.
-    """
     resource = generator.RESOURCE_IDS[1]
     initial = generator.world([(resource, 0)])
     sequence: list[Req] = []
@@ -123,13 +106,13 @@ def generated_sequences() -> list[list[Req]]:
         current = _clone(initial)
         program: list[Req] = []
         for step in range(length):
-            revision = 0 if step == 0 else step  # generated conflict after the first bump in model execution
+            revision = 0 if step == 0 else step
             program.append(generator.req("core", "apply", {
                 "world": _clone(current),
                 "command": generator.command(f"sequence-{length}-{step}", generator.basis(resource, revision)),
             }))
-            # The expected state fed to the next request is bumped only when the
-            # basis is current; stale steps preserve state.
+
+
             if revision == step:
                 current = generator.world([(resource, step + 1)])
         sequence.append(program)
@@ -153,7 +136,7 @@ def check_sequence_threading(impl: Any) -> None:
             next_world = _world(value)
             if next_world is not None:
                 previous_world = next_world
-    # Explicit branches close the success/reject/conflict classifications.
+
     branches = [_clone(r) for r in _requests("core", "apply")
                 if r["input"]["command"]["intent"] in {"intent0", "intent1", "intent2"}]
     require("outcome_classification", len(branches) == 3, branches,
@@ -170,7 +153,7 @@ def check_core_permutations(impl: Any) -> None:
     for size in range(1, 5):
         entries = [(resources[index], index) for index in range(size)]
         orders = permutations_upto4(entries)
-        # Apply an independent command to r0 exactly once for every insertion order.
+
         requests = [generator.req("core", "apply", {"world": generator.world(list(order)),
                     "command": generator.command("independent", generator.basis(resources[0], 0))}) for order in orders]
         values = _run(impl, "core_permutation", requests)
@@ -209,10 +192,10 @@ def check_store_permutations(impl: Any) -> None:
 def check_record_reconcile_permutations(impl: Any) -> None:
     resources = generator.RESOURCE_IDS[:4]
     bases: list[Any] = [generator.basis(resources[i], i) for i in range(4)]
-    # Duplicate r0 at a higher revision to demonstrate max selection.
+
     records = bases + [generator.basis(resources[0], 9), None]
-    # The declared four-element permutation bound applies to independently
-    # reconciled record/basis sets; use 4 records plus separately exercise unbased.
+
+
     selected = records[:4]
     values: list[Any] = []
     for order in permutations_upto4(selected):
@@ -224,9 +207,9 @@ def check_record_reconcile_permutations(impl: Any) -> None:
     maximum_request = generator.req("reconcile", "reconcile", {"bases": [bases[0], generator.basis(resources[0], 9), None],
                         "world": generator.world([(resources[0], 9)]), "dropped": "3"})
     maximum = _run(impl, "record_maximum_basis", [maximum_request])[0]
-    # A current maximum basis is absent from divergences, while an older basis
-    # would yield world_ahead.  Reconcile therefore proves max-selection by
-    # producing no divergence against revision 9 and retaining both counters.
+
+
+
     require("record_maximum_basis", maximum.get("divergences") == [] and maximum.get("unbased") == "1"
             and maximum.get("dropped") == "3", maximum_request,
             "maximum basis selection, unbased, or dropped count not retained", maximum)
@@ -238,7 +221,6 @@ def _by_operation(feature: str, operation: str, limit: int | None = None) -> lis
 
 
 def check_progression_admission_step_file(impl: Any) -> None:
-    """Property checks spanning policy progression, admission, step, and files."""
     progression = []
     for policy in ("latestWins", "fifo", "allExecute"):
         progression.append(_request("request_progression", "empty", lambda r, p=policy: r["input"]["policy"] == p))
@@ -250,15 +232,15 @@ def check_progression_admission_step_file(impl: Any) -> None:
     rendered = json.dumps(results, ensure_ascii=False).lower()
     for word in ("pending", "cancelcommand", "unknowncompletion"):
         require("request_progression_coverage", word in rendered, progression, f"missing {word} progression observation", results)
-    # all three derivations must produce an observable scalar result.
+
     require("request_progression_derivations", all(results[-i] is not None for i in range(1, 7)), progression,
             "derive pending/in-flight/concurrent missing result", results)
 
     admissions = _by_operation("dynamic_admission", "elideAdmissionProvenance") + _by_operation("dynamic_admission", "admitDynamicRequest")
     admission_values = _run(impl, "dynamic_admission", admissions)
     admission_text = json.dumps(admission_values, ensure_ascii=False).lower()
-    # A stale capacity observation closes as capacityObservationUnavailable;
-    # accepted admission remains the complementary branch.
+
+
     for word in ("capacityobservationunavailable", "applied"):
         require("dynamic_admission_coverage", word in admission_text, admissions, f"missing {word} admission observation", admission_values)
     require("dynamic_admission_provenance", "futureuses" not in json.dumps(admission_values[0]).lower(), admissions[0],
@@ -269,15 +251,15 @@ def check_progression_admission_step_file(impl: Any) -> None:
     step_text = json.dumps(step_values, ensure_ascii=False).lower()
     for word in ("reprocess", "capacity", "settled"):
         require("step_transition_coverage", word in step_text, steps, f"missing {word} step observation", step_values)
-    # The immediate two-output seed is ordered o0 then o1 and is an observable order contract.
+
     ordered = next((v for v in step_values if isinstance(v, dict) and v.get("outputs") == ["o0", "o1"]), None)
     require("step_output_order", ordered is not None, steps, "output order was not preserved", step_values)
 
     files = _by_operation("file_effect", "normalizePath") + _by_operation("file_effect", "read") + _by_operation("file_effect", "replace")
     file_values = _run(impl, "external_file_state", files)
     file_text = json.dumps(file_values, ensure_ascii=False).lower()
-    # Missing reads close as rejected and write failures as boundaryFailed;
-    # stale and unobserved states remain explicit result variants.
+
+
     for word in ("rejected", "stalebasis", "unobserved", "boundaryfailed"):
         require("external_file_state_coverage", word in file_text, files, f"missing {word} file-state observation", file_values)
 
@@ -291,12 +273,11 @@ def run_implementation_properties(impl: Any) -> None:
 
 
 def generated_differential_requests() -> list[Req]:
-    """One finite shared query covering all operation domains and sequences."""
     requests = generator.build_requests()
     for program in generated_sequences():
         requests.extend(program)
-    # Guarantee cancellation, expiration/stale capacity and reprocessing are in
-    # the same differential query without retaining expected JSON.
+
+
     requests += _by_operation("request_progression", "decideCancel")
     requests += _by_operation("dynamic_admission", "admitDynamicRequest")
     requests += _by_operation("step_transition", "step")

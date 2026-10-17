@@ -6,7 +6,8 @@ import { once } from "node:events";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import { describe, expect, it } from "vitest";
-import { httpAdapter, networkEffect } from "../src/index.js";
+import * as httpAdapter from "../src/index.js";
+import { networkEffect } from "necoherence";
 
 const { FetchHttpAdapter } = httpAdapter;
 const {

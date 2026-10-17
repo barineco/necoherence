@@ -36,6 +36,20 @@ import necoherence.progression.ExecutionHandle;
 
 /** Small asynchronous adapter around Java's standard HTTP client. */
 public final class JavaHttpAdapter implements AutoCloseable {
+    public necoherence.semantic.SemanticValues.HostAdapter semanticPort() {
+        return new necoherence.semantic.SemanticValues.HostAdapter() {
+            public NetworkEffect.StartObservation start(NetworkEffect.SendCommand command) {
+                return JavaHttpAdapter.this.start(command).observation();
+            }
+            public NetworkEffect.HostObservation observe(NetworkEffect.StartedAttempt started) {
+                return switch (JavaHttpAdapter.this.observe(started)) {
+                    case PollResult.Pending pending -> pending.observation();
+                    case PollResult.Delivered delivered -> delivered.observation();
+                    case PollResult.Closed closed -> closed.observation();
+                };
+            }
+        };
+    }
     interface MonotonicClockPort { NetworkEffect.MonotonicClockObservation now(); }
     interface CancellationPort { boolean cancel(NetworkEffect.AttemptIdentity attempt, ExecutionHandle handle); }
     interface WorkerFactory { ExecutorService create(NetworkEffect.PreparedAttempt prepared); }
@@ -241,7 +255,6 @@ public final class JavaHttpAdapter implements AutoCloseable {
         }
     }
 
-    /** Completion callback for the asynchronously dispatched exchange. */
     private void onExchangeComplete(Job job, HttpResponse<byte[]> response, Throwable error,
             AtomicBoolean responseHeadersReceived) {
         if (error == null) {

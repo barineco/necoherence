@@ -491,10 +491,25 @@ def _references(shape):
     return []
 
 
+def _definition_references(shape):
+    kind, spec = sum_tag(shape), payload(shape)
+    if kind in ("Value", "Message"):
+        return [spec]
+    if kind == "Operation":
+        return [
+            *[port["contract"]["type_id"] for port in spec["inputs"]],
+            *[port["contract"]["type_id"] for outcome in spec["outcomes"] for port in outcome["value_ports"]],
+            *[production["token_type"] for outcome in spec["outcomes"] for production in outcome["produced_resources"]],
+        ]
+    return []
+
+
 def checkLibrary(library):
     checked_profile=checkProfile(library["profile"]); reference=library["identity"]
     node_ids=[node["id"] for node in library["nodes"]]; definition_ids=[row["id"] for row in library["definitions"]]
     if library["schema"]!="ncoh-type-signatures@1" or not reference or not library["revision"] or not _unique(node_ids) or not _unique(definition_ids) or any(child not in node_ids for node in library["nodes"] for child in _references(node["shape"])): _fail(reference,"LB01",["library"])
+    if any(child not in node_ids for definition in library["definitions"] for child in _definition_references(definition["shape"])):
+        _fail(reference, "LB01", ["library"])
     wrappers=library["profile"]["wrappers"]; model=library["profile"]["tag"]
     nodes={node["id"]:node for node in library["nodes"]}
     context=ValueContext(_graph(library))
@@ -523,7 +538,7 @@ def checkLibrary(library):
                     tests=payload(branch["selector"]); keys=[test["key"] for test in tests]
                     if not _unique(keys) or any(sum_tag(test["test"])=="Format" and payload(test["test"]) not in {row["name"] for row in library["profile"]["format_bindings"]} for test in tests): _fail(reference,"LB09",["library"])
             if any(sum_tag(item["selector"])=="InternalTag" and sum_tag(nodes[item["target"]]["shape"]) not in ("Product","Sealed") for item in branches): _fail(reference,"LB11",["library"])
-            selectors=[json.dumps(item["selector"],sort_keys=True) for item in branches]
+            selectors=[json.dumps([item["selector"], item["wire_tag"]] if sum_tag(item["selector"])=="InternalTag" else item["selector"],sort_keys=True) for item in branches]
             if len(set(selectors))!=len(selectors): _fail(reference,"LB18",["library"])
         if kind=="Sealed":
             form=None if model is None else next((row for row in model["sealed"] if row["tag"]==spec["tag"]),None)
@@ -575,11 +590,31 @@ def _signature_ref(type_id):
 
 
 
+def _semantic_shape(shape):
+    shape = copy.deepcopy(shape)
+    kind, spec = sum_tag(shape), payload(shape)
+    def slot(contract):
+        return {**{key: item for key, item in contract.items() if key != "type_id"},
+                "type_ref": _signature_ref(contract["type_id"])}
+    if kind == "Product":
+        spec["fields"] = [{**field, "slot": slot(field["slot"])} for field in spec["fields"]]
+        if sum_tag(spec["extras"]) == "Allow":
+            extras = payload(spec["extras"])
+            extras["value"] = slot(extras["value"])
+    elif kind == "Array":
+        spec["item"] = slot(spec["item"])
+    elif kind == "Alias":
+        spec["target"] = _signature_ref(spec["target"])
+    elif kind == "TaggedUnion":
+        spec["branches"] = [{**branch, "target": _signature_ref(branch["target"])} for branch in spec["branches"]]
+    return shape
+
+
 def _graph(library):
     return {
         "profile": copy.deepcopy(library["profile"]),
         "nodes": [
-            {"id": node["id"], "reference": _signature_ref(node["id"]), "shape": copy.deepcopy(node["shape"])}
+            {"id": node["id"], "reference": _signature_ref(node["id"]), "shape": _semantic_shape(node["shape"])}
             for node in library["nodes"]
         ],
         "definitions": copy.deepcopy(library["definitions"]),

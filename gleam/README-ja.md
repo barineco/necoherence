@@ -52,7 +52,10 @@ pub fn decide(expected, sources, trusted, input, library_wire, value) {
 
 - 宣言の検査: 識別子の重複や、宣言にない型や定義への参照など、型と操作の宣言の誤りを検出する
 - 生成したコードのランタイム: 生成した Gleam のコードが実行時に呼び出す、値の検証とコーデックの共通の処理
-- HTTP アダプター: ネットワーク副作用のリクエストを `gleam_httpc` で実行し、結果を観測として返す
+
+任意の [HTTP アダプター](../gleam-http-adapter/) は、独立したパッケージでネットワーク副作用のコマンドを実行します。
+
+- アダプターの HTTP クライアント: `gleam_httpc`
 
 ## 型付きの遷移モデル
 

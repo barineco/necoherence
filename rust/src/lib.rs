@@ -10,6 +10,7 @@ pub mod call;
 pub mod core;
 pub mod dynamic_admission;
 pub mod file_effect;
+#[cfg(feature = "http-adapter")]
 pub mod http_adapter;
 pub mod iteration;
 pub mod network_effect;
@@ -19,6 +20,7 @@ pub mod request_progression;
 pub mod step_transition;
 pub mod store;
 
+mod default_materialization;
 pub mod exact_json;
 pub mod semantic_codegen_runtime;
 pub mod semantic_composition;

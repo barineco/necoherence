@@ -159,7 +159,10 @@ Functions to call:
 // generator
 necoherence_tools::renderer::render_signature_exchange(
     expected: &SignatureGenerationBasis, text: &str) -> Result<String, RenderFailure>
-necoherence_tools::renderer::render(checked: &CheckedGeneration) -> Result<String, RenderFailure>
+necoherence_tools::renderer::render_signature_composition(
+    expected: &SignatureGenerationBasis, text: &str) -> Result<String, RenderFailure>
+necoherence_tools::renderer::render_checked(checked: &CheckedLibrary) -> Result<String, RenderFailure>
+necoherence_tools::renderer::render_generation(input: &SignatureGenerationInput) -> Result<String, RenderFailure>
 
 // solver
 necoherence_tools::typed_mapping_solver::check_reachability(input: &SolverInput) -> Result<ReachabilityResult, SolverFailure>
@@ -168,7 +171,114 @@ necoherence_tools::typed_mapping_solver::check_well_foundedness(input: &SolverIn
 necoherence_tools::composition_search::derive(prepared: &PreparedCompositionInput) -> Result<CompositionDecision, CompositionEngineFailure>
 ```
 
-The function `render` takes an input document that has already been checked.
+`render_checked` takes a type library that `check_library` has already checked, and renders its types and
+codecs. `render_generation` takes a signature generation input directly: it checks the input's type library
+with `check_library`, and when the input's `composition` field is present, it additionally admits the input
+against its own declared basis with `admit_signature_generation`. It renders the full output: types, codecs,
+operations, and the composition fragment when `composition` is present.
+
+`render_signature_composition` takes the same two inputs as `render_signature_exchange` and renders only the
+composition fragment, for a document whose `composition` field is present. The fragment reuses the native
+types and the `Context` type that a prior call to `render_library` or
+`render_checked` already generated for the same declaration set; that native type module is generated once.
+
+The caller nests the whole fragment text, unchanged, inside its own module named for the recipe, for example
+`pub mod recipe_a { use super::*; /* fragment text */ }`, placed inside that one generated module. The
+fragment's own inner module keeps the name `composed`, together with its matching `pub use composed::*;`; the
+caller's module is an additional outer layer around it.
+
+`render_library`/`render_checked` emit the
+`Context` type and its constructor `Context::new(generation: &GenerationContext) -> Self`, which takes an
+already-admitted `GenerationContext`. `render_generation` additionally emits a ready-made
+`generation_context()` factory as part of its output. A caller that renders types and composition fragments
+separately builds the `GenerationContext` itself, with the runtime function
+`necoherence::semantic_exchange::signature_generation_context(expected: &SignatureGenerationBasis, text: &str)
+-> Result<GenerationContext, GenerationFailure>`.
+
+The composition fragment exposes:
+
+```rust
+pub struct CompositionInput { /* one field per argument input port */ }
+pub struct CompositionOutput { /* one field per goal output port */ }
+pub enum DeclaredFailure { /* one variant per declared failure embedding */ }
+pub enum CompositionOutcome {
+    Success(CompositionOutput),
+    DeclaredFailure(DeclaredFailure),
+}
+```
+
+Each field of `CompositionInput`, `CompositionOutput`, and each
+`DeclaredFailure` payload has the port's native type, wrapped in `Option<_>` when the port is optional and in
+`rt::Nullable<_>` when the port is nullable; both wrappers apply together when a port has both properties.
+
+A `Providers` method's name is `site_` followed by the normalized site identifier and the normalized function
+identity, joined with `_`:
+
+```rust
+pub trait Providers {
+    type Failure;
+    fn site_first_transform(
+        &mut self, input: site_first_transform_Input, resources: &[BoundResource],
+    ) -> Result<site_first_transform_Outcome, Self::Failure>;
+    // one such method per invocation site, with a port-specific input and outcome type
+}
+```
+
+Normalization replaces each non-ASCII-alphanumeric character with `_` and prefixes `_` when the first
+character is a digit, so a `.` in either identifier goes through the same normalization.
+
+```rust
+pub struct BoundResource {
+    pub reference: ResourceLotRef,
+    pub lot: ResourceLot,
+    pub requirement: ResourceRequirement,
+}
+pub enum CompositionFailure<E> {
+    Runtime { cause: rt::RuntimeFailure, provenance: BindingProvenance },
+    Provider { site: SiteId, function: FunctionRef, cause: E },
+}
+pub fn execute<P: Providers>(
+    cx: &Context<'_>, input: CompositionInput, providers: &mut P,
+) -> Result<CompositionOutcome, CompositionFailure<P::Failure>>
+```
+
+`BoundResource` carries these existing `semantic_composition` types as read-only metadata:
+
+```rust
+pub struct ResourceLot {
+    pub id: LotId,
+    pub token_type: TypeRef,
+    pub producer: ResourceProducer,
+    pub revision: Nat,
+    pub quantity: Nat,
+    pub provenance: String,
+}
+pub struct ResourceRequirement {
+    pub id: RequirementId,
+    pub token_type: TypeRef,
+    pub mode: BindingMode,
+    pub multiplicity: Nat,
+    pub required_revision: Nat,
+    pub identity: ResourceIdentityConstraint,
+}
+```
+
+`ResourceLot`'s `quantity` reflects any consumption by earlier steps inside the same
+`execute` call.
+
+`CompositionFailure::Runtime` carries a validation or representation failure that the generated code's own
+execution raises. `CompositionFailure::Provider` carries the host's own failure value unconverted.
+
+Byte and raw-body ports use the generated native `Vec<u8>` wrapper type, with the crate's canonical lossless
+byte codec running inside the generated code. This native-typed shape applies to the composition ports' own
+top-level fields.
+
+The type definitions that `render_checked` generates for `Shape::Product` types keep their own fields as
+`Option<rt::JsonValue>`. A composition port whose native type is a Product type carries that same
+representation inside it.
+
+The public compiled-consumer test exercises a full caller:
+[`tools/rust/tests/semantic_composition_execution.rs`](rust/tests/semantic_composition_execution.rs).
 
 ### Gleam
 

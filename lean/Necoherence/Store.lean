@@ -1,20 +1,7 @@
 -- SPDX-FileCopyrightText: 2026 barineco
 -- SPDX-License-Identifier: MIT
 
-/-
-Store<A>: a payload-owning container that projects onto `World`.
 
-This module does not re-prove `Core.lean`'s theorems (`outcome_closure`,
-`basis_retention`, `stale_conflict`, `apply_disjoint_comm`, etc.). It proves
-only that `Store`'s `observe` and `apply` commute with the projection
-`worldOf` onto `World`. Once that commutation holds, `World`'s existing
-theorems apply to `Store` through the projection without restatement.
-
-`Store` payload mutation is value replacement
-only: the command's `intent` is the new payload, replacing the old one in
-place while the matched entry's revision is bumped exactly as `World.bump`
-does.
--/
 
 import Necoherence.Core
 
@@ -77,7 +64,7 @@ def worldOf (s : Store α) : World :=
 
 end Store
 
-/-! ### Projection commutation -/
+
 
 /-- `observe`'s revision part agrees with `lookup` on the `worldOf` projection. -/
 theorem Store.observe_worldOf {α : Type} (s : Store α) (r : ResourceId) :

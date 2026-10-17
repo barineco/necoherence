@@ -1,8 +1,6 @@
 // SPDX-FileCopyrightText: 2026 barineco
 // SPDX-License-Identifier: MIT
 
-// Provenance of calls as data. Records never feed a later decision.
-// Callers hold the provenance value themselves; no sink or drop counter.
 
 import type { Basis } from "./core.js";
 
@@ -53,7 +51,6 @@ function sameResource(a: Basis, b: Basis): boolean {
   return a.resource.kind === b.resource.kind && a.resource.name === b.resource.name;
 }
 
-// An absent edge witnesses that two calls touched disjoint coordinates.
 export function hasEdge<IA, PA, IB, PB>(
   earlier: CallRecord<IA, PA>,
   later: CallRecord<IB, PB>

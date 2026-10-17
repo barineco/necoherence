@@ -1,7 +1,6 @@
 # SPDX-FileCopyrightText: 2026 barineco
 # SPDX-License-Identifier: MIT
 
-"""Property tests for the closed bounded single-owner transition."""
 
 from __future__ import annotations
 

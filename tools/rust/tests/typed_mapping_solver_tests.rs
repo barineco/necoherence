@@ -2,9 +2,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 #![allow(clippy::panic)]
-//! Integration checks for `necoherence_tools::typed_mapping_solver`: only the
-//! public module through the crate root, no copied solver logic.
-//! Fixtures mirror `NecoherenceToolsTests.TypedMappingSolverTest`.
 
 use necoherence::typed_mapping::{
     derive_enabled, BindingMode, ColoredToken, DeadlockResult, DeadlockWitness, DeclarationGraph,
@@ -114,7 +111,6 @@ fn input_ready() -> SolverInput {
     }
 }
 
-/// `check_reachability` finds the goal reachable by firing `T-RUN` once.
 #[test]
 fn check_reachability_finds_goal_by_firing_run() {
     let produced = ColoredToken {
@@ -132,8 +128,6 @@ fn check_reachability_finds_goal_by_firing_run() {
     assert_eq!(check_reachability(&input_ready()), Ok(expected));
 }
 
-/// An empty marking with no enabled transitions and an unmet goal is
-/// deadlocked.
 #[test]
 fn check_deadlock_reports_deadlocked_on_empty_marking() {
     let mut input = input_ready();
@@ -146,8 +140,6 @@ fn check_deadlock_reports_deadlocked_on_empty_marking() {
     assert_eq!(check_deadlock(&input), Ok(expected));
 }
 
-/// The acyclic ready-to-done graph is well-founded within the declared
-/// bound.
 #[test]
 fn check_well_foundedness_reports_acyclic_graph_well_founded() {
     match check_well_foundedness(&input_ready()) {
@@ -160,8 +152,6 @@ fn check_well_foundedness_reports_acyclic_graph_well_founded() {
     }
 }
 
-/// A declaration mismatch is the semantic `Invalid` value, never a
-/// `SolverFailure`.
 #[test]
 fn invalid_binding_reports_invalid_result() {
     let mut input = input_ready();
@@ -185,8 +175,6 @@ fn invalid_binding_reports_invalid_result() {
     );
 }
 
-/// A goal no bounded closure reaches is `Unreachable` carrying the
-/// fully-explored closure witness.
 #[test]
 fn unreachable_goal_carries_closure_witness() {
     let mut input = input_ready();
@@ -203,8 +191,6 @@ fn unreachable_goal_carries_closure_witness() {
     }
 }
 
-/// Hitting the search-step bound with a nonempty frontier is `Unknown`,
-/// never `Unreachable`.
 #[test]
 fn bound_exhaustion_reports_unknown() {
     let mut input = input_ready();
@@ -223,8 +209,6 @@ fn bound_exhaustion_reports_unknown() {
     );
 }
 
-/// A detected cycle whose resource measure does not decrease is the
-/// `NotWellFounded` witness; a cycle alone is no evidence either way.
 #[test]
 fn non_decreasing_cycle_reports_not_well_founded() {
     let p_a = TypedPlace {
@@ -345,8 +329,6 @@ fn bind(tid: &str, name: &str, place: &str, ident: &str, mode: BindingMode) -> I
     }
 }
 
-/// A convergent diamond where two paths converge on the same marking,
-/// so the marking graph is a DAG with no back edge.
 fn conv_transitions() -> Vec<TypedTransition> {
     vec![
         TypedTransition {
@@ -457,8 +439,6 @@ fn input_conv() -> SolverInput {
     }
 }
 
-/// A marking reached by two distinct paths is a convergence edge, not
-/// a cycle: the convergent DAG is `WellFounded` with no cycle path.
 #[test]
 fn convergent_dag_is_well_founded() {
     match check_well_foundedness(&input_conv()) {
@@ -471,8 +451,6 @@ fn convergent_dag_is_well_founded() {
     }
 }
 
-/// The closure witness records each explored marking exactly once:
-/// the convergent marking is enqueued and reported a single time.
 #[test]
 fn closure_witness_records_distinct_markings() {
     match check_reachability(&input_conv()) {
@@ -493,8 +471,6 @@ fn closure_witness_records_distinct_markings() {
     }
 }
 
-/// Exceeding the declared `max_bindings` is
-/// `Unknown(BindingBoundExhausted(_))`, never `Unreachable` or settled.
 #[test]
 fn binding_bound_exhaustion_reports_unknown() {
     let mut input = input_ready();
@@ -519,8 +495,6 @@ fn binding_bound_exhaustion_reports_unknown() {
     );
 }
 
-/// An output place outside the declared place set is an `Invalid`
-/// dependency mismatch, not a marking-minting success.
 #[test]
 fn undeclared_output_place_is_invalid() {
     let mut input = input_ready();
@@ -549,8 +523,6 @@ fn undeclared_output_place_is_invalid() {
     );
 }
 
-/// A failure place outside the declared place set is equally an
-/// `Invalid` dependency mismatch.
 #[test]
 fn undeclared_failure_place_is_invalid() {
     let mut input = input_ready();

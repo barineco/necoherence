@@ -1,7 +1,6 @@
 # SPDX-FileCopyrightText: 2026 barineco
 # SPDX-License-Identifier: MIT
 
-"""Tests for the payload-owning store."""
 
 from __future__ import annotations
 

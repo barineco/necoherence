@@ -2,23 +2,6 @@
 # SPDX-FileCopyrightText: 2026 barineco
 # SPDX-License-Identifier: MIT
 
-"""Axiom check of the semantic modules: every theorem and definition stays within the allowed axioms.
-
-The check builds the semantic modules of lean/ (MIT) and of tools/lean (AGPL, the renderer, the derivation and
-the generate functions) with Lake, lists the theorem and definition constants of each
-module from the Lean environment, takes the axioms of each one with Lean.collectAxioms (the set that
-`#print axioms` prints) and requires that set to lie within propext, Classical.choice and Quot.sound.
-A declaration that uses `sorry` depends on sorryAx and is reported as such. The check also requires the
-soundness theorems of the witness checkers and the checker entry points to be present, so that a removed or
-renamed property fails the check instead of passing it by absence. The declarations of tools/lean
-are required under their NecoherenceTools names, and those names must be absent from the modules of lean/.
-
-It prints one JSON object: an ok result with the counts and the axioms of the required declarations, or a
-failure that names the offending declarations. The exit status is 0 for an ok result and 1 for a failure.
-No count or expected value is stored besides the names of the required declarations.
-
-Usage: python3 comparison/declaration/semantic_axioms.py [--lean-dir DIR] [--tools-lean-dir DIR]
-"""
 
 from __future__ import annotations
 

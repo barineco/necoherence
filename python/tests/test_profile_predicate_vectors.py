@@ -157,7 +157,7 @@ MEANING_CASES = [
 def test_meaning_predicates_match_lean_representatives(predicate, profile_change, shape, value):
     profile = valid_profile()
     profile_change(profile)
-    context = ValueContext({"profile": profile, "nodes": [node("subject", shape)]})
+    context = ValueContext.from_signature_nodes(profile, [node("subject", shape)])
     with pytest.raises(MeaningFailure) as caught:
         context.validate("subject", value)
     assert caught.value.predicate == predicate
@@ -195,6 +195,27 @@ def test_library_predicates_match_lean_representatives(predicate, value):
     with pytest.raises(DeclarationFailure) as caught:
         checkLibrary(value)
     assert caught.value.predicate == predicate
+
+
+def test_internal_tag_selection_identity_preserves_other_selector_duplicates():
+    profile = valid_profile()
+    profile["tag"] = {"key": "$type", "format": None, "sealed": []}
+    base = [unit_node(), node("tag-value", variant("String", string_spec())),
+            product("a", [field("$type", "tag-value")]),
+            product("b", [field("$type", "tag-value")])]
+    branches = [branch("a", "com.example.a", variant("InternalTag")),
+                branch("b", "com.example.b", variant("InternalTag"))]
+    subject = library_with([*base, union(branches)], profile)
+    checkLibrary(subject)
+    context = ValueContext.from_signature_nodes(profile, subject["nodes"])
+    for tag in ("com.example.a", "com.example.b"):
+        context.validate("union", {"$type": tag})
+    for selector in (variant("Kind", variant("Null")),
+                     variant("MemberShape", [{"key": "key", "test": variant("Absent")}])):
+        duplicate = library_with([*base, union([{**item, "selector": selector} for item in branches])], profile)
+        with pytest.raises(DeclarationFailure) as caught:
+            checkLibrary(duplicate)
+        assert caught.value.predicate == "LB18"
 
 
 def invalid_profile_library():

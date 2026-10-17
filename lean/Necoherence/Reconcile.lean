@@ -1,14 +1,7 @@
 -- SPDX-FileCopyrightText: 2026 barineco
 -- SPDX-License-Identifier: MIT
 
-/-
-Reconcile a recorded call history against the world it should have produced.
 
-Mirrors the Rust and TypeScript reconciliation semantics: for each resource
-named by a basis in the input, take the highest recorded revision seen for
-that resource across all inputs, then compare that revision against the
-world's own revision.
--/
 
 import Necoherence.Core
 
@@ -32,7 +25,7 @@ structure Reconciliation where
 def coherent (r : Reconciliation) : Bool :=
   r.divergences.isEmpty && r.unbased == 0 && r.dropped == 0
 
-/-! ### Per-resource maximum recorded revision -/
+
 
 /-- Fold one input entry into the running maximum revision for resource `r`. -/
 def mergeStep (r : ResourceId) (acc : Option Revision) (mb : Option Basis) : Option Revision :=
@@ -198,7 +191,7 @@ theorem maxRevision_attained (r : ResourceId) (bases : List (Option Basis)) (v :
   · exact absurd hleft (by simp)
   · exact hright
 
-/-! ### Resources named by the input, in first-appearance order -/
+
 
 /-- Fold one input entry into the accumulated distinct resource list. -/
 def resourceStep (acc : List ResourceId) (mb : Option Basis) : List ResourceId :=
@@ -312,7 +305,7 @@ theorem resourcesOf_perm {bases₁ bases₂ : List (Option Basis)} (h : bases₁
   · have ha2 : a ∉ resourcesOf bases₂ := fun h' => ha ((hmem a).mpr h')
     simp [ha, ha2]
 
-/-! ### Comparing a recorded revision against the world -/
+
 
 /-- One resource's divergence between its recorded revision and the world,
 or `none` if the world agrees (equal, or exactly one step ahead: a
@@ -339,7 +332,7 @@ def reconcile (bases : List (Option Basis)) (world : World) (dropped : Nat) : Re
       | some recorded => divergenceAt world r recorded)
   { divergences := divergences, unbased := unbased, dropped := dropped }
 
-/-! ### Theorems -/
+
 
 /-- `unbased` counts exactly the entries with no basis, regardless of order. -/
 theorem unbased_perm {bases₁ bases₂ : List (Option Basis)} (h : bases₁.Perm bases₂) :

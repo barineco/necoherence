@@ -2172,6 +2172,64 @@ fn cause(
   }
 }
 
+fn production_text(
+  value: json.JsonValue,
+  field: String,
+) -> Result(String, Failure) {
+  case value {
+    json.JsonValueStr(text) -> Ok(text)
+    _ -> Error(Wire(decode.DecodeFailure([field], "string required")))
+  }
+}
+
+fn production_natural(
+  value: json.JsonValue,
+  field: String,
+) -> Result(Int, Failure) {
+  let fail = fn(reason) { Error(Wire(decode.DecodeFailure([field], reason))) }
+  case value {
+    json.JsonValueStr(text) ->
+      case int.parse(text) {
+        Ok(number) ->
+          case int.to_string(number) == text && number >= 0 {
+            True -> Ok(number)
+            False -> fail("canonical decimal integer")
+          }
+        Error(_) -> fail("decimal integer required")
+      }
+    _ -> fail("integer must be a decimal string")
+  }
+}
+
+fn production(
+  value: json.JsonValue,
+  source: types.SourceRef,
+) -> Result(composition.ResourceProduction, Failure) {
+  use _ <- result.try(
+    object(value, ["id", "token_type", "revision", "quantity", "provenance"]),
+  )
+  use type_id <- result.try(get(value, "token_type", identifier))
+  use id <- result.try(
+    get(value, "id", fn(value) { production_text(value, "id") }),
+  )
+  use revision <- result.try(
+    get(value, "revision", fn(value) { production_natural(value, "revision") }),
+  )
+  use quantity <- result.try(
+    get(value, "quantity", fn(value) { production_natural(value, "quantity") }),
+  )
+  use provenance <- result.try(
+    get(value, "provenance", fn(value) { production_text(value, "provenance") }),
+  )
+  Ok(composition.ResourceProduction(
+    composition.ProductionId(id),
+    reference(source, type_id),
+    revision,
+    quantity,
+    provenance,
+  ))
+}
+
 fn outcome(
   value: json.JsonValue,
   source: types.SourceRef,
@@ -2198,23 +2256,7 @@ fn outcome(
   ))
   use resources <- result.try(
     get(value, "produced_resources", fn(value) {
-      array(value, fn(value) {
-        use _ <- result.try(
-          object(value, [
-            "id",
-            "token_type",
-            "revision",
-            "quantity",
-            "provenance",
-          ]),
-        )
-        use id <- result.try(get(value, "token_type", identifier))
-        use wire <- result.try(old_reference_wire(reference(source, id)))
-        old(
-          replace(value, "token_type", wire),
-          decode.decode_resource_production,
-        )
-      })
+      array(value, fn(value) { production(value, source) })
     }),
   )
   use _ <- result.try(unique(
@@ -2536,7 +2578,7 @@ pub fn decode_library_value(
   ))
   use definitions <- result.try(
     get(value, "definitions", fn(value) {
-      array(value, fn(value) { definition(value, source, sources) })
+      array(value, fn(value) { definition(value, type_source, sources) })
     }),
   )
   use _ <- result.try(unique(

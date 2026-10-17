@@ -394,17 +394,15 @@ fn render_type(
   })
   let function_name = lower(type_name)
   let payload_type = shape.0
-  let bytes = case node.shape {
-    types.BytesShape(_) | types.RawBodyShape(_) -> True
-    _ -> False
+  let wire_field = case node.shape {
+    types.BytesShape(_) | types.RawBodyShape(_) -> ", wire: Option(String)"
+    types.ProductShape(_) -> ", member_order: List(String)"
+    _ -> ""
   }
-  let wire_field = case bytes {
-    True -> ", wire: Option(String)"
-    False -> ""
-  }
-  let wire_argument = case bytes {
-    True -> ", None"
-    False -> ""
+  let wire_argument = case node.shape {
+    types.BytesShape(_) | types.RawBodyShape(_) -> ", None"
+    types.ProductShape(_) -> ", []"
+    _ -> ""
   }
   use default <- result.try(case shape_default(node.shape) {
     None -> Ok([])
@@ -503,7 +501,7 @@ fn render_type(
       <> "(context: Context, wire: String) -> Result("
       <> type_name
       <> ", ValueFailure) {",
-    "  use raw <- result.try(result.map_error(values.parse_wire(wire), fn(failure) { runtime.Wire("
+    "  use raw <- result.try(result.map_error(values.parse_unique_wire(wire), fn(failure) { runtime.Wire("
       <> ref_name(type_name)
       <> ", failure) }))",
     "  use defaulted <- result.try(result.map_error(validation.materialize_defaults(graph(context), "
@@ -549,9 +547,11 @@ fn render_scalar(
     types.BytesShape(_) | types.RawBodyShape(_) ->
       "use encoded <- result.try(case value.wire { Some(text) -> Ok(text) None -> result.map_error(native.encode_bytes(value.value), fn(_) { runtime.Representation("
       <> ref_name(type_name)
-      <> ", \"byte outside 0..255\") }) }) Ok(kdl.JsonValueStr(encoded))"
+      <> ", \"byte outside 0..255\") }) }) case graph(context).profile.bytes_policy { Some(types.BytesPolicy(wrapper: Some(name), ..)) -> result.map_error(runtime.wrap_encode(graph(context).profile, name, kdl.JsonValueStr(encoded)), fn(_) { runtime.Representation("
+      <> ref_name(type_name)
+      <> ", \"wrapper encode\") }) _ -> Ok(kdl.JsonValueStr(encoded)) }"
     types.UnitShape -> "Ok(kdl.JsonValueNull)"
-    types.UnknownShape(types.AnyValue) -> "Ok(value.value)"
+    types.UnknownShape(_) -> "Ok(value.value)"
     _ -> "representation(" <> ref_name(type_name) <> ")"
   }
   let decoded = case shape {
@@ -593,7 +593,9 @@ fn render_scalar(
           <> ") }"
       }
     types.BytesShape(_) | types.RawBodyShape(_) ->
-      "case value { kdl.JsonValueStr(text) -> { use bytes <- result.try(result.map_error(native.decode_bytes(text), fn(_) { runtime.Representation("
+      "use payload <- result.try(case graph(context).profile.bytes_policy { Some(types.BytesPolicy(wrapper: Some(name), ..)) -> result.map_error(runtime.wrap_decode(graph(context).profile, name, value), fn(_) { runtime.Representation("
+      <> ref_name(type_name)
+      <> ", \"wrapper decode\") }) _ -> Ok(value) }) case payload { kdl.JsonValueStr(text) -> { use bytes <- result.try(result.map_error(native.decode_bytes(text), fn(_) { runtime.Representation("
       <> ref_name(type_name)
       <> ", \"invalid base64\") })) Ok("
       <> type_name
@@ -606,7 +608,7 @@ fn render_scalar(
       <> "(Nil)) _ -> representation("
       <> ref_name(type_name)
       <> ") }"
-    types.UnknownShape(types.AnyValue) -> "Ok(" <> type_name <> "(value))"
+    types.UnknownShape(_) -> "Ok(" <> type_name <> "(value))"
     _ -> "representation(" <> ref_name(type_name) <> ")"
   }
   #(scalar_payload(shape), [], [
@@ -713,7 +715,7 @@ fn render_product(
       <> " }))"
     })
   let packed =
-    "  Ok(kdl.JsonValueObj(list.flatten(["
+    "  Ok(kdl.JsonValueObj(runtime.ordered_members(list.flatten(["
     <> string.join(
       list.append(
         list.map(fields, fn(field) {
@@ -728,7 +730,7 @@ fn render_product(
       ),
       ", ",
     )
-    <> "])))"
+    <> "]), value.member_order)))"
   let unpack_fields =
     list.map(fields, fn(field) {
       "      use "
@@ -756,7 +758,7 @@ fn render_product(
       list.append(list.map(fields, fn(field) { field.1 <> "_slot" }), ["extras"]),
       ", ",
     )
-    <> ")))"
+    <> "), list.map(members, fn(member) { member.0 })))"
   Ok(#(
     payload,
     declaration,

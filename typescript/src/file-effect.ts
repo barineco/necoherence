@@ -1,9 +1,6 @@
 // SPDX-FileCopyrightText: 2026 barineco
 // SPDX-License-Identifier: MIT
 
-// File effect as a pure state transition over an external file world.
-// This module never hashes bytes; it only compares digests fed in from
-// outside.
 
 import {
   apply,

@@ -1,19 +1,6 @@
 # SPDX-FileCopyrightText: 2026 barineco
 # SPDX-License-Identifier: MIT
 
-"""Compare the six implementations on the shared operation surface.
-
-Generates deterministic finite requests from declared value domains, sends
-the same evaluate query to Lean and the five other implementations over
-stdin, and compares their normalized JSON results structurally. Lean's
-output is produced on every run and compared like any other
-implementation's output.
-
-Usage:
-    python3 -m comparison.shared_operations.differential --surface
-    python3 -m comparison.shared_operations.differential --invariants
-    python3 -m comparison.shared_operations.differential
-"""
 
 from __future__ import annotations
 
@@ -51,8 +38,6 @@ def fail_invalid_mismatch(
 
 
 def _without_detail(res: Any) -> Any:
-    """Drop the parser-dependent ``failure.detail`` string so implementations
-    are compared on failure kind and structure, not wording."""
     if not isinstance(res, dict):
         return res
     failure = res.get("failure")
@@ -123,7 +108,6 @@ def run_surface_audit(implementations: list[Implementation]) -> None:
 
 
 def check_numeric_invalid(implementations: list[Implementation]) -> None:
-    """Numeric forms outside the decimal-natural protocol close as invalid."""
     resource = generator.RESOURCE_IDS[1]
     for bad in generator.INVALID_INTS:
         world = [{"resource": resource, "revision": bad}]

@@ -52,7 +52,10 @@ Besides the features listed in the [project overview](https://github.com/barinec
 
 - Declaration checking: detects errors in declarations of types and operations, such as duplicate identifiers and references to undeclared types or definitions
 - Runtime for generated code: the shared value validation and codec routines that generated Gleam code calls at run time
-- HTTP adapter: executes the requests of the network effect with `gleam_httpc` and returns the results as observations
+
+The optional [HTTP adapter](../gleam-http-adapter/) executes network-effect commands in a separate package.
+
+- Adapter's HTTP client: `gleam_httpc`
 
 ## Typed transition model
 

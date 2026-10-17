@@ -45,85 +45,85 @@ public final class PresetSemanticValuesTest {
     }
 
     private static Context context() {
-        WireValue bytes = obj("reference", str("bytes"), "shape", variant("Bytes", obj("minimum", NIL_VALUE, "maximum", NIL_VALUE)));
-        WireValue sealed = obj("reference", str("blob"), "shape",
+        WireValue bytes = obj("reference", TypeSignatures.typeReference("bytes"), "shape", variant("Bytes", obj("minimum", NIL_VALUE, "maximum", NIL_VALUE)));
+        WireValue sealed = obj("reference", TypeSignatures.typeReference("blob"), "shape",
                 fields("Sealed", obj("tag", str("blob"), "refinements", arr(List.of()))));
-        WireValue product = obj("reference", str("product"), "shape",
+        WireValue product = obj("reference", TypeSignatures.typeReference("product"), "shape",
                 variant("Product", obj("fields", arr(List.of()), "extras", variant("Reject"))));
-        WireValue tagged = obj("reference", str("tagged"), "shape",
+        WireValue tagged = obj("reference", TypeSignatures.typeReference("tagged"), "shape",
                 variant("TaggedUnion", obj("branches", arr(List.of(
-                        obj("target", str("product"), "wire_tag", str("blob"),
+                        obj("target", TypeSignatures.typeReference("product"), "wire_tag", str("blob"),
                                 "selector", variant("InternalTag")))))));
-        WireValue any = obj("reference", str("any"), "shape", variant("Unknown", variant("Any")));
-        WireValue ordinary = obj("reference", str("ordinary"), "shape",
+        WireValue any = obj("reference", TypeSignatures.typeReference("any"), "shape", variant("Unknown", variant("Any")));
+        WireValue ordinary = obj("reference", TypeSignatures.typeReference("ordinary"), "shape",
                 variant("Unknown", variant("OrdinaryObject")));
-        WireValue string = obj("reference", str("string"), "shape", variant("String", stringSpec()));
-        WireValue nullableStringArray = obj("reference", str("nullable-string-array"), "shape",
-                variant("Array", obj("item", obj("type_ref", str("string"), "nullable", TRUE),
+        WireValue string = obj("reference", TypeSignatures.typeReference("string"), "shape", variant("String", stringSpec()));
+        WireValue nullableStringArray = obj("reference", TypeSignatures.typeReference("nullable-string-array"), "shape",
+                variant("Array", obj("item", obj("type_ref", TypeSignatures.typeReference("string"), "nullable", TRUE),
                         "min_length", NIL_VALUE, "max_length", NIL_VALUE)));
-        WireValue stringArray = obj("reference", str("string-array"), "shape",
-                variant("Array", obj("item", obj("type_ref", str("string"), "nullable", FALSE),
+        WireValue stringArray = obj("reference", TypeSignatures.typeReference("string-array"), "shape",
+                variant("Array", obj("item", obj("type_ref", TypeSignatures.typeReference("string"), "nullable", FALSE),
                         "min_length", NIL_VALUE, "max_length", NIL_VALUE)));
-        WireValue anyArray = obj("reference", str("any-array"), "shape",
-                variant("Array", obj("item", obj("type_ref", str("any"), "nullable", FALSE),
+        WireValue anyArray = obj("reference", TypeSignatures.typeReference("any-array"), "shape",
+                variant("Array", obj("item", obj("type_ref", TypeSignatures.typeReference("any"), "nullable", FALSE),
                         "min_length", NIL_VALUE, "max_length", NIL_VALUE)));
-        WireValue anyMap = obj("reference", str("any-map"), "shape",
+        WireValue anyMap = obj("reference", TypeSignatures.typeReference("any-map"), "shape",
                 variant("Product", obj("fields", arr(List.of()), "extras",
                         fields("Allow", obj("key_format", NIL_VALUE,
-                                "value", obj("type_ref", str("any"), "nullable", FALSE))))));
-        WireValue integer = obj("reference", str("integer"), "shape",
+                                "value", obj("type_ref", TypeSignatures.typeReference("any"), "nullable", FALSE))))));
+        WireValue integer = obj("reference", TypeSignatures.typeReference("integer"), "shape",
                 variant("Integer", obj("domain", str("integer"), "minimum", NIL_VALUE,
                         "maximum", NIL_VALUE, "const_value", NIL_VALUE,
                         "enum_values", NIL_VALUE, "default_value", NIL_VALUE)));
-        WireValue integerMap = obj("reference", str("integer-map"), "shape",
+        WireValue integerMap = obj("reference", TypeSignatures.typeReference("integer-map"), "shape",
                 variant("Product", obj("fields", arr(List.of()), "extras",
                         fields("Allow", obj("key_format", NIL_VALUE,
-                                "value", obj("type_ref", str("integer"), "nullable", FALSE))))));
+                                "value", obj("type_ref", TypeSignatures.typeReference("integer"), "nullable", FALSE))))));
         return new Context(obj("profile", profile(), "nodes", arr(List.of(
                 bytes, sealed, product, tagged, any, ordinary, string, nullableStringArray,
                 stringArray, anyArray, anyMap, integer, integerMap))));
     }
 
     private static ValueFailure rejected(Context context, int type, WireValue value) {
-        return assertThrows(ValueFailure.class, () -> context.validate(type, value));
+        return assertThrows(ValueFailure.class, () -> context.validate(context.reference(type), value));
     }
     @Test void nullableStringArrayAcceptsNullElement() {
         Context context = context();
-        assertDoesNotThrow(() -> context.validate(context.index(str("nullable-string-array")),
+        assertDoesNotThrow(() -> context.validate(TypeSignatures.typeReference("nullable-string-array"),
                 arr(List.of(NIL_VALUE))));
     }
 
     @Test void nonNullableStringArrayRejectsNullElement() {
         Context context = context();
-        assertThrows(ValueFailure.class, () -> context.validate(context.index(str("string-array")),
+        assertThrows(ValueFailure.class, () -> context.validate(TypeSignatures.typeReference("string-array"),
                 arr(List.of(NIL_VALUE))));
     }
 
     @Test void nonNullableUnknownAnyElementsAcceptNull() {
         Context context = context();
-        assertDoesNotThrow(() -> context.validate(context.index(str("any-array")),
+        assertDoesNotThrow(() -> context.validate(TypeSignatures.typeReference("any-array"),
                 arr(List.of(NIL_VALUE))));
-        assertDoesNotThrow(() -> context.validate(context.index(str("any-map")),
+        assertDoesNotThrow(() -> context.validate(TypeSignatures.typeReference("any-map"),
                 obj("value", NIL_VALUE)));
     }
 
     @Test void nonNullableIntegerMapRejectsNullValue() {
         Context context = context();
         ValueFailure failure = assertThrows(ValueFailure.class,
-                () -> context.validate(context.index(str("integer-map")), obj("value", NIL_VALUE)));
-        assertEquals(List.of("value"), failure.path());
+                () -> context.validate(TypeSignatures.typeReference("integer-map"), obj("value", NIL_VALUE)));
+        assertEquals(List.of(variant("Field", str("value"))), failure.path());
     }
 
 
     @Test void sealedStringLeafAcceptsItsDeclaredWrapperAndFormat() {
         Context context = context();
         WireValue value = obj("$type", str("blob"), "ref", obj("$link", str("cid-value")));
-        assertDoesNotThrow(() -> context.validate(1, value));
+        assertDoesNotThrow(() -> context.validate(context.reference(1), value));
     }
 
     @Test void eitherBytesAlphabetAcceptsUnpaddedUrlSafeText() throws Exception {
         Context context = context();
-        assertArrayEquals(new byte[] {(byte) 0xfb, (byte) 0xff}, context.decodeBytes(0, str("-_8")).value());
+        assertArrayEquals(new byte[] {(byte) 0xfb, (byte) 0xff}, context.decodeBytes(context.reference(0), str("-_8")).value());
     }
 
     @Test void objectShapesApplyOneCommonTagValidation() {
@@ -131,23 +131,23 @@ public final class PresetSemanticValuesTest {
         for (int type : List.of(1, 2, 3, 4, 5)) {
             ValueFailure empty = rejected(context, type, obj("$type", str("")));
             assertEquals("InvalidTag", empty.condition());
-            assertEquals(List.of("$type"), empty.path());
+            assertEquals(List.of(variant("Field", str("$type"))), empty.path());
             ValueFailure nonString = rejected(context, type, obj("$type", TRUE));
             assertEquals("InvalidTag", nonString.condition());
-            assertEquals(List.of("$type"), nonString.path());
+            assertEquals(List.of(variant("Field", str("$type"))), nonString.path());
         }
     }
 
     @Test void malformedUnicodeTagIsInvalidDataModel() {
         ValueFailure failure = rejected(context(), 4, obj("$type", new StringValue("\ud800")));
         assertEquals("InvalidDataModel", failure.condition());
-        assertEquals(List.of("$type"), failure.path());
+        assertEquals(List.of(variant("Field", str("$type"))), failure.path());
     }
 
     @Test void unknownAnyValidatesTagsInNestedObjects() {
         ValueFailure failure = rejected(context(), 4, obj("nested", obj("$type", str(""))));
         assertEquals("InvalidTag", failure.condition());
-        assertEquals(List.of("nested", "$type"), failure.path());
+        assertEquals(List.of(variant("Field", str("nested")), variant("Field", str("$type"))), failure.path());
     }
 
     @Test void duplicateMembersPrecedeTagValidation() {

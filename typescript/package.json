@@ -1,12 +1,20 @@
 {
   "name": "necoherence",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Revision-aware state transition utilities for TypeScript",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
+    "./network-effect": {
+      "types": "./dist/network-effect.d.ts",
+      "default": "./dist/network-effect.js"
+    },
+    "./request-progression": {
+      "types": "./dist/request-progression.d.ts",
+      "default": "./dist/request-progression.js"
+    },
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"

@@ -1,0 +1,557 @@
+{
+  "schema": "sealed-leaf-sample-vectors@1",
+  "profile": {
+    "reference": {
+      "identity": "sealed-leaf-samples",
+      "revision": "1",
+      "content_digest": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "source_refs": [],
+    "integer_domains": [
+      {
+        "name": "integer",
+        "reference": {
+          "identity": "sealed-leaf-samples",
+          "revision": "1",
+          "content_digest": "0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "range": {
+          "tag": "Unbounded"
+        },
+        "forms": [
+          {
+            "tag": "Number"
+          }
+        ]
+      }
+    ],
+    "default_integer_domain": "integer",
+    "numbers": {
+      "decimals": false
+    },
+    "grapheme_rules": null,
+    "format_bindings": [
+      {
+        "name": "seven",
+        "reference": {
+          "identity": "sealed-leaf-samples",
+          "revision": "1",
+          "content_digest": "0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "rule": {
+          "tag": "Literal",
+          "value": "7"
+        }
+      },
+      {
+        "name": "non-empty",
+        "reference": {
+          "identity": "sealed-leaf-samples",
+          "revision": "1",
+          "content_digest": "0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "rule": {
+          "tag": "Not",
+          "value": {
+            "tag": "Literal",
+            "value": ""
+          }
+        }
+      }
+    ],
+    "bytes_policy": null,
+    "wrappers": [
+      {
+        "name": "reference",
+        "key": "$link",
+        "payload": {
+          "tag": "Text",
+          "value": null
+        }
+      }
+    ],
+    "tag": {
+      "key": "$type",
+      "format": null,
+      "sealed": [
+        {
+          "tag": "string-order",
+          "fields": [
+            {
+              "key": "const",
+              "required": true,
+              "leaf": {
+                "tag": "String",
+                "value": {
+                  "format": null,
+                  "lengths": [],
+                  "wrapper": null,
+                  "const_value": "k",
+                  "enum_values": [
+                    "k",
+                    "z"
+                  ],
+                  "examples": [
+                    "ex"
+                  ],
+                  "default_value": null
+                }
+              }
+            },
+            {
+              "key": "enum",
+              "required": true,
+              "leaf": {
+                "tag": "String",
+                "value": {
+                  "format": null,
+                  "lengths": [],
+                  "wrapper": null,
+                  "const_value": null,
+                  "enum_values": [
+                    "e1",
+                    "e2"
+                  ],
+                  "examples": [
+                    "ex"
+                  ],
+                  "default_value": null
+                }
+              }
+            },
+            {
+              "key": "example",
+              "required": true,
+              "leaf": {
+                "tag": "String",
+                "value": {
+                  "format": {
+                    "tag": "Named",
+                    "value": "non-empty"
+                  },
+                  "lengths": [],
+                  "wrapper": null,
+                  "const_value": null,
+                  "enum_values": null,
+                  "examples": [
+                    "ex1",
+                    "ex2"
+                  ],
+                  "default_value": null
+                }
+              }
+            },
+            {
+              "key": "format",
+              "required": true,
+              "leaf": {
+                "tag": "String",
+                "value": {
+                  "format": {
+                    "tag": "Named",
+                    "value": "seven"
+                  },
+                  "lengths": [],
+                  "wrapper": null,
+                  "const_value": null,
+                  "enum_values": null,
+                  "examples": [],
+                  "default_value": null
+                }
+              }
+            },
+            {
+              "key": "plain",
+              "required": true,
+              "leaf": {
+                "tag": "String",
+                "value": {
+                  "format": null,
+                  "lengths": [],
+                  "wrapper": null,
+                  "const_value": null,
+                  "enum_values": null,
+                  "examples": [],
+                  "default_value": null
+                }
+              }
+            },
+            {
+              "key": "optional",
+              "required": false,
+              "leaf": {
+                "tag": "String",
+                "value": {
+                  "format": null,
+                  "lengths": [],
+                  "wrapper": null,
+                  "const_value": "o",
+                  "enum_values": null,
+                  "examples": [],
+                  "default_value": null
+                }
+              }
+            }
+          ],
+          "extras": {
+            "tag": "Reject"
+          }
+        },
+        {
+          "tag": "integer-order",
+          "fields": [
+            {
+              "key": "const",
+              "required": true,
+              "leaf": {
+                "tag": "Integer",
+                "value": {
+                  "domain": null,
+                  "minimum": "1",
+                  "maximum": null,
+                  "const_value": "5",
+                  "enum_values": [
+                    "6",
+                    "5"
+                  ],
+                  "default_value": null
+                }
+              }
+            },
+            {
+              "key": "enum",
+              "required": true,
+              "leaf": {
+                "tag": "Integer",
+                "value": {
+                  "domain": null,
+                  "minimum": "1",
+                  "maximum": null,
+                  "const_value": null,
+                  "enum_values": [
+                    "7",
+                    "8"
+                  ],
+                  "default_value": null
+                }
+              }
+            },
+            {
+              "key": "minimum",
+              "required": true,
+              "leaf": {
+                "tag": "Integer",
+                "value": {
+                  "domain": null,
+                  "minimum": "2",
+                  "maximum": "9",
+                  "const_value": null,
+                  "enum_values": null,
+                  "default_value": null
+                }
+              }
+            },
+            {
+              "key": "maximum",
+              "required": true,
+              "leaf": {
+                "tag": "Integer",
+                "value": {
+                  "domain": null,
+                  "minimum": null,
+                  "maximum": "9",
+                  "const_value": null,
+                  "enum_values": null,
+                  "default_value": null
+                }
+              }
+            }
+          ],
+          "extras": {
+            "tag": "Reject"
+          }
+        },
+        {
+          "tag": "blob",
+          "fields": [
+            {
+              "key": "ref",
+              "required": true,
+              "leaf": {
+                "tag": "String",
+                "value": {
+                  "format": {
+                    "tag": "Named",
+                    "value": "seven"
+                  },
+                  "lengths": [],
+                  "wrapper": "reference",
+                  "const_value": null,
+                  "enum_values": null,
+                  "examples": [],
+                  "default_value": null
+                }
+              }
+            },
+            {
+              "key": "mimeType",
+              "required": true,
+              "leaf": {
+                "tag": "String",
+                "value": {
+                  "format": null,
+                  "lengths": [
+                    {
+                      "unit": {
+                        "tag": "Utf8Bytes"
+                      },
+                      "minimum": "1",
+                      "maximum": null
+                    }
+                  ],
+                  "wrapper": null,
+                  "const_value": null,
+                  "enum_values": null,
+                  "examples": [],
+                  "default_value": null
+                }
+              }
+            },
+            {
+              "key": "size",
+              "required": true,
+              "leaf": {
+                "tag": "Integer",
+                "value": {
+                  "domain": null,
+                  "minimum": "1",
+                  "maximum": null,
+                  "const_value": null,
+                  "enum_values": null,
+                  "default_value": null
+                }
+              }
+            }
+          ],
+          "extras": {
+            "tag": "Any"
+          }
+        },
+        {
+          "tag": "selected-value-rejected",
+          "fields": [
+            {
+              "key": "code",
+              "required": true,
+              "leaf": {
+                "tag": "String",
+                "value": {
+                  "format": {
+                    "tag": "Named",
+                    "value": "seven"
+                  },
+                  "lengths": [],
+                  "wrapper": null,
+                  "const_value": "k",
+                  "enum_values": null,
+                  "examples": [
+                    "7"
+                  ],
+                  "default_value": null
+                }
+              }
+            }
+          ],
+          "extras": {
+            "tag": "Reject"
+          }
+        },
+        {
+          "tag": "unbounded-integer",
+          "fields": [
+            {
+              "key": "count",
+              "required": true,
+              "leaf": {
+                "tag": "Integer",
+                "value": {
+                  "domain": null,
+                  "minimum": null,
+                  "maximum": null,
+                  "const_value": null,
+                  "enum_values": null,
+                  "default_value": null
+                }
+              }
+            }
+          ],
+          "extras": {
+            "tag": "Reject"
+          }
+        }
+      ]
+    }
+  },
+  "cases": [
+    {
+      "id": "string-order",
+      "sealed": {
+        "tag": "Sealed",
+        "fields": {
+          "tag": "string-order",
+          "refinements": []
+        }
+      },
+      "expected": [
+        {
+          "$type": "string-order",
+          "const": "k",
+          "enum": "e1",
+          "example": "ex1",
+          "format": "7",
+          "plain": "x"
+        }
+      ]
+    },
+    {
+      "id": "integer-order",
+      "sealed": {
+        "tag": "Sealed",
+        "fields": {
+          "tag": "integer-order",
+          "refinements": []
+        }
+      },
+      "expected": [
+        {
+          "$type": "integer-order",
+          "const": 5,
+          "enum": 7,
+          "maximum": 9,
+          "minimum": 2
+        }
+      ]
+    },
+    {
+      "id": "blob",
+      "sealed": {
+        "tag": "Sealed",
+        "fields": {
+          "tag": "blob",
+          "refinements": []
+        }
+      },
+      "expected": [
+        {
+          "$type": "blob",
+          "mimeType": "x",
+          "ref": "7",
+          "size": 1
+        }
+      ]
+    },
+    {
+      "id": "blob-refined",
+      "sealed": {
+        "tag": "Sealed",
+        "fields": {
+          "tag": "blob",
+          "refinements": [
+            {
+              "key": "size",
+              "leaf": {
+                "tag": "Integer",
+                "value": {
+                  "domain": null,
+                  "minimum": null,
+                  "maximum": null,
+                  "const_value": "42",
+                  "enum_values": null,
+                  "default_value": null
+                }
+              }
+            },
+            {
+              "key": "mimeType",
+              "leaf": {
+                "tag": "String",
+                "value": {
+                  "format": null,
+                  "lengths": [],
+                  "wrapper": null,
+                  "const_value": null,
+                  "enum_values": [
+                    "image/png"
+                  ],
+                  "examples": [],
+                  "default_value": null
+                }
+              }
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "$type": "blob",
+          "mimeType": "image/png",
+          "ref": "7",
+          "size": 42
+        }
+      ]
+    },
+    {
+      "id": "selected-value-rejected",
+      "sealed": {
+        "tag": "Sealed",
+        "fields": {
+          "tag": "selected-value-rejected",
+          "refinements": []
+        }
+      },
+      "expected": []
+    },
+    {
+      "id": "unbounded-integer",
+      "sealed": {
+        "tag": "Sealed",
+        "fields": {
+          "tag": "unbounded-integer",
+          "refinements": []
+        }
+      },
+      "expected": []
+    },
+    {
+      "id": "unbounded-integer-refined",
+      "sealed": {
+        "tag": "Sealed",
+        "fields": {
+          "tag": "unbounded-integer",
+          "refinements": [
+            {
+              "key": "count",
+              "leaf": {
+                "tag": "Integer",
+                "value": {
+                  "domain": null,
+                  "minimum": "3",
+                  "maximum": null,
+                  "const_value": null,
+                  "enum_values": null,
+                  "default_value": null
+                }
+              }
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "$type": "unbounded-integer",
+          "count": 3
+        }
+      ]
+    }
+  ]
+}

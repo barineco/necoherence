@@ -1174,7 +1174,7 @@ private theorem authorizationUnique_eq_projection (records : List AttemptRecord)
         simp [authorizationUnique, authorizationUniqueProjection, authorizationUsed, lineage, ih,
           Function.comp_def]
 
- 
+
 
 def appendRecord (state : NetworkState) (record : AttemptRecord) : NetworkState :=
   { attempts := state.attempts ++ [record] }
@@ -3375,7 +3375,7 @@ private def denialFailure (request : RetryRequest) : NetworkFailure :=
 private def operationRejectedOnMalformed (state : NetworkState) (key : AttemptIdentity) : NetworkStep :=
   .Rejected state (.ObservationRelationMismatch key .EffectWitnessValue)
 
-/- theorem statements -/
+
 
 theorem ledger_invariant_preservation :
     ∀ (state state' : NetworkState), ValidState state → SuccessfulTransition state state' → ValidState state' := by

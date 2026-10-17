@@ -7,7 +7,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "necoherence-tools"
-version = "0.1.0"
+version = "0.2.0"
 description = "Code generators for necoherence"
 license = "AGPL-3.0-only"
 requires-python = ">=3.12"

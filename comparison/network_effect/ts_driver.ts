@@ -1,8 +1,6 @@
 // SPDX-FileCopyrightText: 2026 barineco
 // SPDX-License-Identifier: MIT
 
-// Real necoherence FetchHttpAdapter evidence against a peer supplied over a
-// line-delimited JSON protocol.
 import * as readline from "node:readline";
 import {
   AttemptInput,
@@ -26,7 +24,7 @@ import {
   CancellationPort,
   FetchHttpAdapter,
   MonotonicClockPort,
-} from "../../typescript/src/http-adapter.js";
+} from "../../typescript-http-adapter/src/index.js";
 
 interface Row {
   readonly constructor: string;

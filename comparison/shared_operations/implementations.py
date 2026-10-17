@@ -1,7 +1,6 @@
 # SPDX-FileCopyrightText: 2026 barineco
 # SPDX-License-Identifier: MIT
 
-"""Six implementations behind one stdin query protocol."""
 
 from __future__ import annotations
 

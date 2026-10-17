@@ -13,6 +13,7 @@ import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
 import necoherence/network_effect as effect
+import necoherence/network_host as host
 
 @external(erlang, "necoherence_http_adapter_ffi", "bytes_to_binary")
 fn bytes_to_binary(bytes: List(Int)) -> BitArray
@@ -84,6 +85,18 @@ pub fn default_ports() -> AdapterPorts {
     }),
     CancellationPort(fn(_) { True }),
   )
+}
+
+pub fn host_port(ports: AdapterPorts) -> host.AdapterPorts {
+  host.AdapterPorts(fn(command) {
+    case start_with_ports(command, ports) {
+      Started(execution) ->
+        host.Started(
+          host.Execution(handle(execution), fn() { observe(execution) }),
+        )
+      StartFailed(failure, effect) -> host.StartFailed(failure, effect)
+    }
+  })
 }
 
 pub fn handle(execution: Execution) -> effect.ExecutionHandle {

@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: 2026 barineco
 // SPDX-License-Identifier: MIT
 
-// Closed bounded single-owner transition evaluated in one call.
 
 export interface PositiveLimit {
   readonly kind: "PositiveLimit";
@@ -58,7 +57,6 @@ export type StepTransition<S, O> =
       readonly failure: StepFailure;
     };
 
-// Applies `advance` to the same input until it consumes, within both bounds.
 export function step<S, I, O>(
   initial: S,
   input: I,

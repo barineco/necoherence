@@ -3,7 +3,7 @@
 
 import generated
 import gleam/io
-import necoherence/http_adapter as adapter
+import necoherence/network_host as adapter
 import necoherence/network_effect as network
 import necoherence/semantic_generation_http as result
 import necoherence/semantic_generation_runtime as runtime
@@ -38,7 +38,7 @@ pub fn main() {
     http.Binding(
       fn(_) { Ok(http.Completed(external)) },
       fn(_, _, _) { Error(runtime.CallbackFailure("unexpected HTTP response")) },
-      adapter.default_ports(),
+      adapter.AdapterPorts(fn(_) { panic as "completed preparation issued HTTP" }),
     )
   let assert result.Completed(observed, output) =
     generated.call_wire_operation(

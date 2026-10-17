@@ -1,9 +1,6 @@
 // SPDX-FileCopyrightText: 2026 barineco
 // SPDX-License-Identifier: MIT
 
-// Immutable values, observations with a basis, commands, closed outcomes.
-// World operations are free functions; the world is always the first
-// argument. Revisions and every other Lean `Nat` are `bigint`.
 
 export interface Revision {
   readonly value: bigint;
@@ -115,7 +112,6 @@ function sameResource(a: ResourceId, b: ResourceId): boolean {
   return a.kind === b.kind && a.name === b.name;
 }
 
-// Returns the first matching revision, or the resource's absence.
 export function lookup(world: World, resource: ResourceId): Lookup {
   for (const [rid, rev] of world.entries) {
     if (sameResource(rid, resource)) {
@@ -125,7 +121,6 @@ export function lookup(world: World, resource: ResourceId): Lookup {
   return unknownResource(resource);
 }
 
-// Returns a world with one matching entry's revision incremented.
 export function bump(world: World, resource: ResourceId): World {
   let matched = false;
   const rebuilt: (readonly [ResourceId, Revision])[] = [];
@@ -140,7 +135,6 @@ export function bump(world: World, resource: ResourceId): World {
   return worldOf(rebuilt);
 }
 
-// Builds a command that keeps the observation's own basis.
 export function commandOf<A, B>(
   observation: Observation<A>,
   intent: B
@@ -152,7 +146,6 @@ function revisionEquals(a: Revision, b: Revision): boolean {
   return a.value === b.value;
 }
 
-// Closes over four branches; the boundary branch never actually fires.
 export function apply<A>(
   world: World,
   command: Command<A>

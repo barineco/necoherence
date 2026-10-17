@@ -9,6 +9,7 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -188,7 +189,10 @@ def mismatch_classification(case):
 def build_commands(languages, directory):
     lean_dir = ROOT / "tools/lean"
     execute(["lake", "build", "semantic_invariant"], cwd=lean_dir)
-    commands = {"lean": [lean_dir / ".lake/build/bin/semantic_invariant"],
+    lean_launcher = directory / "lean_runner"
+    lean_launcher.write_text("#!/bin/sh\ncd " + shlex.quote(str(lean_dir)) + " || exit\nexec lake exe semantic_invariant \"$@\"\n", encoding="utf-8")
+    lean_launcher.chmod(0o700)
+    commands = {"lean": [lean_launcher],
                 "python": [sys.executable, ROOT / "tools/python/semantic_invariant_adapter.py"]}
     if "typescript" in languages:
         for package in (ROOT / "typescript", ROOT / "tools/typescript"):

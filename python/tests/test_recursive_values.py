@@ -7,7 +7,7 @@ from necoherence.signature_values import ValueContext, ValueFailure, variant
 
 
 def node(name, shape):
-    return {"reference": name, "shape": shape}
+    return {"id": name, "shape": shape}
 
 
 def product(fields=(), extras=None):
@@ -60,12 +60,7 @@ def union(branches):
 
 
 def context(nodes):
-    return ValueContext(
-        {
-            "profile": {"tag": {"key": "kind", "format": None, "sealed": []}},
-            "nodes": nodes,
-        }
-    )
+    return ValueContext.from_signature_nodes({"tag": {"key": "kind", "format": None, "sealed": []}}, nodes)
 
 
 def test_finite_recursive_leaf_not_and_or():
@@ -103,40 +98,38 @@ def test_recursive_array_deeper_than_node_count_and_extras():
 
 
 @pytest.mark.parametrize(
-    "shapes,trace,diagnostic",
+    "shapes,trace",
     [
-        ([node("A", variant("Alias", {"target": "A"}))], ("A",), ()),
+        ([node("A", variant("Alias", {"target": "A"}))], ("A",)),
         (
             [
                 node("A", variant("Alias", {"target": "B"})),
                 node("B", variant("Alias", {"target": "A"})),
             ],
             ("A", "B"),
-            (),
         ),
-        ([node("A", union([("loop", "A")]))], ("A",), ("loop",)),
+        ([node("A", union([("loop", "A")]))], ("A",)),
         (
             [
                 node("A", variant("Alias", {"target": "U"})),
                 node("U", union([("loop", "A")])),
             ],
             ("A", "U"),
-            ("loop",),
         ),
     ],
 )
 @pytest.mark.parametrize("child", [False, True])
-def test_reference_cycles_preserve_failure_fields(shapes, trace, diagnostic, child):
+def test_reference_cycles_preserve_failure_fields(shapes, trace, child):
     ctx = context([*shapes, node("Parent", product([("child", "A")]))])
     observed = {"kind": "loop"}
     value = {"child": observed} if child else observed
     with pytest.raises(ValueFailure) as caught:
         ctx.validate("Parent" if child else "A", value)
     failure = caught.value
-    assert failure.type_ref == "A"
+    assert failure.type_ref == ctx.reference("A")
     assert failure.condition == "ReferenceCycle"
-    assert failure.value_path == (("child",) if child else ()) + diagnostic
+    assert failure.value_path == (("child",) if child else ())
     assert failure.observed == observed
-    assert failure.reference_trace == (("Parent",) if child else ()) + trace
-    assert failure.definition_ref is None
-    assert failure.origin is None
+    assert failure.reference_trace == tuple(ctx.reference(name) for name in (("Parent",) if child else ()) + trace)
+    assert failure.definition_ref == {"source": ctx.reference("A")["source"], "name": "A"}
+    assert failure.origin == {"source": ctx.reference("A")["source"], "pointer": []}

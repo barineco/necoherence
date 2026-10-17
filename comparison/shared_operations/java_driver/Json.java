@@ -8,11 +8,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Minimal JSON value model and parser/writer for the stdin inspection adapter.
- *
- * <p>Inspection-only: no public runtime API depends on this class.
- */
+
 public sealed interface Json permits Json.JNull, Json.JBool, Json.JStr, Json.JNum, Json.JArr, Json.JObj {
 
     record JNull() implements Json {
@@ -24,7 +20,7 @@ public sealed interface Json permits Json.JNull, Json.JBool, Json.JStr, Json.JNu
     record JStr(String value) implements Json {
     }
 
-    /** A JSON number, stored as its raw decimal text so no precision is lost. */
+
     record JNum(String raw) implements Json {
     }
 
@@ -73,7 +69,7 @@ public sealed interface Json permits Json.JNull, Json.JBool, Json.JStr, Json.JNu
         }
     }
 
-    /** Thrown for any JSON syntax failure. */
+
     final class JsonSyntaxException extends RuntimeException {
         public JsonSyntaxException(String message) {
             super(message);

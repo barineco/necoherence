@@ -1,11 +1,6 @@
 # SPDX-FileCopyrightText: 2026 barineco
 # SPDX-License-Identifier: MIT
 
-"""HostFailure constructor matrix built from each runtime's real adapter and
-classifier against a controlled loopback peer, plus a mock lane for pure
-lifecycle coverage. Every count is measured from the invoked lane and the
-peer, never handwritten.
-"""
 
 from __future__ import annotations
 
@@ -26,6 +21,7 @@ from .generator import HOST_STAGES, TIMEOUT_CAUSES, generate_timeout_pairs
 from .mock_actions import MockAdapter, failure_action
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "python-http-adapter" / "src"))
 PYTHON_SRC = ROOT / "python" / "src"
 if str(PYTHON_SRC) not in sys.path:
     sys.path.insert(0, str(PYTHON_SRC))
@@ -54,9 +50,9 @@ SIMPLE_CONSTRUCTORS = (
     "HostClosed",
 )
 
-# No lane exposes a public port for name resolution, partial write, header
-# codec, or worker-runtime faults, and no adapter has a finite request
-# timeout; these constructors are always measured as testOnlyPort.
+
+
+
 UNIFORM_TEST_ONLY = {
     "ExecutionStartFailed",
     "NameResolutionFailed",
@@ -65,9 +61,9 @@ UNIFORM_TEST_ONLY = {
     "HostRuntimeFailure",
 }
 
-# Some adapters reject InvalidHostConfiguration / DeadlineControlUnavailable
-# only from fields the pure ledger already validates at prepare, so the row
-# is testOnlyPort there; others compare a distinct adapter-owned port.
+
+
+
 PER_RUNTIME_TEST_ONLY = {
     "InvalidHostConfiguration": {"typescript", "java", "gleam"},
     "DeadlineControlUnavailable": {"java"},
@@ -114,9 +110,9 @@ def peer_for(constructor: str) -> ControlledPeer:
     return ControlledPeer(action).start()
 
 
-# ---------------------------------------------------------------------------
-# Mock lane: I/O-free lifecycle coverage, independent of the real evidence.
-# ---------------------------------------------------------------------------
+
+
+
 
 
 def _mock_row(constructor: str, stage: str) -> dict[str, Any]:
@@ -136,14 +132,14 @@ def _mock_row(constructor: str, stage: str) -> dict[str, Any]:
     }
 
 
-# ---------------------------------------------------------------------------
-# Python lane: direct import, real ledger and real HttpHostAdapter.
-# ---------------------------------------------------------------------------
+
+
+
 
 
 def _python_evidence(constructor: str, test_only: bool, peer_host: str, peer_port: int, timeout_stage: str | None, timeout_cause: str | None) -> dict[str, Any]:
     from necoherence import network_effect as ne
-    from necoherence.http_adapter import EventCancellationPort, HttpHostAdapter, SystemMonotonicClock
+    from necoherence_http_adapter import EventCancellationPort, HttpHostAdapter, SystemMonotonicClock
     from necoherence.request_progression import RequestIdentity
 
     class _RejectingCancellation(EventCancellationPort):
@@ -314,9 +310,9 @@ def _report_terminal(handle: str, ledger_record_count: int, issued_command_count
     return {**base, "outcomeTag": type(terminal.outcome).__name__}
 
 
-# ---------------------------------------------------------------------------
-# Compiled-lane long-lived evidence processes (JSON-lines stdio protocol).
-# ---------------------------------------------------------------------------
+
+
+
 
 
 @dataclass(frozen=True)
@@ -390,7 +386,7 @@ def _start_java_lane() -> LaneProcess:
         return LaneProcess("java", None, "ExecutableUnavailable:javac")
     lane_classes = ROOT / "java" / "build" / "classes"
     lane_classes.mkdir(parents=True, exist_ok=True)
-    sources = list((ROOT / "java" / "src" / "main" / "java").rglob("*.java"))
+    sources = [path for directory in ("java", "java-http-adapter") for path in (ROOT / directory / "src" / "main" / "java").rglob("*.java")]
     build = subprocess.run([javac, "--release", "21", "-d", str(lane_classes), *[str(path) for path in sources]], capture_output=True, text=True, timeout=120, check=False)
     if build.returncode != 0:
         return LaneProcess("java", None, f"LaneCompileFailed:{build.stderr[:400]}")

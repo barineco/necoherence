@@ -39,7 +39,8 @@ def decide(expected, sources, trusted, input_bytes, library, type_id, value):
 
 - 宣言の検査: 識別子の重複や、宣言にない型や定義への参照など、型と操作の宣言の誤りを検出する
 - 生成したコードのランタイム: 生成した Python のコードが実行時に呼び出す、値の検証とコーデックの共通の処理
-- HTTP アダプター: ネットワーク副作用のリクエストを実行し、結果を観測として返す
+
+任意の [HTTP アダプター](../python-http-adapter/) は、`necoherence-http-adapter` として独立に配布します。ネットワーク副作用のコマンドを実行し、観測を核の台帳へ返します。
 
 ## 付属のツール
 

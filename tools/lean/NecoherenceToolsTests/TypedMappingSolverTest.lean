@@ -3,11 +3,7 @@
 
 import NecoherenceTools.TypedMappingSolver
 
-/-!
-Executable regression checks for `NecoherenceTools.TypedMappingSolver`. This
-file imports only the public module and invokes its four public
-operations directly; it does not copy or substitute the solver logic.
--/
+
 
 namespace NecoherenceTools
 open Necoherence
@@ -36,11 +32,11 @@ private def inputReady : SolverInput :=
   { places := [placeReady, placeDone], transitions := [tRun], bindings := [bindingRun],
     goal := .placeHasAtLeast "P-DONE" 1, graph := graphSimple, marking := markingReady, bound := boundSmall }
 
-/-- `deriveEnabled` reports `T-RUN` enabled at the ready marking. -/
+
 example : deriveEnabled inputReady = .enabledSet { enabled := [{ transitionId := "T-RUN", bindings := [bindingRun] }] } := by
   decide
 
-/-- `checkReachability` finds the goal reachable by firing `T-RUN` once. -/
+
 example :
     checkReachability inputReady =
       .reachable
@@ -48,21 +44,21 @@ example :
           finalMarking := { places := [("P-READY", []), ("P-DONE", [{ target := "T-RUN", index := 0, revision := 1, kind := .output }])] } } := by
   decide
 
-/-- An empty marking with no enabled transitions and an unmet goal is deadlocked. -/
+
 example :
     checkDeadlock
         { inputReady with marking := { places := [("P-READY", []), ("P-DONE", [])] } } =
       .deadlocked { marking := { places := [("P-READY", []), ("P-DONE", [])] } } := by
   decide
 
-/- `checkWellFoundedness` returns an acyclic finite closure witness. -/
+
 example (w : AcyclicWitness)
     (h : checkWellFoundedness inputReady = .wellFounded w) :
     w.frontier = [] ∧ w.steps ≤ boundSmall.maxSearchSteps := by
   have hs := acyclicWitnessSound inputReady w h
   exact ⟨hs.2.2.1, hs.2.2.2.1⟩
 
-/-! ### Regression fixtures -/
+
 
 private def placeOf (id : String) : TypedPlace := { identity := id, tokenType := "T-JOB", revision := 1 }
 
@@ -74,10 +70,7 @@ private def bind (tid name place ident : String) (mode : BindingMode) : InputBin
   { transitionId := tid, name, place, tokenType := "T-JOB", identity := ident,
     provenance := "test", multiplicity := 1, mode, requiredRevision := 1 }
 
-/-- A convergent diamond: `T-A` and `T-B` both fire from the initial
-marking, and the paths `T-A → T-AX` and `T-B → T-BC → T-CX` converge on
-the same marking `mConvX` (only untouched input tokens remain). The
-marking graph is a DAG: no edge ever returns to an ancestor. -/
+
 private def convTransitions : List TypedTransition :=
   [ { identity := "T-A", inputPlaces := ["P-SRC", "P-X", "P-S"], outputPlaces := ["P-A"], failurePlaces := [], revision := 1 },
     { identity := "T-B", inputPlaces := ["P-SRC", "P-X", "P-S"], outputPlaces := ["P-B"], failurePlaces := [], revision := 1 },
@@ -133,14 +126,14 @@ private def inputConv : SolverInput :=
                transitions := ["T-A", "T-B", "T-AX", "T-BC", "T-CX"], edges := [], revision := 1 },
     marking := mConv0, bound := convBound }
 
-/- A convergent marking is explored once and classified as acyclic. -/
+
 example (w : AcyclicWitness)
     (h : checkWellFoundedness inputConv = .wellFounded w) :
     w.frontier = [] ∧ w.steps ≤ inputConv.bound.maxSearchSteps := by
   have hs := acyclicWitnessSound inputConv w h
   exact ⟨hs.2.2.1, hs.2.2.2.1⟩
 
-/- The closure witness records each marking once and has empty frontier. -/
+
 example (w : ClosureWitness)
     (h : checkReachability inputConv = .unreachable w) :
     w.frontier = [] ∧ w.steps ≤ inputConv.bound.maxSearchSteps := by
@@ -159,18 +152,18 @@ private def inputGhost : SolverInput :=
     goal := inputReady.goal, graph := graphGhost, marking := inputReady.marking,
     bound := inputReady.bound }
 
-/- Input-place membership is checked before binding and graph validation. -/
+
 example : checkReachability inputGhost =
     .invalid (.unknownInputPlace "T-GHOST" "P-GHOST") := by
   decide
 
-/- Every declared input place requires a binding. -/
+
 example :
     deriveEnabled { inputReady with bindings := [] } =
       .invalid (.missingInputBinding "T-RUN" "P-READY") := by
   decide
 
-/- Transition identities form a unique declaration key. -/
+
 example :
     checkDeadlock { inputReady with transitions := [tRun, tRun] } =
       .invalid (.duplicateTransitionIdentity "T-RUN") := by
@@ -192,7 +185,7 @@ private def inputSource : SolverInput :=
 private def sourceFinal : Marking :=
   { places := [("P-READY", [tokJob]), ("P-DONE", [outTok "T-SOURCE"])] }
 
-/- A zero-input source transition remains enabled with an empty binding list. -/
+
 example : checkReachability inputSource =
     .reachable { path := ["T-SOURCE"], finalMarking := sourceFinal } := by
   decide
@@ -207,7 +200,7 @@ private def inputInitialGoal : SolverInput :=
     graph := inputReady.graph, marking := inputReady.marking,
     bound := boundInitial }
 
-/- A satisfied initial goal is reachable with an empty path at bound zero. -/
+
 example : checkReachability inputInitialGoal =
     .reachable { path := [], finalMarking := markingReady } := by
   decide
@@ -244,8 +237,7 @@ private def cycleInput : SolverInput :=
     marking := cycleMarking,
     bound := { convBound with maxSearchSteps := 10 } }
 
-/- A closing edge may decrease the token measure, but every repeated
-marking cycle remains NotWellFounded. -/
+
 example :
     checkWellFoundedness cycleInput =
       .notWellFounded
@@ -259,14 +251,12 @@ example :
 private def finalMarkingRun : Marking :=
   { places := [("P-READY", []), ("P-DONE", [outTok "T-RUN"])] }
 
-/- The public theorem exposes replay and goal semantics, not only a result
-constructor equality. -/
+
 example : pathReplay inputReady markingReady ["T-RUN"] =
     some finalMarkingRun := by
   native_decide
 
-/-- A `consume` binding with multiplicity one removes exactly one
-occurrence of a duplicated token, retaining the second. -/
+
 example :
     tokensAt
         (applyConsumption { places := [("P-DUP", [inTok "job-d", inTok "job-d"])] }
@@ -274,15 +264,12 @@ example :
         "P-DUP" = [inTok "job-d"] := by
   decide
 
-/-- Exceeding the declared `maxBindings` during binding enumeration is
-`Unknown (.bindingBoundExhausted …)`, never `Unreachable` or a settled
-result. -/
+
 example : checkReachability { inputReady with bound := { boundSmall with maxBindings := 0 } } =
     .unknown (.bindingBoundExhausted 0) := by
   decide
 
-/-- An output place outside the declared place set is an `Invalid`
-dependency mismatch, not a marking-minting success. -/
+
 example : checkReachability
     { inputReady with
       transitions := [{ identity := "T-BAD-OUT", inputPlaces := [], outputPlaces := ["P-GHOST"], failurePlaces := [], revision := 1 }],
@@ -291,8 +278,7 @@ example : checkReachability
     .invalid (.dependencyMismatch "T-BAD-OUT" "P-GHOST") := by
   decide
 
-/-- A failure place outside the declared place set is equally an
-`Invalid` dependency mismatch. -/
+
 example : checkReachability
     { inputReady with
       transitions := [{ identity := "T-BAD-FAIL", inputPlaces := [], outputPlaces := [], failurePlaces := ["P-GHOST-F"], revision := 1 }],

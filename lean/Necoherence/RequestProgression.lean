@@ -299,7 +299,7 @@ def deriveConcurrent (snapshot : RequestProgressionSnapshot) : ResourceDemand :=
         concurrent := total.concurrent + entry.demand.concurrent })
     { pending := 0, inFlight := 0, concurrent := 0 }
 
-/-- Start-order constraint defined by the policy. `FIFO` permits only the earliest `Pending` entry. -/
+
 private def policyOrderAllowed (snapshot : RequestProgressionSnapshot) (identity : RequestIdentity) : Bool :=
   match snapshot.policy with
   | .latestWins => snapshot.currentIdentity == some identity
@@ -309,9 +309,7 @@ private def policyOrderAllowed (snapshot : RequestProgressionSnapshot) (identity
     | some earliest => earliest.identity == identity
     | none => false
 
-/-- An `OrderedEffect` request may start only if it is `pure` or its identity matches the earliest entry that is
-both `Pending` and `OrderedEffect`. This applies to every policy, including `AllExecute`, and excludes the
-`OrderedEffect` set from automatic parallel execution. -/
+
 private def orderedEffectAllowed (snapshot : RequestProgressionSnapshot) (identity : RequestIdentity) (entry : RequestEntry) : Bool :=
   if entry.footprint.effectClass != .orderedEffect then true
   else
@@ -341,10 +339,7 @@ def submit (snapshot : RequestProgressionSnapshot) (request : RequestInput) : Su
       { snapshot with entries := entries, currentIdentity := some request.identity, revision := snapshot.revision + 1 }
       { identity := request.identity }
 
-/-- Advances a `Pending` entry that satisfies the permission, identity, and budget conditions according to the
-selection. `RemainPending` keeps the phase `Pending` without issuing an adapter command. `ExecuteNow` constructs a
-`StartCommand` and moves the entry to `Preparing`. `decideStart` takes no adapter observation as input, preserving
-the causal order from command derivation to observation application. -/
+
 private def decideStartSelection (snapshot : RequestProgressionSnapshot) (accepted : Accepted)
     (entry : RequestEntry) (selection : CostSelection) : StartDecisionResult :=
   match selection with

@@ -41,9 +41,6 @@ fn neighbors_of(input: &SolverInput, path: &[String], m: &Marking) -> Vec<(Vec<S
         .collect()
 }
 
-/// The neighbours that are genuinely new: marking not among the
-/// `blocked` visited or pending markings and not produced by another
-/// neighbour in the same batch; convergent markings enqueue at most once.
 fn fresh_neighbors(
     neighbors: Vec<(Vec<String>, Marking)>,
     blocked: &[Marking],

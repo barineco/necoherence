@@ -13,6 +13,8 @@ private def library : Necoherence.TypeSignatures.TypeSignatureLibrary :=
   { identity := "codec-values", revision := "2",
     profile := {
       reference := { identity := "value-only", revision := "2", contentDigest := "codec-values" },
+      integerDomains := [{ name := "integers", reference := { identity := "integer-domain", revision := "1", contentDigest := "integers" }, range := .unbounded, forms := [.number] }],
+      defaultIntegerDomain := "integers",
       bytesPolicy := some {
         reference := { identity := "bytes", revision := "1", contentDigest := "bytes" },
         paddingOptional := true, wrapper := some "bytes" }

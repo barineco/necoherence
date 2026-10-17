@@ -13,7 +13,7 @@ witnesses and regression checks live in `Tests.ResidualCoherenceTheorems`.
 
 namespace Necoherence
 
-/-! ### Nonnegative rational arithmetic facts used by the theorems below -/
+
 
 theorem rational_add_comm (a b : NonnegativeRational) : a.add b = b.add a := by
   simp only [NonnegativeRational.add]; congr 1 <;> ac_rfl
@@ -146,7 +146,7 @@ theorem add_numerator_zero_iff (a b : NonnegativeRational) :
   · rintro ⟨ha, hb⟩
     simp [ha, hb]
 
-/-! ### `measureContributionSum` combinators over the underlying `foldl` -/
+
 
 theorem measureContributionSum_nil :
     measureContributionSum ([] : List InputElement) = NonnegativeRational.zero := rfl
@@ -259,7 +259,7 @@ theorem foldl_add_numerator_zero (l : List InputElement) : ∀ acc : Nonnegative
     · subst heq; exact hhd
     · exact hall e hmem
 
-/-! ### The residual coherence theorems -/
+
 
 /-- The residual coherence measure never reports a negative extent. -/
 theorem Nonnegativity (model : FiniteResidualModel) (measure : ResidualCoherenceMeasure)
@@ -386,12 +386,9 @@ unchanged. -/
 theorem AxiomOpacity_residualCoherence (model : FiniteResidualModel) (axiomDeclarations' : List AxiomDeclaration) :
     residualCoherence { model with axiomDeclarations := axiomDeclarations' } = residualCoherence model := rfl
 
-/-- Composing the model, measure, and vector products always yields a
-verification input whose model component is the original model, whose
-measure component is exactly what `residualCoherence` computes for that
-model, and whose vectors component is exactly what `canonicalResidualVectors`
-computes for that model: a downstream Cell can uniquely recover not just the
-model but every product it built from a successful composition. -/
+/-- A successful composition returns the original model, the measure computed
+by `residualCoherence`, and the vectors computed by `canonicalResidualVectors`.
+Each component can be recovered from the returned verification input. -/
 theorem Composability (model : FiniteResidualModel) (input : ResidualCoherenceVerificationInput)
     (h : composeResidualProducts model = .ok input) :
     input.model = model ∧ residualCoherence model = .ok input.measure ∧

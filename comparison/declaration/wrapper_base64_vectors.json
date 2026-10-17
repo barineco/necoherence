@@ -1,0 +1,2344 @@
+{
+  "schema": "wrapper-base64-vectors@1",
+  "profiles": {
+    "default": {
+      "reference": {
+        "identity": "wrapper-base64",
+        "revision": "1",
+        "content_digest": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "source_refs": [],
+      "integer_domains": [
+        {
+          "name": "integer",
+          "reference": {
+            "identity": "wrapper-base64",
+            "revision": "1",
+            "content_digest": "0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "range": {
+            "tag": "Unbounded"
+          },
+          "forms": [
+            {
+              "tag": "Number"
+            }
+          ]
+        }
+      ],
+      "default_integer_domain": "integer",
+      "numbers": {
+        "decimals": false
+      },
+      "grapheme_rules": null,
+      "format_bindings": [],
+      "bytes_policy": {
+        "reference": {
+          "identity": "wrapper-base64",
+          "revision": "1",
+          "content_digest": "0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "padding_optional": true,
+        "alphabet": {
+          "tag": "Either"
+        },
+        "strict_pad_bits": true,
+        "wrapper": "bytes"
+      },
+      "wrappers": [
+        {
+          "name": "bytes",
+          "key": "bytes",
+          "payload": {
+            "tag": "Bytes"
+          }
+        },
+        {
+          "name": "text",
+          "key": "text",
+          "payload": {
+            "tag": "Text",
+            "value": null
+          }
+        }
+      ],
+      "tag": {
+        "key": "kind",
+        "format": null,
+        "sealed": [
+          {
+            "tag": "sealed",
+            "fields": [
+              {
+                "key": "label",
+                "required": true,
+                "leaf": {
+                  "tag": "String",
+                  "value": {
+                    "format": null,
+                    "lengths": [],
+                    "wrapper": null,
+                    "const_value": null,
+                    "enum_values": null,
+                    "examples": [],
+                    "default_value": null
+                  }
+                }
+              }
+            ],
+            "extras": {
+              "tag": "Reject"
+            }
+          }
+        ]
+      }
+    },
+    "standard": {
+      "reference": {
+        "identity": "wrapper-base64",
+        "revision": "1",
+        "content_digest": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "source_refs": [],
+      "integer_domains": [
+        {
+          "name": "integer",
+          "reference": {
+            "identity": "wrapper-base64",
+            "revision": "1",
+            "content_digest": "0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "range": {
+            "tag": "Unbounded"
+          },
+          "forms": [
+            {
+              "tag": "Number"
+            }
+          ]
+        }
+      ],
+      "default_integer_domain": "integer",
+      "numbers": {
+        "decimals": false
+      },
+      "grapheme_rules": null,
+      "format_bindings": [],
+      "bytes_policy": {
+        "reference": {
+          "identity": "wrapper-base64",
+          "revision": "1",
+          "content_digest": "0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "padding_optional": true,
+        "alphabet": {
+          "tag": "Standard"
+        },
+        "strict_pad_bits": true,
+        "wrapper": "bytes"
+      },
+      "wrappers": [
+        {
+          "name": "bytes",
+          "key": "bytes",
+          "payload": {
+            "tag": "Bytes"
+          }
+        },
+        {
+          "name": "text",
+          "key": "text",
+          "payload": {
+            "tag": "Text",
+            "value": null
+          }
+        }
+      ],
+      "tag": {
+        "key": "kind",
+        "format": null,
+        "sealed": [
+          {
+            "tag": "sealed",
+            "fields": [
+              {
+                "key": "label",
+                "required": true,
+                "leaf": {
+                  "tag": "String",
+                  "value": {
+                    "format": null,
+                    "lengths": [],
+                    "wrapper": null,
+                    "const_value": null,
+                    "enum_values": null,
+                    "examples": [],
+                    "default_value": null
+                  }
+                }
+              }
+            ],
+            "extras": {
+              "tag": "Reject"
+            }
+          }
+        ]
+      }
+    },
+    "urlsafe": {
+      "reference": {
+        "identity": "wrapper-base64",
+        "revision": "1",
+        "content_digest": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "source_refs": [],
+      "integer_domains": [
+        {
+          "name": "integer",
+          "reference": {
+            "identity": "wrapper-base64",
+            "revision": "1",
+            "content_digest": "0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "range": {
+            "tag": "Unbounded"
+          },
+          "forms": [
+            {
+              "tag": "Number"
+            }
+          ]
+        }
+      ],
+      "default_integer_domain": "integer",
+      "numbers": {
+        "decimals": false
+      },
+      "grapheme_rules": null,
+      "format_bindings": [],
+      "bytes_policy": {
+        "reference": {
+          "identity": "wrapper-base64",
+          "revision": "1",
+          "content_digest": "0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "padding_optional": true,
+        "alphabet": {
+          "tag": "UrlSafe"
+        },
+        "strict_pad_bits": true,
+        "wrapper": "bytes"
+      },
+      "wrappers": [
+        {
+          "name": "bytes",
+          "key": "bytes",
+          "payload": {
+            "tag": "Bytes"
+          }
+        },
+        {
+          "name": "text",
+          "key": "text",
+          "payload": {
+            "tag": "Text",
+            "value": null
+          }
+        }
+      ],
+      "tag": {
+        "key": "kind",
+        "format": null,
+        "sealed": [
+          {
+            "tag": "sealed",
+            "fields": [
+              {
+                "key": "label",
+                "required": true,
+                "leaf": {
+                  "tag": "String",
+                  "value": {
+                    "format": null,
+                    "lengths": [],
+                    "wrapper": null,
+                    "const_value": null,
+                    "enum_values": null,
+                    "examples": [],
+                    "default_value": null
+                  }
+                }
+              }
+            ],
+            "extras": {
+              "tag": "Reject"
+            }
+          }
+        ]
+      }
+    },
+    "padding-required": {
+      "reference": {
+        "identity": "wrapper-base64",
+        "revision": "1",
+        "content_digest": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "source_refs": [],
+      "integer_domains": [
+        {
+          "name": "integer",
+          "reference": {
+            "identity": "wrapper-base64",
+            "revision": "1",
+            "content_digest": "0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "range": {
+            "tag": "Unbounded"
+          },
+          "forms": [
+            {
+              "tag": "Number"
+            }
+          ]
+        }
+      ],
+      "default_integer_domain": "integer",
+      "numbers": {
+        "decimals": false
+      },
+      "grapheme_rules": null,
+      "format_bindings": [],
+      "bytes_policy": {
+        "reference": {
+          "identity": "wrapper-base64",
+          "revision": "1",
+          "content_digest": "0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "padding_optional": false,
+        "alphabet": {
+          "tag": "Either"
+        },
+        "strict_pad_bits": true,
+        "wrapper": "bytes"
+      },
+      "wrappers": [
+        {
+          "name": "bytes",
+          "key": "bytes",
+          "payload": {
+            "tag": "Bytes"
+          }
+        },
+        {
+          "name": "text",
+          "key": "text",
+          "payload": {
+            "tag": "Text",
+            "value": null
+          }
+        }
+      ],
+      "tag": {
+        "key": "kind",
+        "format": null,
+        "sealed": [
+          {
+            "tag": "sealed",
+            "fields": [
+              {
+                "key": "label",
+                "required": true,
+                "leaf": {
+                  "tag": "String",
+                  "value": {
+                    "format": null,
+                    "lengths": [],
+                    "wrapper": null,
+                    "const_value": null,
+                    "enum_values": null,
+                    "examples": [],
+                    "default_value": null
+                  }
+                }
+              }
+            ],
+            "extras": {
+              "tag": "Reject"
+            }
+          }
+        ]
+      }
+    },
+    "loose-pad-bits": {
+      "reference": {
+        "identity": "wrapper-base64",
+        "revision": "1",
+        "content_digest": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "source_refs": [],
+      "integer_domains": [
+        {
+          "name": "integer",
+          "reference": {
+            "identity": "wrapper-base64",
+            "revision": "1",
+            "content_digest": "0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "range": {
+            "tag": "Unbounded"
+          },
+          "forms": [
+            {
+              "tag": "Number"
+            }
+          ]
+        }
+      ],
+      "default_integer_domain": "integer",
+      "numbers": {
+        "decimals": false
+      },
+      "grapheme_rules": null,
+      "format_bindings": [],
+      "bytes_policy": {
+        "reference": {
+          "identity": "wrapper-base64",
+          "revision": "1",
+          "content_digest": "0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "padding_optional": true,
+        "alphabet": {
+          "tag": "Either"
+        },
+        "strict_pad_bits": false,
+        "wrapper": "bytes"
+      },
+      "wrappers": [
+        {
+          "name": "bytes",
+          "key": "bytes",
+          "payload": {
+            "tag": "Bytes"
+          }
+        },
+        {
+          "name": "text",
+          "key": "text",
+          "payload": {
+            "tag": "Text",
+            "value": null
+          }
+        }
+      ],
+      "tag": {
+        "key": "kind",
+        "format": null,
+        "sealed": [
+          {
+            "tag": "sealed",
+            "fields": [
+              {
+                "key": "label",
+                "required": true,
+                "leaf": {
+                  "tag": "String",
+                  "value": {
+                    "format": null,
+                    "lengths": [],
+                    "wrapper": null,
+                    "const_value": null,
+                    "enum_values": null,
+                    "examples": [],
+                    "default_value": null
+                  }
+                }
+              }
+            ],
+            "extras": {
+              "tag": "Reject"
+            }
+          }
+        ]
+      }
+    },
+    "cid-wrapper": {
+      "reference": {
+        "identity": "wrapper-base64",
+        "revision": "1",
+        "content_digest": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "source_refs": [],
+      "integer_domains": [
+        {
+          "name": "integer",
+          "reference": {
+            "identity": "wrapper-base64",
+            "revision": "1",
+            "content_digest": "0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "range": {
+            "tag": "Unbounded"
+          },
+          "forms": [
+            {
+              "tag": "Number"
+            }
+          ]
+        }
+      ],
+      "default_integer_domain": "integer",
+      "numbers": {
+        "decimals": false
+      },
+      "grapheme_rules": null,
+      "format_bindings": [],
+      "bytes_policy": {
+        "reference": {
+          "identity": "wrapper-base64",
+          "revision": "1",
+          "content_digest": "0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "padding_optional": true,
+        "alphabet": {
+          "tag": "Either"
+        },
+        "strict_pad_bits": true,
+        "wrapper": "bytes"
+      },
+      "wrappers": [
+        {
+          "name": "bytes",
+          "key": "bytes",
+          "payload": {
+            "tag": "Bytes"
+          }
+        },
+        {
+          "name": "cid",
+          "key": "cid",
+          "payload": {
+            "tag": "Text",
+            "value": null
+          }
+        }
+      ],
+      "tag": {
+        "key": "kind",
+        "format": null,
+        "sealed": [
+          {
+            "tag": "sealed",
+            "fields": [
+              {
+                "key": "label",
+                "required": true,
+                "leaf": {
+                  "tag": "String",
+                  "value": {
+                    "format": null,
+                    "lengths": [],
+                    "wrapper": null,
+                    "const_value": null,
+                    "enum_values": null,
+                    "examples": [],
+                    "default_value": null
+                  }
+                }
+              }
+            ],
+            "extras": {
+              "tag": "Reject"
+            }
+          }
+        ]
+      }
+    },
+    "wrapper-format": {
+      "reference": {
+        "identity": "wrapper-base64",
+        "revision": "1",
+        "content_digest": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "source_refs": [],
+      "integer_domains": [
+        {
+          "name": "integer",
+          "reference": {
+            "identity": "wrapper-base64",
+            "revision": "1",
+            "content_digest": "0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "range": {
+            "tag": "Unbounded"
+          },
+          "forms": [
+            {
+              "tag": "Number"
+            }
+          ]
+        }
+      ],
+      "default_integer_domain": "integer",
+      "numbers": {
+        "decimals": false
+      },
+      "grapheme_rules": null,
+      "format_bindings": [
+        {
+          "name": "wrapper-format",
+          "reference": {
+            "identity": "wrapper-base64",
+            "revision": "1",
+            "content_digest": "0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "rule": {
+            "tag": "Literal",
+            "value": "hello"
+          }
+        }
+      ],
+      "bytes_policy": {
+        "reference": {
+          "identity": "wrapper-base64",
+          "revision": "1",
+          "content_digest": "0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "padding_optional": true,
+        "alphabet": {
+          "tag": "Either"
+        },
+        "strict_pad_bits": true,
+        "wrapper": "bytes"
+      },
+      "wrappers": [
+        {
+          "name": "bytes",
+          "key": "bytes",
+          "payload": {
+            "tag": "Bytes"
+          }
+        },
+        {
+          "name": "text",
+          "key": "text",
+          "payload": {
+            "tag": "Text",
+            "value": "wrapper-format"
+          }
+        }
+      ],
+      "tag": {
+        "key": "kind",
+        "format": null,
+        "sealed": [
+          {
+            "tag": "sealed",
+            "fields": [
+              {
+                "key": "label",
+                "required": true,
+                "leaf": {
+                  "tag": "String",
+                  "value": {
+                    "format": null,
+                    "lengths": [],
+                    "wrapper": null,
+                    "const_value": null,
+                    "enum_values": null,
+                    "examples": [],
+                    "default_value": null
+                  }
+                }
+              }
+            ],
+            "extras": {
+              "tag": "Reject"
+            }
+          }
+        ]
+      }
+    },
+    "leaf-inline-format": {
+      "reference": {
+        "identity": "wrapper-base64",
+        "revision": "1",
+        "content_digest": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "source_refs": [],
+      "integer_domains": [
+        {
+          "name": "integer",
+          "reference": {
+            "identity": "wrapper-base64",
+            "revision": "1",
+            "content_digest": "0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "range": {
+            "tag": "Unbounded"
+          },
+          "forms": [
+            {
+              "tag": "Number"
+            }
+          ]
+        }
+      ],
+      "default_integer_domain": "integer",
+      "numbers": {
+        "decimals": false
+      },
+      "grapheme_rules": null,
+      "format_bindings": [],
+      "bytes_policy": {
+        "reference": {
+          "identity": "wrapper-base64",
+          "revision": "1",
+          "content_digest": "0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "padding_optional": true,
+        "alphabet": {
+          "tag": "Either"
+        },
+        "strict_pad_bits": true,
+        "wrapper": "bytes"
+      },
+      "wrappers": [
+        {
+          "name": "bytes",
+          "key": "bytes",
+          "payload": {
+            "tag": "Bytes"
+          }
+        },
+        {
+          "name": "text",
+          "key": "text",
+          "payload": {
+            "tag": "Text",
+            "value": null
+          }
+        }
+      ],
+      "tag": {
+        "key": "kind",
+        "format": null,
+        "sealed": [
+          {
+            "tag": "sealed",
+            "fields": [
+              {
+                "key": "label",
+                "required": true,
+                "leaf": {
+                  "tag": "String",
+                  "value": {
+                    "format": {
+                      "tag": "Inline",
+                      "value": {
+                        "tag": "Literal",
+                        "value": "hello"
+                      }
+                    },
+                    "lengths": [],
+                    "wrapper": null,
+                    "const_value": null,
+                    "enum_values": null,
+                    "examples": [],
+                    "default_value": null
+                  }
+                }
+              }
+            ],
+            "extras": {
+              "tag": "Reject"
+            }
+          }
+        ]
+      }
+    },
+    "leaf-named-format": {
+      "reference": {
+        "identity": "wrapper-base64",
+        "revision": "1",
+        "content_digest": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "source_refs": [],
+      "integer_domains": [
+        {
+          "name": "integer",
+          "reference": {
+            "identity": "wrapper-base64",
+            "revision": "1",
+            "content_digest": "0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "range": {
+            "tag": "Unbounded"
+          },
+          "forms": [
+            {
+              "tag": "Number"
+            }
+          ]
+        }
+      ],
+      "default_integer_domain": "integer",
+      "numbers": {
+        "decimals": false
+      },
+      "grapheme_rules": null,
+      "format_bindings": [
+        {
+          "name": "leaf-format",
+          "reference": {
+            "identity": "wrapper-base64",
+            "revision": "1",
+            "content_digest": "0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "rule": {
+            "tag": "Literal",
+            "value": "hello"
+          }
+        }
+      ],
+      "bytes_policy": {
+        "reference": {
+          "identity": "wrapper-base64",
+          "revision": "1",
+          "content_digest": "0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "padding_optional": true,
+        "alphabet": {
+          "tag": "Either"
+        },
+        "strict_pad_bits": true,
+        "wrapper": "bytes"
+      },
+      "wrappers": [
+        {
+          "name": "bytes",
+          "key": "bytes",
+          "payload": {
+            "tag": "Bytes"
+          }
+        },
+        {
+          "name": "text",
+          "key": "text",
+          "payload": {
+            "tag": "Text",
+            "value": null
+          }
+        }
+      ],
+      "tag": {
+        "key": "kind",
+        "format": null,
+        "sealed": [
+          {
+            "tag": "sealed",
+            "fields": [
+              {
+                "key": "label",
+                "required": true,
+                "leaf": {
+                  "tag": "String",
+                  "value": {
+                    "format": {
+                      "tag": "Named",
+                      "value": "leaf-format"
+                    },
+                    "lengths": [],
+                    "wrapper": null,
+                    "const_value": null,
+                    "enum_values": null,
+                    "examples": [],
+                    "default_value": null
+                  }
+                }
+              }
+            ],
+            "extras": {
+              "tag": "Reject"
+            }
+          }
+        ]
+      }
+    },
+    "sealed-text-wrapper": {
+      "reference": {
+        "identity": "wrapper-base64",
+        "revision": "1",
+        "content_digest": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "source_refs": [],
+      "integer_domains": [
+        {
+          "name": "integer",
+          "reference": {
+            "identity": "wrapper-base64",
+            "revision": "1",
+            "content_digest": "0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "range": {
+            "tag": "Unbounded"
+          },
+          "forms": [
+            {
+              "tag": "Number"
+            }
+          ]
+        }
+      ],
+      "default_integer_domain": "integer",
+      "numbers": {
+        "decimals": false
+      },
+      "grapheme_rules": null,
+      "format_bindings": [],
+      "bytes_policy": {
+        "reference": {
+          "identity": "wrapper-base64",
+          "revision": "1",
+          "content_digest": "0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "padding_optional": true,
+        "alphabet": {
+          "tag": "Either"
+        },
+        "strict_pad_bits": true,
+        "wrapper": "bytes"
+      },
+      "wrappers": [
+        {
+          "name": "bytes",
+          "key": "bytes",
+          "payload": {
+            "tag": "Bytes"
+          }
+        },
+        {
+          "name": "text",
+          "key": "text",
+          "payload": {
+            "tag": "Text",
+            "value": null
+          }
+        }
+      ],
+      "tag": {
+        "key": "kind",
+        "format": null,
+        "sealed": [
+          {
+            "tag": "sealed",
+            "fields": [
+              {
+                "key": "label",
+                "required": true,
+                "leaf": {
+                  "tag": "String",
+                  "value": {
+                    "format": null,
+                    "lengths": [],
+                    "wrapper": "text",
+                    "const_value": null,
+                    "enum_values": null,
+                    "examples": [],
+                    "default_value": null
+                  }
+                }
+              }
+            ],
+            "extras": {
+              "tag": "Reject"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "type_graphs": {
+    "bytes": {
+      "root": "value",
+      "nodes": [
+        {
+          "id": "value",
+          "shape": {
+            "tag": "Bytes",
+            "value": {
+              "minimum": null,
+              "maximum": null
+            }
+          }
+        }
+      ]
+    },
+    "bounded-bytes": {
+      "root": "value",
+      "nodes": [
+        {
+          "id": "value",
+          "shape": {
+            "tag": "Bytes",
+            "value": {
+              "minimum": null,
+              "maximum": "0"
+            }
+          }
+        }
+      ]
+    },
+    "string-text": {
+      "root": "value",
+      "nodes": [
+        {
+          "id": "value",
+          "shape": {
+            "tag": "String",
+            "value": {
+              "format": null,
+              "lengths": [],
+              "wrapper": "text",
+              "const_value": null,
+              "enum_values": null,
+              "examples": [],
+              "default_value": null
+            }
+          }
+        }
+      ]
+    },
+    "string-cid": {
+      "root": "value",
+      "nodes": [
+        {
+          "id": "value",
+          "shape": {
+            "tag": "String",
+            "value": {
+              "format": null,
+              "lengths": [],
+              "wrapper": "cid",
+              "const_value": null,
+              "enum_values": null,
+              "examples": [],
+              "default_value": null
+            }
+          }
+        }
+      ]
+    },
+    "sealed": {
+      "root": "value",
+      "nodes": [
+        {
+          "id": "value",
+          "shape": {
+            "tag": "Sealed",
+            "fields": {
+              "tag": "sealed",
+              "refinements": []
+            }
+          }
+        }
+      ]
+    },
+    "unknown": {
+      "root": "value",
+      "nodes": [
+        {
+          "id": "value",
+          "shape": {
+            "tag": "Unknown",
+            "value": {
+              "tag": "Any"
+            }
+          }
+        }
+      ]
+    },
+    "nested-string": {
+      "root": "root",
+      "nodes": [
+        {
+          "id": "root",
+          "shape": {
+            "tag": "Product",
+            "value": {
+              "fields": [
+                {
+                  "wire_name": "ops",
+                  "slot": {
+                    "type_id": "operations",
+                    "required": true,
+                    "nullable": false
+                  }
+                }
+              ],
+              "extras": {
+                "tag": "Reject"
+              }
+            }
+          }
+        },
+        {
+          "id": "operations",
+          "shape": {
+            "tag": "Array",
+            "value": {
+              "item": {
+                "type_id": "operation",
+                "nullable": false
+              },
+              "min_length": null,
+              "max_length": null
+            }
+          }
+        },
+        {
+          "id": "operation",
+          "shape": {
+            "tag": "Product",
+            "value": {
+              "fields": [
+                {
+                  "wire_name": "cid",
+                  "slot": {
+                    "type_id": "value",
+                    "required": true,
+                    "nullable": false
+                  }
+                }
+              ],
+              "extras": {
+                "tag": "Reject"
+              }
+            }
+          }
+        },
+        {
+          "id": "value",
+          "shape": {
+            "tag": "String",
+            "value": {
+              "format": null,
+              "lengths": [],
+              "wrapper": "text",
+              "const_value": null,
+              "enum_values": null,
+              "examples": [],
+              "default_value": null
+            }
+          }
+        }
+      ]
+    },
+    "nested-bytes": {
+      "root": "root",
+      "nodes": [
+        {
+          "id": "root",
+          "shape": {
+            "tag": "Product",
+            "value": {
+              "fields": [
+                {
+                  "wire_name": "ops",
+                  "slot": {
+                    "type_id": "operations",
+                    "required": true,
+                    "nullable": false
+                  }
+                }
+              ],
+              "extras": {
+                "tag": "Reject"
+              }
+            }
+          }
+        },
+        {
+          "id": "operations",
+          "shape": {
+            "tag": "Array",
+            "value": {
+              "item": {
+                "type_id": "operation",
+                "nullable": false
+              },
+              "min_length": null,
+              "max_length": null
+            }
+          }
+        },
+        {
+          "id": "operation",
+          "shape": {
+            "tag": "Product",
+            "value": {
+              "fields": [
+                {
+                  "wire_name": "cid",
+                  "slot": {
+                    "type_id": "value",
+                    "required": true,
+                    "nullable": false
+                  }
+                }
+              ],
+              "extras": {
+                "tag": "Reject"
+              }
+            }
+          }
+        },
+        {
+          "id": "value",
+          "shape": {
+            "tag": "Bytes",
+            "value": {
+              "minimum": null,
+              "maximum": null
+            }
+          }
+        }
+      ]
+    },
+    "union-bytes": {
+      "root": "union",
+      "nodes": [
+        {
+          "id": "union",
+          "shape": {
+            "tag": "TaggedUnion",
+            "value": {
+              "branches": [
+                {
+                  "target": "root",
+                  "wire_tag": "branch",
+                  "selector": {
+                    "tag": "Otherwise"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "root",
+          "shape": {
+            "tag": "Product",
+            "value": {
+              "fields": [
+                {
+                  "wire_name": "ops",
+                  "slot": {
+                    "type_id": "operations",
+                    "required": true,
+                    "nullable": false
+                  }
+                }
+              ],
+              "extras": {
+                "tag": "Reject"
+              }
+            }
+          }
+        },
+        {
+          "id": "operations",
+          "shape": {
+            "tag": "Array",
+            "value": {
+              "item": {
+                "type_id": "operation",
+                "nullable": false
+              },
+              "min_length": null,
+              "max_length": null
+            }
+          }
+        },
+        {
+          "id": "operation",
+          "shape": {
+            "tag": "Product",
+            "value": {
+              "fields": [
+                {
+                  "wire_name": "cid",
+                  "slot": {
+                    "type_id": "value",
+                    "required": true,
+                    "nullable": false
+                  }
+                }
+              ],
+              "extras": {
+                "tag": "Reject"
+              }
+            }
+          }
+        },
+        {
+          "id": "value",
+          "shape": {
+            "tag": "Bytes",
+            "value": {
+              "minimum": null,
+              "maximum": null
+            }
+          }
+        }
+      ]
+    }
+  },
+  "branches": [
+    {
+      "id": "1-standard",
+      "profile": "standard",
+      "type_graph": "bytes",
+      "cases": [
+        {
+          "id": "1-standard/1",
+          "input": {
+            "bytes": "+/8="
+          },
+          "expected": {
+            "accepted": true,
+            "condition": null,
+            "path": []
+          }
+        },
+        {
+          "id": "1-standard/2",
+          "input": {
+            "bytes": "-_8="
+          },
+          "expected": {
+            "accepted": false,
+            "condition": {
+              "tag": "InvalidBytes"
+            },
+            "path": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "1-urlsafe",
+      "profile": "urlsafe",
+      "type_graph": "bytes",
+      "cases": [
+        {
+          "id": "1-urlsafe/1",
+          "input": {
+            "bytes": "-_8="
+          },
+          "expected": {
+            "accepted": true,
+            "condition": null,
+            "path": []
+          }
+        },
+        {
+          "id": "1-urlsafe/2",
+          "input": {
+            "bytes": "+/8="
+          },
+          "expected": {
+            "accepted": false,
+            "condition": {
+              "tag": "InvalidBytes"
+            },
+            "path": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "1-either",
+      "profile": "default",
+      "type_graph": "bytes",
+      "cases": [
+        {
+          "id": "1-either/1",
+          "input": {
+            "bytes": "+/8="
+          },
+          "expected": {
+            "accepted": true,
+            "condition": null,
+            "path": []
+          }
+        },
+        {
+          "id": "1-either/2",
+          "input": {
+            "bytes": "-_8="
+          },
+          "expected": {
+            "accepted": true,
+            "condition": null,
+            "path": []
+          }
+        },
+        {
+          "id": "1-either/3",
+          "input": {
+            "bytes": "+_8="
+          },
+          "expected": {
+            "accepted": true,
+            "condition": null,
+            "path": []
+          }
+        },
+        {
+          "id": "1-either/4",
+          "input": {
+            "bytes": "-/8="
+          },
+          "expected": {
+            "accepted": true,
+            "condition": null,
+            "path": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "2-padding-optional",
+      "profile": "default",
+      "type_graph": "bytes",
+      "cases": [
+        {
+          "id": "2-padding-optional/1",
+          "input": {
+            "bytes": "YQ=="
+          },
+          "expected": {
+            "accepted": true,
+            "condition": null,
+            "path": []
+          }
+        },
+        {
+          "id": "2-padding-optional/2",
+          "input": {
+            "bytes": "YQ"
+          },
+          "expected": {
+            "accepted": true,
+            "condition": null,
+            "path": []
+          }
+        },
+        {
+          "id": "2-padding-optional/3",
+          "input": {
+            "bytes": "YQ="
+          },
+          "expected": {
+            "accepted": false,
+            "condition": {
+              "tag": "InvalidBytes"
+            },
+            "path": []
+          }
+        },
+        {
+          "id": "2-padding-optional/4",
+          "input": {
+            "bytes": "YQ==="
+          },
+          "expected": {
+            "accepted": false,
+            "condition": {
+              "tag": "InvalidBytes"
+            },
+            "path": []
+          }
+        },
+        {
+          "id": "2-padding-optional/5",
+          "input": {
+            "bytes": "YWJj="
+          },
+          "expected": {
+            "accepted": false,
+            "condition": {
+              "tag": "InvalidBytes"
+            },
+            "path": []
+          }
+        },
+        {
+          "id": "2-padding-optional/6",
+          "input": {
+            "bytes": "YWJj=="
+          },
+          "expected": {
+            "accepted": false,
+            "condition": {
+              "tag": "InvalidBytes"
+            },
+            "path": []
+          }
+        },
+        {
+          "id": "2-padding-optional/7",
+          "input": {
+            "bytes": "YQ==x"
+          },
+          "expected": {
+            "accepted": false,
+            "condition": {
+              "tag": "InvalidBytes"
+            },
+            "path": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "2-padding-required",
+      "profile": "padding-required",
+      "type_graph": "bytes",
+      "cases": [
+        {
+          "id": "2-padding-required/1",
+          "input": {
+            "bytes": "YQ=="
+          },
+          "expected": {
+            "accepted": true,
+            "condition": null,
+            "path": []
+          }
+        },
+        {
+          "id": "2-padding-required/2",
+          "input": {
+            "bytes": "YQ"
+          },
+          "expected": {
+            "accepted": false,
+            "condition": {
+              "tag": "InvalidBytes"
+            },
+            "path": []
+          }
+        },
+        {
+          "id": "2-padding-required/3",
+          "input": {
+            "bytes": "YQ="
+          },
+          "expected": {
+            "accepted": false,
+            "condition": {
+              "tag": "InvalidBytes"
+            },
+            "path": []
+          }
+        },
+        {
+          "id": "2-padding-required/4",
+          "input": {
+            "bytes": "YWJj"
+          },
+          "expected": {
+            "accepted": true,
+            "condition": null,
+            "path": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "3-unused-bits-strict",
+      "profile": "default",
+      "type_graph": "bytes",
+      "cases": [
+        {
+          "id": "3-unused-bits-strict/1",
+          "input": {
+            "bytes": "YR=="
+          },
+          "expected": {
+            "accepted": false,
+            "condition": {
+              "tag": "InvalidBytes"
+            },
+            "path": []
+          }
+        },
+        {
+          "id": "3-unused-bits-strict/2",
+          "input": {
+            "bytes": "YWJ="
+          },
+          "expected": {
+            "accepted": false,
+            "condition": {
+              "tag": "InvalidBytes"
+            },
+            "path": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "3-unused-bits-loose",
+      "profile": "loose-pad-bits",
+      "type_graph": "bytes",
+      "cases": [
+        {
+          "id": "3-unused-bits-loose/1",
+          "input": {
+            "bytes": "YR=="
+          },
+          "expected": {
+            "accepted": true,
+            "condition": null,
+            "path": []
+          }
+        },
+        {
+          "id": "3-unused-bits-loose/2",
+          "input": {
+            "bytes": "YWJ="
+          },
+          "expected": {
+            "accepted": true,
+            "condition": null,
+            "path": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "4-string-valid",
+      "profile": "default",
+      "type_graph": "string-text",
+      "cases": [
+        {
+          "id": "4-string-valid/1",
+          "input": {
+            "text": "hello"
+          },
+          "expected": {
+            "accepted": true,
+            "condition": null,
+            "path": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "4-string-scalar-and-ordinary-object",
+      "profile": "default",
+      "type_graph": "string-text",
+      "cases": [
+        {
+          "id": "4-string-scalar-and-ordinary-object/1",
+          "input": 1,
+          "expected": {
+            "accepted": false,
+            "condition": {
+              "tag": "WrongValueKind",
+              "value": "string wrapper"
+            },
+            "path": []
+          }
+        },
+        {
+          "id": "4-string-scalar-and-ordinary-object/2",
+          "input": {
+            "other": "hello"
+          },
+          "expected": {
+            "accepted": false,
+            "condition": {
+              "tag": "WrongValueKind",
+              "value": "string wrapper"
+            },
+            "path": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "4-string-numeric-wrapper-payload",
+      "profile": "cid-wrapper",
+      "type_graph": "string-cid",
+      "cases": [
+        {
+          "id": "4-string-numeric-wrapper-payload/1",
+          "input": {
+            "cid": 1
+          },
+          "expected": {
+            "accepted": false,
+            "condition": {
+              "tag": "WrongValueKind",
+              "value": "wrapper text"
+            },
+            "path": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "4-string-extra-member",
+      "profile": "default",
+      "type_graph": "string-text",
+      "cases": [
+        {
+          "id": "4-string-extra-member/1",
+          "input": {
+            "text": "hello",
+            "extra": true
+          },
+          "expected": {
+            "accepted": false,
+            "condition": {
+              "tag": "WrongValueKind",
+              "value": "wrapper text"
+            },
+            "path": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "4-string-wrapper-format",
+      "profile": "wrapper-format",
+      "type_graph": "string-text",
+      "cases": [
+        {
+          "id": "4-string-wrapper-format/1",
+          "input": {
+            "text": "wrong"
+          },
+          "expected": {
+            "accepted": false,
+            "condition": {
+              "tag": "Format",
+              "value": "wrapper-format"
+            },
+            "path": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "5-bytes-structure",
+      "profile": "default",
+      "type_graph": "bytes",
+      "cases": [
+        {
+          "id": "5-bytes-structure/1",
+          "input": 1,
+          "expected": {
+            "accepted": false,
+            "condition": {
+              "tag": "InvalidBytes"
+            },
+            "path": []
+          }
+        },
+        {
+          "id": "5-bytes-structure/2",
+          "input": {
+            "bytes": 1
+          },
+          "expected": {
+            "accepted": false,
+            "condition": {
+              "tag": "InvalidBytes"
+            },
+            "path": []
+          }
+        },
+        {
+          "id": "5-bytes-structure/3",
+          "input": {
+            "other": "YQ=="
+          },
+          "expected": {
+            "accepted": false,
+            "condition": {
+              "tag": "InvalidBytes"
+            },
+            "path": []
+          }
+        },
+        {
+          "id": "5-bytes-structure/4",
+          "input": {
+            "bytes": "YQ==",
+            "extra": true
+          },
+          "expected": {
+            "accepted": false,
+            "condition": {
+              "tag": "InvalidBytes"
+            },
+            "path": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "6-bytes-length",
+      "profile": "default",
+      "type_graph": "bounded-bytes",
+      "cases": [
+        {
+          "id": "6-bytes-length/1",
+          "input": {
+            "bytes": "YQ=="
+          },
+          "expected": {
+            "accepted": false,
+            "condition": {
+              "tag": "BytesLength"
+            },
+            "path": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "7-sealed-valid-wrappers",
+      "profile": "default",
+      "type_graph": "sealed",
+      "cases": [
+        {
+          "id": "7-sealed-valid-wrappers/1",
+          "input": {
+            "kind": "sealed",
+            "label": {
+              "text": "hello"
+            }
+          },
+          "expected": {
+            "accepted": true,
+            "condition": null,
+            "path": []
+          }
+        },
+        {
+          "id": "7-sealed-valid-wrappers/2",
+          "input": {
+            "kind": "sealed",
+            "label": {
+              "bytes": "YQ=="
+            }
+          },
+          "expected": {
+            "accepted": true,
+            "condition": null,
+            "path": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "7-sealed-wrapper-structure",
+      "profile": "default",
+      "type_graph": "sealed",
+      "cases": [
+        {
+          "id": "7-sealed-wrapper-structure/1",
+          "input": {
+            "kind": "sealed",
+            "label": {
+              "text": 1
+            }
+          },
+          "expected": {
+            "accepted": false,
+            "condition": {
+              "tag": "WrongValueKind",
+              "value": "wrapper text"
+            },
+            "path": [
+              {
+                "tag": "Field",
+                "value": "label"
+              }
+            ]
+          }
+        },
+        {
+          "id": "7-sealed-wrapper-structure/2",
+          "input": {
+            "kind": "sealed",
+            "label": {
+              "bytes": "!"
+            }
+          },
+          "expected": {
+            "accepted": false,
+            "condition": {
+              "tag": "InvalidBytes"
+            },
+            "path": [
+              {
+                "tag": "Field",
+                "value": "label"
+              }
+            ]
+          }
+        },
+        {
+          "id": "7-sealed-wrapper-structure/3",
+          "input": {
+            "kind": "sealed",
+            "label": {
+              "text": "hello",
+              "extra": true
+            }
+          },
+          "expected": {
+            "accepted": false,
+            "condition": {
+              "tag": "WrongValueKind",
+              "value": "wrapper text"
+            },
+            "path": [
+              {
+                "tag": "Field",
+                "value": "label"
+              }
+            ]
+          }
+        },
+        {
+          "id": "7-sealed-wrapper-structure/4",
+          "input": {
+            "kind": "sealed",
+            "label": {
+              "other": "hello"
+            }
+          },
+          "expected": {
+            "accepted": false,
+            "condition": {
+              "tag": "WrongValueKind",
+              "value": "string"
+            },
+            "path": [
+              {
+                "tag": "Field",
+                "value": "label"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "7-sealed-wrapper-format",
+      "profile": "wrapper-format",
+      "type_graph": "sealed",
+      "cases": [
+        {
+          "id": "7-sealed-wrapper-format/1",
+          "input": {
+            "kind": "sealed",
+            "label": {
+              "text": "wrong"
+            }
+          },
+          "expected": {
+            "accepted": false,
+            "condition": {
+              "tag": "Format",
+              "value": "wrapper-format"
+            },
+            "path": [
+              {
+                "tag": "Field",
+                "value": "label"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "7-sealed-leaf-inline-format",
+      "profile": "leaf-inline-format",
+      "type_graph": "sealed",
+      "cases": [
+        {
+          "id": "7-sealed-leaf-inline-format/1",
+          "input": {
+            "kind": "sealed",
+            "label": "wrong"
+          },
+          "expected": {
+            "accepted": false,
+            "condition": {
+              "tag": "Format",
+              "value": "inline"
+            },
+            "path": [
+              {
+                "tag": "Field",
+                "value": "label"
+              }
+            ]
+          }
+        },
+        {
+          "id": "7-sealed-leaf-inline-format/2",
+          "input": {
+            "kind": "sealed",
+            "label": {
+              "text": "wrong"
+            }
+          },
+          "expected": {
+            "accepted": false,
+            "condition": {
+              "tag": "Format",
+              "value": "inline"
+            },
+            "path": [
+              {
+                "tag": "Field",
+                "value": "label"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "7-sealed-leaf-named-format",
+      "profile": "leaf-named-format",
+      "type_graph": "sealed",
+      "cases": [
+        {
+          "id": "7-sealed-leaf-named-format/1",
+          "input": {
+            "kind": "sealed",
+            "label": "wrong"
+          },
+          "expected": {
+            "accepted": false,
+            "condition": {
+              "tag": "Format",
+              "value": "leaf-format"
+            },
+            "path": [
+              {
+                "tag": "Field",
+                "value": "label"
+              }
+            ]
+          }
+        },
+        {
+          "id": "7-sealed-leaf-named-format/2",
+          "input": {
+            "kind": "sealed",
+            "label": {
+              "text": "wrong"
+            }
+          },
+          "expected": {
+            "accepted": false,
+            "condition": {
+              "tag": "Format",
+              "value": "leaf-format"
+            },
+            "path": [
+              {
+                "tag": "Field",
+                "value": "label"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "7-sealed-explicit-wrapper-raw-string",
+      "profile": "sealed-text-wrapper",
+      "type_graph": "sealed",
+      "cases": [
+        {
+          "id": "7-sealed-explicit-wrapper-raw-string/1",
+          "input": {
+            "kind": "sealed",
+            "label": "hello"
+          },
+          "expected": {
+            "accepted": true,
+            "condition": null,
+            "path": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "8-unknown-wrappers",
+      "profile": "default",
+      "type_graph": "unknown",
+      "cases": [
+        {
+          "id": "8-unknown-wrappers/1",
+          "input": {
+            "label": {
+              "bytes": "!"
+            }
+          },
+          "expected": {
+            "accepted": false,
+            "condition": {
+              "tag": "InvalidBytes"
+            },
+            "path": [
+              {
+                "tag": "Field",
+                "value": "label"
+              }
+            ]
+          }
+        },
+        {
+          "id": "8-unknown-wrappers/2",
+          "input": {
+            "label": {
+              "bytes": 1
+            }
+          },
+          "expected": {
+            "accepted": false,
+            "condition": {
+              "tag": "InvalidBytes"
+            },
+            "path": [
+              {
+                "tag": "Field",
+                "value": "label"
+              }
+            ]
+          }
+        },
+        {
+          "id": "8-unknown-wrappers/3",
+          "input": {
+            "label": {
+              "text": 1
+            }
+          },
+          "expected": {
+            "accepted": false,
+            "condition": {
+              "tag": "WrongValueKind",
+              "value": "wrapper text"
+            },
+            "path": [
+              {
+                "tag": "Field",
+                "value": "label"
+              }
+            ]
+          }
+        },
+        {
+          "id": "8-unknown-wrappers/4",
+          "input": {
+            "label": {
+              "text": "hello",
+              "extra": true
+            }
+          },
+          "expected": {
+            "accepted": false,
+            "condition": {
+              "tag": "WrongValueKind",
+              "value": "wrapper text"
+            },
+            "path": [
+              {
+                "tag": "Field",
+                "value": "label"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "8-unknown-padding",
+      "profile": "default",
+      "type_graph": "unknown",
+      "cases": [
+        {
+          "id": "8-unknown-padding/1",
+          "input": {
+            "label": {
+              "bytes": "YQ="
+            }
+          },
+          "expected": {
+            "accepted": false,
+            "condition": {
+              "tag": "InvalidBytes"
+            },
+            "path": [
+              {
+                "tag": "Field",
+                "value": "label"
+              }
+            ]
+          }
+        },
+        {
+          "id": "8-unknown-padding/2",
+          "input": {
+            "label": {
+              "bytes": "YWJj="
+            }
+          },
+          "expected": {
+            "accepted": false,
+            "condition": {
+              "tag": "InvalidBytes"
+            },
+            "path": [
+              {
+                "tag": "Field",
+                "value": "label"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "9-field-index-string",
+      "profile": "default",
+      "type_graph": "nested-string",
+      "cases": [
+        {
+          "id": "9-field-index-string/1",
+          "input": {
+            "ops": [
+              {
+                "cid": 1
+              }
+            ]
+          },
+          "expected": {
+            "accepted": false,
+            "condition": {
+              "tag": "WrongValueKind",
+              "value": "string wrapper"
+            },
+            "path": [
+              {
+                "tag": "Field",
+                "value": "ops"
+              },
+              {
+                "tag": "Index",
+                "value": "0"
+              },
+              {
+                "tag": "Field",
+                "value": "cid"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "9-field-index-bytes",
+      "profile": "default",
+      "type_graph": "nested-bytes",
+      "cases": [
+        {
+          "id": "9-field-index-bytes/1",
+          "input": {
+            "ops": [
+              {
+                "cid": {
+                  "bytes": "!"
+                }
+              }
+            ]
+          },
+          "expected": {
+            "accepted": false,
+            "condition": {
+              "tag": "InvalidBytes"
+            },
+            "path": [
+              {
+                "tag": "Field",
+                "value": "ops"
+              },
+              {
+                "tag": "Index",
+                "value": "0"
+              },
+              {
+                "tag": "Field",
+                "value": "cid"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "9-variant",
+      "profile": "default",
+      "type_graph": "union-bytes",
+      "cases": [
+        {
+          "id": "9-variant/1",
+          "input": {
+            "ops": [
+              {
+                "cid": {
+                  "bytes": "!"
+                }
+              }
+            ]
+          },
+          "expected": {
+            "accepted": false,
+            "condition": {
+              "tag": "InvalidBytes"
+            },
+            "path": [
+              {
+                "tag": "Field",
+                "value": "ops"
+              },
+              {
+                "tag": "Index",
+                "value": "0"
+              },
+              {
+                "tag": "Field",
+                "value": "cid"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

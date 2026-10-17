@@ -192,6 +192,11 @@ fn producer_model(
     state: &SearchState,
     source: &AvailableValue,
 ) -> Option<SlotValue> {
+    let facts = state
+        .facts
+        .iter()
+        .filter(|fact| fact.inspected.producer == source.producer)
+        .collect::<Vec<_>>();
     let fixed = match &source.producer {
         ProducerRef::Initial(id) => prepared
             .input()
@@ -204,131 +209,208 @@ fn producer_model(
             }),
         _ => None,
     };
+    let mut replacements = Vec::new();
     let limit = prepared.input().bounds.max_type_obligations;
-    let mut candidates = fixed.clone().map(|value| vec![value]).unwrap_or_else(|| {
-        slot_samples(prepared.graph(), &prepared.input().bounds, &source.contract).values
-    });
-    if fixed.is_none() {
-        for fact in state
-            .facts
-            .iter()
-            .filter(|fact| fact.inspected.producer == source.producer)
-        {
-            let guard = guard_declaration(prepared.input(), &fact.guard)?;
-            let projected = effective_projection(prepared, state, &fact.inspected).ok()?;
-            let mut replacements = match &fact.arm {
-                GuardArm::Absent => vec![SlotValue::Absent],
-                GuardArm::Null => vec![SlotValue::Null],
-                GuardArm::Accepted => match &guard.kind {
-                    GuardKind::Validate(contract) => {
-                        slot_samples(prepared.graph(), &prepared.input().bounds, contract).values
-                    }
-                    _ => Vec::new(),
-                },
-                GuardArm::Variant(tag) => {
-                    let mut values = slot_samples(
-                        prepared.graph(),
-                        &prepared.input().bounds,
-                        &projected.destination,
-                    )
-                    .values;
-                    if let Some(TypeShape::TaggedUnion(spec)) =
-                        resolved_shape(prepared.graph(), &projected.destination.type_ref)
-                    {
-                        if let Some(branch) =
-                            spec.branches.iter().find(|branch| &branch.wire_tag == tag)
-                        {
-                            let key = prepared
-                                .graph()
-                                .profile()
-                                .tag
-                                .as_ref()
-                                .map(|model| model.key.as_str());
-                            values.extend(
-                                sample_value_fuel(
-                                    prepared.graph(),
-                                    &prepared.input().bounds,
-                                    limit,
-                                    &[],
-                                    &branch.target,
-                                )
-                                .values
-                                .into_iter()
-                                .filter_map(|value| match key {
-                                    Some(key) => with_member(key, tag, value).ok(),
-                                    None => Some(value),
-                                })
-                                .map(SlotValue::Present),
-                            );
-                        }
-                    }
-                    values
-                }
-                GuardArm::Rejected => match &guard.kind {
-                    GuardKind::Validate(_) => {
-                        slot_samples(
-                            prepared.graph(),
-                            &prepared.input().bounds,
-                            &projected.destination,
-                        )
-                        .values
-                    }
-                    _ => Vec::new(),
-                },
-                _ => {
-                    slot_samples(
-                        prepared.graph(),
-                        &prepared.input().bounds,
-                        &projected.destination,
-                    )
-                    .values
-                }
-            };
-            replacements.retain(|value| {
-                evaluate_guard_arm(prepared.graph(), guard, borrowed_slot(value))
-                    .ok()
-                    .as_ref()
-                    == Some(&fact.arm)
-            });
-            let originals = candidates.clone();
-            for candidate in originals {
-                for replacement in &replacements {
-                    if let Some(value) =
-                        replace_projected(&candidate, &fact.inspected.path, replacement)
-                    {
-                        if !candidates.contains(&value) {
-                            candidates.push(value);
-                        }
-                        if candidates.len() >= limit {
-                            break;
-                        }
-                    }
-                }
-                if candidates.len() >= limit {
-                    break;
-                }
+    if let Some(value) = fixed {
+        if !matches!(
+            validation::accepts_slot(prepared.graph(), &source.contract, borrowed_slot(&value)),
+            ValueDecision::Accepted
+        ) {
+            return None;
+        }
+        return satisfy_branch_facts(
+            prepared,
+            state,
+            source,
+            &facts,
+            0,
+            &value,
+            false,
+            &mut replacements,
+            limit,
+        );
+    }
+    let mut answer = None;
+    find_accepted_slot_candidate(
+        prepared.graph(),
+        &prepared.input().bounds,
+        &source.contract,
+        |candidate, _within_bound| {
+            if let Some(value) = satisfy_branch_facts(
+                prepared,
+                state,
+                source,
+                &facts,
+                0,
+                candidate,
+                true,
+                &mut replacements,
+                limit,
+            ) {
+                answer = Some(value);
+                SlotCandidateControl::Accept
+            } else if replacements.len() >= limit {
+                SlotCandidateControl::StopNoEvidence
+            } else {
+                SlotCandidateControl::Continue
+            }
+        },
+    );
+    answer
+}
+
+fn branch_facts_hold(
+    prepared: &PreparedCompositionInput<'_>,
+    facts: &[&BranchFact],
+    count: usize,
+    value: &SlotValue,
+) -> bool {
+    facts.iter().take(count).all(|fact| {
+        let Some(guard) = guard_declaration(prepared.input(), &fact.guard) else {
+            return false;
+        };
+        let inspected = project_owned(value, &fact.inspected.path, &());
+        evaluate_guard_arm(prepared.graph(), guard, borrowed_slot(&inspected))
+            .ok()
+            .as_ref()
+            == Some(&fact.arm)
+    })
+}
+#[allow(clippy::too_many_arguments)]
+fn satisfy_branch_facts(
+    prepared: &PreparedCompositionInput<'_>,
+    state: &SearchState,
+    source: &AvailableValue,
+    facts: &[&BranchFact],
+    index: usize,
+    current: &SlotValue,
+    allow_replacement: bool,
+    replacements: &mut Vec<SlotValue>,
+    limit: usize,
+) -> Option<SlotValue> {
+    let Some(fact) = facts.get(index) else {
+        return Some(current.clone());
+    };
+    let guard = guard_declaration(prepared.input(), &fact.guard)?;
+    let projected = effective_projection(prepared, state, &fact.inspected).ok()?;
+    let inspected = project_owned(current, &fact.inspected.path, &());
+    if evaluate_guard_arm(prepared.graph(), guard, borrowed_slot(&inspected))
+        .ok()
+        .as_ref()
+        == Some(&fact.arm)
+    {
+        if let Some(result) = satisfy_branch_facts(
+            prepared,
+            state,
+            source,
+            facts,
+            index + 1,
+            current,
+            allow_replacement,
+            replacements,
+            limit,
+        ) {
+            if branch_facts_hold(prepared, facts, index + 1, &result) {
+                return Some(result);
             }
         }
     }
-    candidates.into_iter().find(|value| {
-        matches!(
-            validation::accepts_slot(prepared.graph(), &source.contract, borrowed_slot(value)),
-            ValueDecision::Accepted
-        ) && state
-            .facts
-            .iter()
-            .filter(|fact| fact.inspected.producer == source.producer)
-            .all(|fact| {
-                let Some(guard) = guard_declaration(prepared.input(), &fact.guard) else {
-                    return false;
-                };
-                let inspected = project_owned(value, &fact.inspected.path, &());
-                evaluate_guard_arm(prepared.graph(), guard, borrowed_slot(&inspected))
-                    .ok()
-                    .as_ref()
-                    == Some(&fact.arm)
-            })
-    })
+    if !allow_replacement || replacements.len() >= limit {
+        return None;
+    }
+
+    let (search_contract, shaping) = match (&fact.arm, &guard.kind) {
+        (GuardArm::Accepted, GuardKind::Validate(contract)) => (contract.clone(), None),
+        (GuardArm::Variant(tag), _) => {
+            let TypeShape::TaggedUnion(spec) =
+                resolved_shape(prepared.graph(), &projected.destination.type_ref)?
+            else {
+                return None;
+            };
+            let branch = spec
+                .branches
+                .iter()
+                .find(|branch| &branch.wire_tag == tag)?;
+            let mut contract = projected.destination.clone();
+            contract.type_ref = branch.target.clone();
+            let key = prepared
+                .graph()
+                .profile()
+                .tag
+                .as_ref()
+                .map(|model| model.key.clone());
+            (contract, Some((tag.clone(), key)))
+        }
+        _ => (projected.destination.clone(), None),
+    };
+
+    let mut answer = None;
+    find_accepted_slot_candidate(
+        prepared.graph(),
+        &prepared.input().bounds,
+        &search_contract,
+        |candidate, _within_bound| {
+            if replacements.len() >= limit {
+                return SlotCandidateControl::StopNoEvidence;
+            }
+            let replacement = match (&shaping, candidate) {
+                (Some((tag, Some(key))), SlotValue::Present(value)) => {
+                    let Ok(value) = with_member(key, tag, value.clone()) else {
+                        return SlotCandidateControl::Continue;
+                    };
+                    SlotValue::Present(value)
+                }
+                (Some((_, Some(_))), _) => return SlotCandidateControl::Continue,
+                (_, value) => value.clone(),
+            };
+            if evaluate_guard_arm(prepared.graph(), guard, borrowed_slot(&replacement))
+                .ok()
+                .as_ref()
+                != Some(&fact.arm)
+            {
+                return SlotCandidateControl::Continue;
+            }
+            let Some(updated) = replace_projected(current, &fact.inspected.path, &replacement)
+            else {
+                return SlotCandidateControl::Continue;
+            };
+            if !matches!(
+                validation::accepts_slot(
+                    prepared.graph(),
+                    &source.contract,
+                    borrowed_slot(&updated)
+                ),
+                ValueDecision::Accepted
+            ) {
+                return SlotCandidateControl::Continue;
+            }
+            if !replacements.contains(&updated) {
+                replacements.push(updated.clone());
+            }
+            if let Some(result) = satisfy_branch_facts(
+                prepared,
+                state,
+                source,
+                facts,
+                index + 1,
+                &updated,
+                allow_replacement,
+                replacements,
+                limit,
+            ) {
+                if branch_facts_hold(prepared, facts, index + 1, &result) {
+                    answer = Some(result);
+                    return SlotCandidateControl::Accept;
+                }
+            }
+            if replacements.len() >= limit {
+                SlotCandidateControl::StopNoEvidence
+            } else {
+                SlotCandidateControl::Continue
+            }
+        },
+    );
+    answer
 }
 fn derive_value_models(
     prepared: &PreparedCompositionInput<'_>,

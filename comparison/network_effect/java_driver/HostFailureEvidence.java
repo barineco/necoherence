@@ -3,8 +3,6 @@
 
 package necoherence.network;
 
-// Real necoherence.network.JavaHttpAdapter evidence against a peer supplied
-// over a line-delimited JSON protocol.
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;

@@ -325,19 +325,17 @@ fn tag_members_and_unwrapped_bytes_follow_the_profile() {
             ..
         }) if value_path == vec![PathStep::Field("kind".into())]
     ));
-    let decision = accepts_value(
-        &graph,
-        &choice,
-        &JsonValue::Obj(vec![("kind".into(), JsonValue::Bool(false))]),
-    );
-    assert!(matches!(
-        decision,
-        ValueDecision::Rejected(ValueFailure {
-            condition: ValueCondition::InvalidTag,
-            value_path,
-            ..
-        }) if value_path == vec![PathStep::Field("kind".into())]
-    ));
+    for tag in [JsonValue::Bool(false), JsonValue::Num(BigInt::from(1))] {
+        let decision = accepts_value(&graph, &choice, &JsonValue::Obj(vec![("kind".into(), tag)]));
+        assert!(matches!(
+            decision,
+            ValueDecision::Rejected(ValueFailure {
+                condition: ValueCondition::InvalidTag,
+                value_path,
+                ..
+            }) if value_path == vec![PathStep::Field("kind".into())]
+        ));
+    }
 
     let mut bytes = library();
     bytes.profile.bytes_policy = Some(BytesPolicy {

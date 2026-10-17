@@ -20,7 +20,7 @@ import necoherence.core.Revision;
 import necoherence.core.World;
 import org.junit.jupiter.api.Test;
 
-/** Tests translating lean/Necoherence/Reconcile.lean. */
+
 final class ReconcileTest {
 
     private static ResourceId rid(String name) {
@@ -106,7 +106,7 @@ final class ReconcileTest {
         assertFalse(Reconcile.coherent(withDropped));
     }
 
-    /** Reconciliation's divergence set does not depend on the order of the recorded input. */
+
     @Test
     void reconcileDivergencesAreOrderIndependentProperty() {
         List<Optional<Basis>> bases1 = List.of(
@@ -123,7 +123,7 @@ final class ReconcileTest {
         assertEquals(r1.unbased(), r2.unbased());
     }
 
-    /** The recorded maximum for a resource is the highest revision named by any basis on it. */
+
     @Test
     void reconcileUsesTheHighestRecordedRevisionPerResource() {
         List<Optional<Basis>> bases = List.of(

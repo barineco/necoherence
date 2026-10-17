@@ -752,6 +752,11 @@ public final class NetworkEffectHttpSmoke {
     }
 
     public static void main(String[] args) throws Exception {
+        try (JavaHttpAdapter adapter = new JavaHttpAdapter()) {
+            var issued = issue("ftp://example.test/", List.of(), List.of(), configuration(0, 0), Optional.empty());
+            check(adapter.semanticPort().start(issued.command()) instanceof NetworkEffect.StartObservation.StartFailed,
+                    "semantic port preserves failed start");
+        }
         loopbackSuccessPreservesBytesHeadersAndCounts();
         rawStatusesRemainResponses();
         actualFailureStimuli();

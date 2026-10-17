@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: MIT
 
 import { describe, expect, it } from "vitest";
-import { decideStart, empty, submit, type ResourceBudget } from "../src/request-progression.js";
-import { httpAdapter, networkEffect } from "../src/index.js";
+import { decideStart, empty, submit, type ResourceBudget } from "necoherence/request-progression";
+import * as httpAdapter from "../src/index.js";
+import { networkEffect } from "necoherence";
 
 describe("network effect progression bridge", () => {
   it("keeps progression identity separate from the transport ledger", () => {

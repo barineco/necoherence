@@ -11,13 +11,7 @@ import necoherence.call.Call.CallResult;
 import necoherence.call.Call.Request;
 import org.junit.jupiter.api.Test;
 
-/**
- * Tests translating python/tests/test_call.py.
- *
- * <p>Projection checks field-name presence on a {@link Request}, not the nominal {@code Req}
- * type: a value can satisfy {@code Req} at compile time while still lacking a required field
- * name in {@link Request#fields()}, exactly as the Python and Rust declarations model it.
- */
+
 final class CallTest {
 
     interface GreetReq {
@@ -101,11 +95,6 @@ final class CallTest {
 
     @Test
     void ioAndIssueAreDistinctAtTheTypeLevel() {
-        // Immediate<Req, Prd> and Deferred<Req, Slot> are distinct nominal
-        // types with no subtyping between them; io accepts only Immediate
-        // and issue accepts only Deferred. There is no runtime assertion to
-        // make here: passing a Deferred to io fails at compile time, the
-        // same guarantee Rust and mypy --strict give.
         Immediate<GreetReq, String> imm = Call.immediateOf("test.greet", List.of("name"), CallTest::greet);
         Deferred<GreetReq, String> def =
                 Call.deferredOf("test.stage", List.of("name"), req -> "staged:" + req.name());

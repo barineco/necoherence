@@ -2,25 +2,6 @@
 # SPDX-FileCopyrightText: 2026 barineco
 # SPDX-License-Identifier: MIT
 
-"""Independent oracle for the typed mapping solver.
-
-This oracle is a separately defined decision procedure for the four solver
-operations (derive-enabled, reachability, deadlock, well-foundedness) over
-the closed typed-mapping input vocabulary. It is implemented from scratch in
-this file and shares no code with the Lean semantic authority, the Rust
-producer or the Gleam producer: it never opens, imports, parses or executes
-any of those producer sources. Its canonical JSON result encoding is emitted
-on stdout so the comparison harness can check agreement between the oracle
-and every public producer independently.
-
-CLI:
-  oracle.py --fixtures <path>   evaluate every case in a fixtures document
-  oracle.py --input <path>      evaluate one {"name","input"} case document
-
-The input representation operates on the decoded JSON form of `SolverInput`
-directly (dictionaries and lists), which keeps this implementation
-textually and structurally distinct from the typed producers.
-"""
 
 import json
 import sys
@@ -29,13 +10,12 @@ from collections import deque
 OPS = ("derive_enabled", "check_reachability", "check_deadlock",
        "check_well_foundedness")
 
-# ---------------------------------------------------------------------------
-# small accessors over the decoded JSON representation
-# ---------------------------------------------------------------------------
+
+
+
 
 
 def tokens_at(marking, place):
-    """Tokens carried at `place`; absent places carry none."""
     for entry in marking["places"]:
         if entry["place"] == place:
             return entry["tokens"]
@@ -68,9 +48,9 @@ def _find(seq, pred):
     return None
 
 
-# ---------------------------------------------------------------------------
-# validation (returns an InvalidReason dict or None)
-# ---------------------------------------------------------------------------
+
+
+
 
 
 def _structure_fault(spec, binding):
@@ -206,9 +186,9 @@ def validate(spec):
 
 
 
-# ---------------------------------------------------------------------------
-# enabledness and branch application
-# ---------------------------------------------------------------------------
+
+
+
 
 
 def bindings_for(spec, transition_id):
@@ -257,7 +237,6 @@ def consumed_at(bindings, marking, place):
 
 
 def _drop_one(tokens, token):
-    """Remove a single occurrence of `token` (structural equality)."""
     remaining = []
     dropped = False
     for current in tokens:
@@ -269,9 +248,6 @@ def _drop_one(tokens, token):
 
 
 def apply_consumption(marking, bindings):
-    """Multiset subtraction: each selected occurrence removes exactly one
-    equal token, so structurally identical duplicates the binding did not
-    select are retained."""
     places = []
     for entry in marking["places"]:
         kept = list(entry["tokens"])
@@ -312,9 +288,9 @@ def apply_branch_at(marking, transition, bindings):
     return result
 
 
-# ---------------------------------------------------------------------------
-# bounded exploration
-# ---------------------------------------------------------------------------
+
+
+
 
 
 def _neighbors(spec, path, marking):
@@ -328,8 +304,6 @@ def _neighbors(spec, path, marking):
 
 
 def _fresh(neighbors, blocked):
-    """Neighbours whose marking is not among `blocked` and not already
-    produced by another neighbour in the same batch."""
     kept = []
     seen = list(blocked)
     for pair in neighbors:
@@ -341,10 +315,6 @@ def _fresh(neighbors, blocked):
 
 
 def explore(spec):
-    """Bounded BFS with a deduplicated frontier: a marking already visited
-    or already pending (a convergence target) is never enqueued a second
-    time. Returns ("found", path, marking) | ("closed", visited)
-    | ("bound_hit", visited)."""
     fuel = spec["bound"]["max_search_steps"]
     frontier = deque([([], spec["marking"])])
     visited = []
@@ -370,7 +340,6 @@ def _total_tokens(marking):
 
 
 def explore_cycles(spec):
-    """Search active paths for an exact repeated marking."""
     fuel = spec["bound"]["max_search_steps"]
     stack = [([], [spec["marking"]], spec["marking"])]
     explored = []
@@ -401,15 +370,12 @@ def explore_cycles(spec):
     return ("closed", explored)
 
 
-# ---------------------------------------------------------------------------
-# the four operations, encoded in the canonical result vocabulary
-# ---------------------------------------------------------------------------
+
+
+
 
 
 def _binding_bound_exceeded(spec):
-    """Enabledness enumeration must consider every declared binding of
-    every declared transition; when that candidate count exceeds the
-    declared `max_bindings` the operation reports Unknown."""
     candidates = sum(
         len(bindings_for(spec, transition["identity"]))
         for transition in spec["transitions"])
@@ -495,7 +461,6 @@ def op_check_well_foundedness(spec):
 
 
 def evaluate(spec):
-    """The closed result of all four operations for one solver input."""
     return {
         "derive_enabled": op_derive_enabled(spec),
         "check_reachability": op_check_reachability(spec),
@@ -504,9 +469,9 @@ def evaluate(spec):
     }
 
 
-# ---------------------------------------------------------------------------
-# CLI
-# ---------------------------------------------------------------------------
+
+
+
 
 
 def _fail(message):

@@ -1,7 +1,6 @@
 # SPDX-FileCopyrightText: 2026 barineco
 # SPDX-License-Identifier: MIT
 
-"""Deterministic finite requests over the shared operation surface."""
 
 from __future__ import annotations
 
@@ -10,13 +9,13 @@ import json
 import sys
 from typing import Any
 
-# Each runtime-generated differential query is bounded to this many contiguous
-# requests.  Coverage is always checked against the complete generated list.
+
+
 DIFFERENTIAL_CHUNK_SIZE = 32
 
-# Declared feature/operation inventory. Every adapter must expose exactly
-# this set, in this order, and every operation below must be exercised by
-# at least one generated request.
+
+
+
 
 SURFACE: list[tuple[str, list[str]]] = [
     ("core", ["lookup", "bump", "commandOf", "apply"]),
@@ -49,9 +48,9 @@ ALL_OPERATIONS: list[tuple[str, str]] = [
 ]
 
 
-# ---------------------------------------------------------------------------
-# Value domains
-# ---------------------------------------------------------------------------
+
+
+
 
 NONNEG_INTS: list[int] = [0, 1, 2, 3, 2**53 - 1, 2**53, 2**63 - 1, 2**63, 2**64, 10**100]
 INVALID_INTS: list[str] = ["-1", "1.5", "abc", ""]
@@ -98,8 +97,6 @@ def observation(payload: Any, b: dict[str, Any], observed_at: int) -> dict[str, 
 
 
 def zip_cycle(*seqs: list[Any]) -> list[tuple[Any, ...]]:
-    """Deterministic pairwise combination: shorter sequences cycle so every
-    value in every sequence appears at least once, no full product."""
     n = max(len(s) for s in seqs)
     return [tuple(s[i % len(s)] for s in seqs) for i in range(n)]
 
@@ -110,9 +107,9 @@ def permutations_upto4(items: list[Any]) -> list[tuple[Any, ...]]:
     return list(itertools.permutations(items))
 
 
-# ---------------------------------------------------------------------------
-# Call declaration builders
-# ---------------------------------------------------------------------------
+
+
+
 
 
 def form_identity() -> dict[str, Any]:
@@ -151,12 +148,6 @@ def req(feature: str, operation: str, input_: Any) -> Req:
 
 
 def build_seed_requests() -> list[Req]:
-    """Operation-shaped seeds.
-
-    ``build_requests`` below expands these seeds over the declared finite
-    domains.  Keeping operation construction here avoids a saved corpus while
-    making the public protocol for every operation visible in one place.
-    """
     out: list[Req] = []
 
     w_basic = world([(RESOURCE_IDS[1], 0), (RESOURCE_IDS[2], 5)])
@@ -556,7 +547,7 @@ def build_seed_requests() -> list[Req]:
         "environmentSpecification": environment_specification(100),
         "capacityObservation": capacity_obs(budget(5, 5, 5), 10),
         "observedAt": nat(10),
-        "start": None,  # CostSelection | null; no adapter observation
+        "start": None,
     }
     out.append(req("dynamic_admission", "admitDynamicRequest", admission_input_submit))
 
@@ -566,7 +557,7 @@ def build_seed_requests() -> list[Req]:
         "environmentSpecification": environment_specification(1),
         "capacityObservation": capacity_obs(budget(5, 5, 5), 0),
         "observedAt": nat(1000),
-        "start": None,  # CostSelection | null; no adapter observation
+        "start": None,
     }
     out.append(req("dynamic_admission", "admitDynamicRequest", admission_input_stale))
 
@@ -763,7 +754,6 @@ def replace_input(seed: Req, input_: Any) -> Req:
 
 
 def build_requests() -> list[Req]:
-    """Expand operation-shaped inputs over deterministic finite values."""
     seeds = build_seed_requests()
     out = list(seeds)
     lookup = next(s for s in seeds if (s["feature"], s["operation"]) == ("core", "lookup"))
@@ -775,7 +765,7 @@ def build_requests() -> list[Req]:
         out.append(replace_input(command_seed, {"observation": observation(PAYLOADS[index % len(PAYLOADS)], basis(resource, number), number), "payload": PAYLOADS[(index + 1) % len(PAYLOADS)]}))
         out.append(replace_input(apply_seed, {"world": world([(resource, number)]), "command": command("generated", basis(resource, number))}))
 
-    # The map-like World value accepts all orders, including empty and four-item input.
+
     for size in range(5):
         entries = [(RESOURCE_IDS[i], NONNEG_INTS[i]) for i in range(size)]
         for ordered in permutations_upto4(entries):
@@ -792,7 +782,6 @@ def build_requests() -> list[Req]:
 
 
 def contiguous_request_chunks(requests: list[Req]) -> list[tuple[int, list[Req]]]:
-    """Partition requests into deterministic, order-preserving bounded slices."""
     return [
         (start, requests[start:start + DIFFERENTIAL_CHUNK_SIZE])
         for start in range(0, len(requests), DIFFERENTIAL_CHUNK_SIZE)

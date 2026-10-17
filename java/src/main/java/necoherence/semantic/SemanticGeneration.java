@@ -188,7 +188,7 @@ GoalPort id:s;contract:SlotContract;source_constraint:SourceConstraint
 FailureEmbedding id:s;origin:FailureOrigin;contract:SlotContract;final_resources:[ResourceGoal]
 GoalSpec outputs:[GoalPort];failures:[FailureEmbedding];final_resources:[ResourceGoal]
 ResourceBounds max_bindings:n;max_search_steps:n;max_tokens:n
-SearchBounds max_expanded_states:n;max_binding_candidates:n;max_type_obligations:n;max_branch_nodes:n;resource_bounds:?ResourceBounds
+SearchBounds max_expanded_states:n;max_binding_candidates:n;max_type_obligations:n;max_branch_nodes:n;resource_bounds:?ResourceBounds;max_sample_length:n
 CompositionInput identity:s;revision:s;basis:SemanticBasis;signatures:[FunctionSignature];initial_inputs:[InitialInput];initial_resources:[ResourceLot];goal:GoalSpec;invocation_domain:InvocationDomain;allowed_effects:[CompositionEffect];explicit_order:[(s,s)];selection_policy:?SelectionPolicy;bounds:SearchBounds
 ResourceBinding requirement:s;lot:ResourceLotRef;inclusion:InclusionCertificate
 InvocationPlan site:s;function:FunctionRef;bindings:[(s,BindingExpr)];resources:[ResourceBinding]
@@ -262,13 +262,15 @@ GenerationComposition problem:CompositionInput;derivation:RawComposition
         enums(result, "ChoiceSkeleton", "Invoke{invocation:InvocationPlan;outcomes:[s];empty_outcomes:[s]}|Guard{guard:s;inspected:ValueRef;arms:[GuardArm]}"); enums(result, "TerminalAssessment", "Feasible:ResourceTraceCertificate|EmptyValues:[ProducerRef]|Unknown:[UnresolvedObligation]|ResourceUnreachable{trace:BranchTrace;lowering:SolverInput;correspondence:ResourceCorrespondence;closure:ClosureWitness}|RejectedLowering{trace:BranchTrace;reason:s}");
         enums(result, "SelectionEvidence", "AnyFeasible|Unique{closure:CompositionClosureWitness;canonical_plan:s}"); enums(result, "TokenKind", "Input|Output|Failure|Effect|Observation|Accepted"); enums(result, "GoalPredicate", "PlaceHasAtLeast{place:s;count:n}|PlaceHasToken{place:s;target:s;index:n;revision:n}|And:(GoalPredicate,GoalPredicate)|Or:(GoalPredicate,GoalPredicate)|Not:GoalPredicate"); enums(result, "UnknownReason", "BindingBoundExhausted:n|SearchStepBoundExhausted:n");
         enums(result, "ExactJson", "Null|Bool:b|Integer:i|Decimal{text:d}|String:s|Array{items:[ExactJson]}|Object{members:[ExactMember]}"); result.put("ExactMember", recordDesc("key:s;value:ExactJson"));
-        result.put("TypeRef", new Atom("s")); result.put("DefinitionRef", new Atom("s"));
+        result.put("TypeRef", recordDesc("source:SourceRef;definition_name:s;pointer:[s]"));
+        result.put("DefinitionRef", recordDesc("source:SourceRef;name:s"));
         result.put("SemanticBasis", new Atom("SignatureGenerationBasis"));
-        result.put("SourceRef", recordDesc("repository:s;revision:s;path:s;content_digest:h"));
+        result.put("SourceRef", recordDesc("repository:s;revision:s;path:s;content_digest:s;document_id:s;declared_revision:?i"));
         result.put("OccurrenceRef", recordDesc("source:SourceRef;pointer:[s]"));
         TypeSignatures.descriptors(result, SemanticGeneration::recordDesc, (name, variants) -> enums(result, name, variants));
         Map<String, Descriptor> original = new LinkedHashMap<>(result);
         for (var entry : original.entrySet()) result.put("Sig" + entry.getKey(), signatureDescriptor(entry.getValue(), original));
+        result.put("SigSourceRef", recordDesc("repository:s;revision:s;path:s;content_digest:h"));
         RecordDesc outcome = (RecordDesc) result.get("SigOutcomeContract");
         List<NamedField> outcomeFields = new ArrayList<>(outcome.fields());
         outcomeFields.add(new NamedField("cause", new Atom("OutcomeCause")));
@@ -467,7 +469,7 @@ GenerationComposition problem:CompositionInput;derivation:RawComposition
         for (WireValue candidate : candidates) {
             if (!sampleWithinBound(candidate, maxSampleLength)) { omitted = true; continue; }
             try {
-                context.validateSlot(context.index(sourceRef), true, false, new Present<>(candidate));
+                context.validateSlot(sourceRef, true, false, new Present<>(candidate));
                 additional.add(candidate);
             } catch (ValueFailure failure) {}
         }
@@ -650,7 +652,7 @@ GenerationComposition problem:CompositionInput;derivation:RawComposition
                 texts.add(""); texts.add("a");
                 for (WireValue bound : a(f(spec, "lengths"))) for (String key : List.of("minimum", "maximum"))
                     if (!nil(f(bound, key))) texts.add("a".repeat(n(f(bound, key)).intValueExact()));
-                for (String text : texts) candidates.add(context.encodeText(context.index(reference), text));
+                for (String text : texts) candidates.add(context.encodeText(reference, text));
             }
             case "Bytes" -> {
                 List<BigInteger> lengths = new ArrayList<>(List.of(BigInteger.ZERO, BigInteger.ONE));
@@ -719,7 +721,7 @@ GenerationComposition problem:CompositionInput;derivation:RawComposition
         }
         List<WireValue> accepted = new ArrayList<>();
         for (WireValue candidate : candidates) try {
-            context.validateSlot(context.index(reference), true, false, new Present<>(candidate));
+            context.validateSlot(reference, true, false, new Present<>(candidate));
             if (!accepted.contains(candidate)) accepted.add(candidate);
         } catch (ValueFailure failure) {}
         return accepted;
@@ -893,7 +895,7 @@ GenerationComposition problem:CompositionInput;derivation:RawComposition
                     if (finite != null) {
                         for (BigInteger value : finite)
                             if (within(value, integerBounds(s)))
-                                try { context.validateSlot(context.index(destinationRef), true, false, new Present<>(num(value))); }
+                                try { context.validateSlot(destinationRef, true, false, new Present<>(num(value))); }
                                 catch (ValueFailure failure) { accepted = false; break; }
                     } else {
                         accepted = nil(f(d, "const_value")) && nil(f(d, "enum_values"))
@@ -1537,8 +1539,8 @@ GenerationComposition problem:CompositionInput;derivation:RawComposition
             catch (ValueFailure failure) {
                 if (failure.condition().startsWith("UndefinedMeaning:")) throw failure; rejected = true;
                 WireValue supplied = f(certificate, "destination_failure"), ref = f(supplied, "type_ref"); context.index(ref);
-                require(failure.typeIndex() >= 0 && ref.equals(context.reference(failure.typeIndex())), "$counterexample", "failure source identity");
-                require(a(f(supplied, "value_path")).stream().map(step -> s(payload(step))).toList().equals(failure.path()) && failure.condition().split(": ", 2)[0].equals(tag(f(supplied, "condition"))) && f(supplied, "reference_trace").equals(arr(failure.referenceTrace())), "$counterexample", "actual rejection path/condition/trace");
+                require(ref.equals(failure.typeRef()), "$counterexample", "failure source identity");
+                require(a(f(supplied, "value_path")).equals(failure.path()) && failure.condition().split(": ", 2)[0].equals(tag(f(supplied, "condition"))) && f(supplied, "reference_trace").equals(arr(failure.referenceTrace())), "$counterexample", "actual rejection path/condition/trace");
                 Slot<WireValue> observed = projectSlotValue(context, value, a(f(supplied, "value_path")));
                 require(s(f(supplied, "observed")).equals(observed(observed)), "$counterexample", "observed rejection value");
                 if (o(f(supplied, "condition")).get("value") != null) {
@@ -1833,8 +1835,11 @@ GenerationComposition problem:CompositionInput;derivation:RawComposition
     }
     private static String encodeTuple(String... parts) { return encodeTuple(List.of(parts)); }
     private static String typeIdentity(WireValue reference) {
-        return encodeTuple("type", "ncoh-type-signatures", "1", "", "", "", "none", "", s(reference),
-                encodeTuple(List.of()));
+        WireValue source = f(reference, "source"), declared = f(source, "declared_revision");
+        return encodeTuple("type", s(f(source, "repository")), s(f(source, "revision")), s(f(source, "path")),
+                s(f(source, "content_digest")), s(f(source, "document_id")), nil(declared) ? "none" : "some",
+                nil(declared) ? "" : s(declared), s(f(reference, "definition_name")),
+                encodeTuple(a(f(reference, "pointer")).stream().map(SemanticValues::s).toList()));
     }
     private static String functionIdentity(WireValue reference) { return encodeTuple(s(f(reference, "identity")), s(f(reference, "revision")), s(f(reference, "content_digest"))); }
     private static String producerIdentity(WireValue producer) {

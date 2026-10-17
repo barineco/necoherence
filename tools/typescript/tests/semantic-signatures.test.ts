@@ -68,3 +68,42 @@ fail(decodes !== 1 && "decoded once");
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+it("compiles both generated default codecs and roundtrips every declared slot", () => {
+  const input = structuredClone(generation());
+  const truth = input.signatures.nodes.find(node => node.id === "truth")!;
+  const product = input.signatures.nodes.find(node => node.id === "product")!;
+  if (truth.shape.tag !== "Boolean" || product.shape.tag !== "Product") throw new Error("fixture");
+  Object.assign(truth.shape.value, { default_value: false });
+  Object.assign(input.signatures, { nodes: [...input.signatures.nodes, { id: "any", shape: { tag: "Unknown", value: { tag: "Any" } } }] });
+  Object.assign(product.shape.value, { fields: [
+    { wire_name: "flag", slot: { type_id: "truth", required: true, nullable: false } },
+    { wire_name: "seen", slot: { type_id: "truth", required: false, nullable: true } },
+  ], extras: { tag: "Allow", fields: { key_format: null, value: { type_id: "any", nullable: false } } } });
+  Object.assign(input, { basis: S.signatureBasis(input.signatures, input.entrypoints) });
+  const admitted = S.admitSignatureGeneration(input.basis, JSON.stringify(input));
+  if (admitted.tag !== "Admitted") throw new Error(JSON.stringify(admitted.failure));
+  const directory = mkdtempSync(resolve(tmpdir(), "ncoh-default-typescript-"));
+  try {
+    const filename = resolve(directory, "generated.mts");
+    writeFileSync(filename, renderSignatureGeneration(admitted.checked, resolve("../../typescript/dist/index.js")));
+    execFileSync(process.execPath, [resolve("node_modules/typescript/bin/tsc"), filename, "--target", "ES2022", "--module", "NodeNext", "--strict", "--skipLibCheck"], { encoding: "utf8", stdio: "pipe" });
+    const runner = resolve(directory, "runner.mjs");
+    writeFileSync(runner, `import * as G from "./generated.mjs";
+import { semanticValues as V } from ${JSON.stringify(resolve("../../typescript/dist/index.js"))};
+const typed = G.Type_product_3Codec.decodeWithDefaults("{}");
+if (typed.flag !== false || typed.seen !== false) throw new Error("declared slots");
+if (V.encodeExact(G.Type_product_3Codec.encode(typed)) !== '{"flag":false,"seen":false}') throw new Error("concrete encode");
+if (G.T_70726f64756374Codec.encode(G.T_70726f64756374Codec.decodeWithDefaults("{}")) !== '{"flag":false,"seen":false}') throw new Error("exact encode");
+const retained = '{"2":false,"seen":null,"1":0}', expected = retained.slice(0, -1) + ',"flag":false}';
+const ordered = G.Type_product_3Codec.decodeWithDefaults(retained);
+if (ordered.flag !== false || ordered.seen !== null || ordered["1"] !== 0n || ordered["2"] !== false) throw new Error("ordered declared and extra slots");
+if (V.encodeExact(G.Type_product_3Codec.encode(ordered)) !== expected) throw new Error("ordered concrete encode");
+if (G.T_70726f64756374Codec.encode(G.T_70726f64756374Codec.decodeWithDefaults(retained)) !== expected) throw new Error("ordered exact encode");
+let strict = false;
+try { G.Type_product_3Codec.decode(V.parseExact("{}")); } catch { strict = true; }
+if (!strict) throw new Error("strict decode");
+`);
+    execFileSync(process.execPath, [runner], { encoding: "utf8", stdio: "pipe" });
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});

@@ -4,7 +4,6 @@
 use crate::network_effect::*;
 use crate::request_progression::ExecutionHandle;
 use std::collections::{HashMap, VecDeque};
-use std::error::Error as StdError;
 use std::io::{ErrorKind, Read};
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -470,8 +469,20 @@ fn perform_request(
         .collect::<Result<_, _>>()
         .map_err(|_| (HostStage::RequestWrite, HostFailure::RequestWriteFailed))?;
 
-    let agent = ureq::AgentBuilder::new().redirects(0).build();
-    let mut request = agent.request(&input.instruction.method, &input.instruction.target);
+    let agent = ureq::Agent::config_builder()
+        .tls_config(
+            ureq::tls::TlsConfig::builder()
+                .root_certs(ureq::tls::RootCerts::PlatformVerifier)
+                .build(),
+        )
+        .max_redirects(0)
+        .max_redirects_will_error(false)
+        .http_status_as_error(false)
+        .build()
+        .new_agent();
+    let mut headers = Vec::new();
+    let mut host_seen = false;
+    let mut content_length_seen = false;
     for field in &input.instruction.headers {
         let bytes: Vec<u8> = field
             .value
@@ -490,37 +501,54 @@ fn perform_request(
                 HostFailure::RequestHeaderEncodingUnavailable,
             )
         })?;
-        request = request.set(&field.name, &value);
+        if field.name.eq_ignore_ascii_case("host") {
+            if host_seen {
+                return Err((HostStage::RequestWrite, HostFailure::RequestWriteFailed));
+            }
+            host_seen = true;
+        }
+        if field.name.eq_ignore_ascii_case("content-length") {
+            let length = value.trim_matches([' ', '\t']);
+            if content_length_seen
+                || length.is_empty()
+                || !length.bytes().all(|byte| byte.is_ascii_digit())
+                || length.parse::<u64>().is_err()
+            {
+                return Err((HostStage::RequestWrite, HostFailure::RequestWriteFailed));
+            }
+            content_length_seen = true;
+        }
+        headers.push((field.name.as_str(), value));
+    }
+    let mut request = ureq::http::Request::builder()
+        .method(input.instruction.method.as_str())
+        .uri(input.instruction.target.as_str());
+    for (name, value) in headers {
+        request = request.header(name, value);
     }
 
-    let result = if body.is_empty() {
-        request.call()
+    let result = if body.is_empty()
+        && !matches!(input.instruction.method.as_str(), "POST" | "PUT" | "PATCH")
+    {
+        agent.run(
+            request
+                .body(())
+                .map_err(|_| (HostStage::RequestWrite, HostFailure::RequestWriteFailed))?,
+        )
     } else {
-        request.send_bytes(&body)
+        agent.run(
+            request
+                .body(body.as_slice())
+                .map_err(|_| (HostStage::RequestWrite, HostFailure::RequestWriteFailed))?,
+        )
     };
-    let response = match result {
-        Ok(response) => response,
-        Err(ureq::Error::Status(_, response)) => response,
-        Err(ureq::Error::Transport(transport)) => {
-            return Err(classify_transport(&transport));
-        }
-    };
+    let response = result.map_err(|error| classify_transport(&error))?;
 
-    let status = Natural::from(response.status());
+    let status = Natural::from(response.status().as_u16());
     let mut headers = Vec::new();
-    let mut occurrences: HashMap<String, usize> = HashMap::new();
-    for name in response.headers_names() {
-        let occurrence = occurrences.entry(name.clone()).or_insert(0);
-        let values = response.all(&name);
-        let Some(value) = values.get(*occurrence) else {
-            return Err((
-                HostStage::ResponseHeaders,
-                HostFailure::HeaderRepresentationUnavailable,
-            ));
-        };
-        *occurrence += 1;
+    for (name, value) in response.headers() {
         headers.push(RawHeaderField {
-            name,
+            name: name.as_str().to_owned(),
             value: value
                 .as_bytes()
                 .iter()
@@ -535,6 +563,7 @@ fn perform_request(
         .map_or(u64::MAX, |limit| limit.saturating_add(1));
     let mut body = Vec::new();
     response
+        .into_body()
         .into_reader()
         .take(read_limit)
         .read_to_end(&mut body)
@@ -566,57 +595,67 @@ fn perform_request(
     ))
 }
 
-fn classify_transport(transport: &ureq::Transport) -> (HostStage, HostFailure) {
-    use ureq::ErrorKind;
-
-    match transport.kind() {
-        ErrorKind::InvalidUrl | ErrorKind::UnknownScheme => {
-            (HostStage::Start, HostFailure::UnsupportedUriScheme)
-        }
-        ErrorKind::InsecureRequestHttpsOnly | ErrorKind::InvalidProxyUrl => {
+fn classify_transport(error: &ureq::Error) -> (HostStage, HostFailure) {
+    match error {
+        ureq::Error::BadUri(_) => (HostStage::Start, HostFailure::UnsupportedUriScheme),
+        ureq::Error::RequireHttpsOnly(_) | ureq::Error::InvalidProxyUrl => {
             (HostStage::Start, HostFailure::InvalidHostConfiguration)
         }
-        ErrorKind::Dns => (HostStage::Start, HostFailure::NameResolutionFailed),
-        ErrorKind::ConnectionFailed | ErrorKind::ProxyConnect | ErrorKind::ProxyUnauthorized => {
+        ureq::Error::HostNotFound => (HostStage::Start, HostFailure::NameResolutionFailed),
+        ureq::Error::ConnectionFailed | ureq::Error::ConnectProxyFailed(_) => {
             (HostStage::Start, HostFailure::ConnectionFailed)
         }
-        ErrorKind::BadStatus | ErrorKind::BadHeader => {
+        ureq::Error::Http(_) | ureq::Error::BodyExceedsLimit(_) => {
+            (HostStage::RequestWrite, HostFailure::RequestWriteFailed)
+        }
+        ureq::Error::Protocol(error) => match error {
+            ureq_proto::Error::TooManyHostHeaders
+            | ureq_proto::Error::BadHostHeader
+            | ureq_proto::Error::BadAuthorizationHeader
+            | ureq_proto::Error::BadHeader(_)
+            | ureq_proto::Error::BodyLargerThanContentLength
+            | ureq_proto::Error::BodyNotAllowed
+            | ureq_proto::Error::UnsupportedVersion
+            | ureq_proto::Error::MethodVersionMismatch(_, _) => {
+                (HostStage::RequestWrite, HostFailure::RequestWriteFailed)
+            }
+            _ => (HostStage::ResponseHeaders, HostFailure::MalformedResponse),
+        },
+        ureq::Error::Io(error) => classify_io_transport(error),
+        ureq::Error::Timeout(_) => (
+            HostStage::ResponseHeaders,
+            HostFailure::Timeout {
+                stage: HostStage::ResponseHeaders,
+                cause: HostTimeoutCause::LibraryReported,
+            },
+        ),
+        ureq::Error::LargeResponseHeader(_, _) => {
             (HostStage::ResponseHeaders, HostFailure::MalformedResponse)
         }
-        ErrorKind::Io => classify_io_transport(transport),
-        ErrorKind::TooManyRedirects | ErrorKind::HTTP => {
-            (HostStage::ResponseHeaders, HostFailure::HostRuntimeFailure)
-        }
+        _ => (HostStage::ResponseHeaders, HostFailure::HostRuntimeFailure),
     }
 }
 
-fn classify_io_transport(transport: &ureq::Transport) -> (HostStage, HostFailure) {
-    let kind = StdError::source(transport)
-        .and_then(|source| source.downcast_ref::<std::io::Error>())
-        .map(std::io::Error::kind);
-    match kind {
-        Some(ErrorKind::TimedOut | ErrorKind::WouldBlock) => (
+fn classify_io_transport(error: &std::io::Error) -> (HostStage, HostFailure) {
+    match error.kind() {
+        ErrorKind::TimedOut | ErrorKind::WouldBlock => (
             HostStage::ResponseHeaders,
             HostFailure::Timeout {
                 stage: HostStage::ResponseHeaders,
                 cause: HostTimeoutCause::SocketReported,
             },
         ),
-        Some(ErrorKind::ConnectionRefused | ErrorKind::NotConnected) => {
+        ErrorKind::ConnectionRefused | ErrorKind::NotConnected => {
             (HostStage::Start, HostFailure::ConnectionFailed)
         }
-        Some(ErrorKind::BrokenPipe | ErrorKind::WriteZero) => {
+        ErrorKind::BrokenPipe | ErrorKind::WriteZero => {
             (HostStage::RequestWrite, HostFailure::RequestWriteFailed)
         }
-        Some(
-            ErrorKind::ConnectionAborted | ErrorKind::ConnectionReset | ErrorKind::UnexpectedEof,
-        ) => (
+        ErrorKind::ConnectionAborted | ErrorKind::ConnectionReset | ErrorKind::UnexpectedEof => (
             HostStage::ResponseHeaders,
             HostFailure::ResponseHeadersFailed,
         ),
-        Some(ErrorKind::InvalidData) => {
-            (HostStage::ResponseHeaders, HostFailure::MalformedResponse)
-        }
+        ErrorKind::InvalidData => (HostStage::ResponseHeaders, HostFailure::MalformedResponse),
         _ => (HostStage::ResponseHeaders, HostFailure::HostRuntimeFailure),
     }
 }

@@ -48,8 +48,6 @@ fn cmd(resource: Int, revision: Int, intent: Int) -> core.Command(Int) {
   core.Command(intent, core.Basis(rid(resource), core.revision(revision)))
 }
 
-// ### Core
-
 pub fn core_outcome_closure_test() {
   let world = world_of([#(0, 1), #(1, 2)])
   list.each([cmd(0, 1, 7), cmd(99, 0, 1), cmd(0, 0, 2)], fn(command) {
@@ -105,8 +103,6 @@ pub fn core_bump_lookup_locality_test() {
   assert core.lookup(bumped, rid(0)) == core.Found(core.revision(2))
 }
 
-// ### Iteration
-
 fn counter_step() -> call.Immediate(Int, Int) {
   call.immediate_of("counter", [], fn(state) { state + 1 })
 }
@@ -158,8 +154,6 @@ pub fn iteration_closure_extensivity_and_termination_test() {
   assert outcome == iteration.Fixpoint([1, 2], 2)
 }
 
-// ### Store
-
 pub fn store_observe_preserves_world_projection_test() {
   let entries = [
     #(rid(0), core.revision(1), "a"),
@@ -191,8 +185,6 @@ pub fn store_apply_projects_onto_world_apply_test() {
     _ -> panic as "expected applied"
   }
 }
-
-// ### Record / Reconcile
 
 pub fn record_has_edge_symmetric_test() {
   let basis = core.Basis(rid(0), core.revision(1))
@@ -247,8 +239,6 @@ pub fn reconcile_unbased_and_dropped_test() {
   assert result.dropped == 2
   assert reconcile.coherent(result) == False
 }
-
-// ### Request progression
 
 fn budget(max: Int) -> rp.ResourceBudget {
   rp.ResourceBudget(
@@ -362,8 +352,6 @@ pub fn request_progression_derive_occupancy_test() {
   assert rp.derive_concurrent(s1) == rp.ResourceDemand(0, 0, 0)
 }
 
-// ### Dynamic admission
-
 fn admission_state(max: Int) -> admission.DynamicAdmissionState {
   admission.DynamicAdmissionState(
     rp.empty(rp.AllExecute, budget(max)),
@@ -441,8 +429,6 @@ pub fn dynamic_admission_erasure_requires_terminal_test() {
     _ -> panic as "expected unknown request"
   }
 }
-
-// ### Step transition
 
 pub fn transition_settles_within_limit_test() {
   let assert Ok(limit) = transition.positive_limit_new(3)
@@ -550,8 +536,6 @@ pub fn transition_limit_and_capacity_bounds_test() {
   let assert Ok(capacity) = transition.capacity_new(0)
   assert transition.capacity_value(capacity) == 0
 }
-
-// ### File effect
 
 pub fn file_effect_normalize_path_idempotent_test() {
   let raw = ["a", "..", "b", ".", "c"]

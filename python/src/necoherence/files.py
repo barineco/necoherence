@@ -58,16 +58,10 @@ class ContentDigest:
 
 
 def _is_special_segment(segment: str) -> bool:
-    """Segments that normalization always removes: empty, ``.``, and ``..``
-    with nothing to pop."""
     return segment == "" or segment == "." or segment == ".."
 
 
 def _normalize_segments(raw: tuple[str, ...]) -> tuple[str, ...]:
-    """Fold raw segments into a normalized list: empty segments and ``.`` are
-    dropped, ``..`` pops the most recently appended segment (or is dropped
-    outright when there is nothing to pop), and every other segment is
-    appended in order."""
     acc: list[str] = []
     for segment in raw:
         if segment == "" or segment == ".":
@@ -86,14 +80,11 @@ def normalize_path(root: bool, raw: tuple[str, ...]) -> NormalizedPath:
 
 
 def _path_string(path: NormalizedPath) -> str:
-    """Deterministic string rendering of a normalized path, used as a resource name."""
     body = "/".join(path.segments)
     return "/" + body if path.root else body
 
 
 def _path_resource(path: NormalizedPath) -> ResourceId:
-    """Identity a normalized path determines. Equal paths always yield an
-    equal ``ResourceId``."""
     return ResourceId(kind=_FILE_KIND, name=_path_string(path))
 
 
@@ -122,7 +113,6 @@ class ExternalFileState:
 
 
 def _state_lookup(state: ExternalFileState, path: NormalizedPath) -> FileRecord | None:
-    """Current record at ``path``, or ``None`` when the path is absent."""
     for entry_path, record in state.files:
         if entry_path == path:
             return record
@@ -130,8 +120,6 @@ def _state_lookup(state: ExternalFileState, path: NormalizedPath) -> FileRecord 
 
 
 def _set_file(state: ExternalFileState, path: NormalizedPath, record: FileRecord) -> ExternalFileState:
-    """Replace ``path``'s record, adding it when absent. A single total step:
-    never partial."""
     if any(entry_path == path for entry_path, _ in state.files):
         files = tuple((entry_path, record if entry_path == path else entry_record)
                        for entry_path, entry_record in state.files)
@@ -203,8 +191,6 @@ class ReplaceContents:
 def _register_resource(
     world: World, resource: ResourceId, observed_at: int
 ) -> tuple[Observation[Revision], World]:
-    """Register ``resource``'s current revision in ``world``, starting it at
-    0 when absent."""
     current = lookup(world, resource)
     if isinstance(current, UnknownResource):
         revision = Revision(0)
@@ -236,9 +222,6 @@ type TrackResult = Outcome[Tracked, Never, Never, Never]
 
 
 def _track(req: TrackReq) -> TrackResult:
-    """Register ``req.path`` as an owned resource and return its
-    observation. Never fails: registering a revision touches no file
-    contents."""
     resource = _path_resource(req.path)
     observation, world = _register_resource(req.world, resource, req.observed_at)
     return Applied(Tracked(observation=observation, world=world))
@@ -281,11 +264,6 @@ type ReadResult = Outcome[Read, UnknownResource, Never, ReadFailure]
 
 
 def _read(req: ReadReq) -> ReadResult:
-    """Read ``req.path`` from ``req.state``. A declared read failure yields
-    ``BoundaryFailed``, checked first. Otherwise an absent path yields
-    ``Rejected(UnknownResource(...))``; a present path yields ``Applied``
-    with a basis-carrying observation of its ``FileSnapshot``, and its
-    digest is recorded into ``req.digests``."""
     if req.path in req.state.read_failures:
         return BoundaryFailed(ReadFailure(req.path))
     resource = _path_resource(req.path)
@@ -360,19 +338,6 @@ type ReplaceResult = Outcome[Replaced, ReplaceRejection, ReplaceConflict, WriteF
 
 
 def _replace(req: ReplaceReq) -> ReplaceResult:
-    """Apply ``req.command`` as a compare-and-replace atomic write.
-
-    ``req.command.basis.resource`` must name the same file as ``req.path``;
-    a mismatch is rejected with ``ResourcePathMismatch`` before any digest,
-    world, or file observation is made. A resource with no recorded digest
-    is rejected with ``UnobservedContents``. A revision mismatch against
-    ``req.world`` is the first staleness layer, ``Conflicted(StaleBasis(...))``.
-    An absent path is ``Rejected(UnknownResource(...))``. With the file
-    present, a digest mismatch against the last recorded digest is the
-    second staleness layer, ``Conflicted(ExternalMutation(...))``. A
-    declared write failure is ``BoundaryFailed``. Only once every layer
-    passes is ``req.state`` updated, a single total step.
-    """
     resource = req.command.basis.resource
     if resource != _path_resource(req.path):
         return Rejected(ResourcePathMismatch(resource=resource, path=req.path))

@@ -307,8 +307,6 @@ def _resource_coordinate_mismatch(
 
 
 def _observation_age(input: DynamicAdmissionInput) -> int:
-    """Age of the capacity observation relative to ``input.observed_at``. A
-    future-dated observation is folded to strictly exceed ``max_observation_age``."""
     if input.observed_at < input.capacity_observation.observed_at:
         return (
             (input.capacity_observation.observed_at - input.observed_at)
@@ -319,8 +317,6 @@ def _observation_age(input: DynamicAdmissionInput) -> int:
 
 
 def _permission_check(request: RequestInput) -> DynamicAdmissionFailure | None:
-    """Closed check of ``request.permission`` against ``request.identity``;
-    ``None`` means permitted."""
     permission = request.permission
     if isinstance(permission, Denied):
         if permission.identity == request.identity:

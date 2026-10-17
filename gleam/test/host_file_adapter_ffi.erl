@@ -5,7 +5,7 @@
 -export([temporary_directory/0, write/2, read/1, atomic_replace/2, remove/1]).
 
 temporary_directory() ->
-    Root = filename:join(["/tmp", "necoherence-file-" ++ integer_to_list(erlang:unique_integer([positive]))]),
+    Root = filename:absname("necoherence-file-" ++ integer_to_list(erlang:unique_integer([positive]))),
     ok = file:make_dir(Root),
     ok = file:make_dir(filename:join(Root, "nested")),
     unicode:characters_to_binary(Root).

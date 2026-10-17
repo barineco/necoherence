@@ -26,7 +26,7 @@ def _accepted(context, reference, value):
     return True
 
 def _element_allows_null(context, contract):
-    return contract["nullable"] or _accepted(context, contract["type_id"], None)
+    return contract["nullable"] or _accepted(context, contract["type_ref"], None)
 
 
 def _unique(values):
@@ -96,7 +96,7 @@ def _candidates(context,fuel,seen,reference):
     shape=context.shape(reference); kind,spec=sum_tag(shape),payload(shape)
     recurse=lambda target:_candidates(context,fuel-1,(*seen,ref_key(reference)),target)
     def element_values(contract):
-        return _unique([*([None] if contract["nullable"] else []), *recurse(contract["type_id"])])
+        return _unique([*([None] if contract["nullable"] else []), *recurse(contract["type_ref"])])
 
     if kind=="Boolean": return [spec["const_value"]] if spec["const_value"] is not None else [False,True]
     if kind=="Integer":
@@ -153,7 +153,7 @@ def _candidates(context,fuel,seen,reference):
         def construct(fields):
             if not fields: return [{}]
             field,*rest=fields; remaining=construct(rest); slot=field["slot"]
-            choices=[*([] if slot["required"] else [_ABSENT]),*([None] if slot["nullable"] else []),*recurse(slot["type_id"])]
+            choices=[*([] if slot["required"] else [_ABSENT]),*([None] if slot["nullable"] else []),*recurse(slot["type_ref"])]
             return [(dict(row) if item is _ABSENT else {field["wire_name"]:item,**row}) for item in choices for row in remaining][:fuel]
         base=construct(list(spec["fields"])); extras=[]
         if sum_tag(spec["extras"])=="Allow":
@@ -214,7 +214,7 @@ def inclusion_samples(context,source,destination,max_obligations,max_sample_leng
                     if isinstance(sample,dict): candidates.extend([{field["wire_name"]:value,**sample} for value in (None,True,"x","y",0)])
         if sum_tag(source_spec["extras"])=="Allow":
             details=payload(source_spec["extras"])
-            values=[*([None] if details["value"]["nullable"] else []), *sample_values(context,min(max_obligations,len(context.nodes)+1),(),details["value"]["type_id"],max_sample_length).values]
+            values=[*([None] if details["value"]["nullable"] else []), *sample_values(context,min(max_obligations,len(context.nodes)+1),(),details["value"]["type_ref"],max_sample_length).values]
             for key in _format_use_samples(context.profile,details["key_format"],1,max_obligations):
                 candidates.extend([{key:value} for value in values])
     accepted=[value for value in candidates if _within_bound(value,max_sample_length) and _accepted(context,source,value)]
@@ -304,7 +304,7 @@ def _structural(context,source,destination,remaining,seen):
     if lk=="Array":
         if not _lower(ls["min_length"],rs["min_length"],True) or not _upper(ls["max_length"],rs["max_length"]): return None
         if _element_allows_null(context,ls["item"]) and not _element_allows_null(context,rs["item"]): return None
-        return _structural(context,ls["item"]["type_id"],rs["item"]["type_id"],remaining-1,seen)
+        return _structural(context,ls["item"]["type_ref"],rs["item"]["type_ref"],remaining-1,seen)
     if lk=="Product":
         left_fields={item["wire_name"]:item for item in ls["fields"]}
         right_fields={item["wire_name"]:item for item in rs["fields"]}
@@ -314,26 +314,26 @@ def _structural(context,source,destination,remaining,seen):
             candidate=left_fields.get(name)
             if candidate is not None:
                 if not _presence(candidate["slot"],target["slot"]): return None
-                pairs.append((candidate["slot"]["type_id"],target["slot"]["type_id"]))
+                pairs.append((candidate["slot"]["type_ref"],target["slot"]["type_ref"]))
                 continue
             if target["slot"]["required"] or name==tag_key or sum_tag(ls["extras"])!="Allow": return None
             source_extra=payload(ls["extras"])["value"]
             if _element_allows_null(context,source_extra) and not target["slot"]["nullable"]: return None
-            pairs.append((source_extra["type_id"],target["slot"]["type_id"]))
+            pairs.append((source_extra["type_ref"],target["slot"]["type_ref"]))
         for name,candidate in left_fields.items():
             if name in right_fields or name==tag_key: continue
             if sum_tag(rs["extras"])!="Allow": return None
             destination_extra=payload(rs["extras"])
             if not _format_use_included(context.profile,variant("Inline",variant("Literal",name)),destination_extra["key_format"]): return None
             if candidate["slot"]["nullable"] and not _element_allows_null(context,destination_extra["value"]): return None
-            pairs.append((candidate["slot"]["type_id"],destination_extra["value"]["type_id"]))
+            pairs.append((candidate["slot"]["type_ref"],destination_extra["value"]["type_ref"]))
         left_extra,right_extra=sum_tag(ls["extras"]),sum_tag(rs["extras"])
         if left_extra=="Allow" and right_extra=="Reject": return None
         if left_extra=="Allow" and right_extra=="Allow":
             source_extra,destination_extra=payload(ls["extras"]),payload(rs["extras"])
             if not _format_use_included(context.profile,source_extra["key_format"],destination_extra["key_format"]): return None
             if _element_allows_null(context,source_extra["value"]) and not _element_allows_null(context,destination_extra["value"]): return None
-            pairs.append((source_extra["value"]["type_id"],destination_extra["value"]["type_id"]))
+            pairs.append((source_extra["value"]["type_ref"],destination_extra["value"]["type_ref"]))
         return all(_structural(context,a,b,remaining-1,seen) is True for a,b in pairs)
     if lk=="TaggedUnion":
         if any(sum_tag(item["selector"])=="Otherwise" for item in ls["branches"]): return True if ls==rs else None

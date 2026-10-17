@@ -18,7 +18,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import necoherence.network.JavaHttpAdapter;
 import necoherence.network.NetworkEffect;
 
 /** Exact wire values and the validators used by admitted generated classes. */
@@ -88,29 +87,53 @@ public final class SemanticValues {
         public RawBody { Objects.requireNonNull(encoding); Objects.requireNonNull(bytes); }
     }
     public static final class ValueFailure extends Exception {
-        private final String definition;
-        private final List<String> path;
-        private final int typeIndex;
+        private final List<WireValue> path;
         private final WireValue typeRef;
+        private final WireValue origin;
         private final List<WireValue> referenceTrace;
         private final String condition;
         private final WireValue observed;
-        public ValueFailure(String definition, List<String> path, String condition) {
-            this(definition, path, condition, -1, signatureTypeRef(definition), List.of(), null);
+        private final List<WireValue> obligations;
+        public ValueFailure(WireValue typeRef, List<WireValue> path, String condition) {
+            this(typeRef, path, condition, List.of(), null, List.of());
         }
-        private ValueFailure(String definition, List<String> path, String condition, int typeIndex,
-                WireValue typeRef, List<WireValue> referenceTrace, WireValue observed) {
-            super(definition + " " + path + ": " + condition);
-            this.definition = definition; this.path = List.copyOf(path); this.condition = condition; this.typeIndex = typeIndex; this.typeRef = typeRef;
+        private ValueFailure(WireValue typeRef, List<WireValue> path, String condition,
+                List<WireValue> referenceTrace, WireValue observed) {
+            this(typeRef, path, condition, referenceTrace, observed, List.of());
+        }
+        private ValueFailure(WireValue typeRef, List<WireValue> path, String condition,
+                List<WireValue> referenceTrace, WireValue observed, List<WireValue> obligations) {
+            super(encodeWire(typeRef) + " " + path + ": " + condition);
+            this.path = List.copyOf(path); this.condition = condition; this.typeRef = typeRef;
+            this.origin = obj("source", f(typeRef, "source"), "pointer", f(typeRef, "pointer"));
             this.referenceTrace = List.copyOf(referenceTrace); this.observed = observed;
+            this.obligations = List.copyOf(obligations);
         }
-        public String definition() { return definition; }
-        public List<String> path() { return path; }
+        public String definition() { return s(f(typeRef, "definition_name")); }
+        public List<WireValue> path() { return path; }
         public String condition() { return condition; }
         public WireValue observed() { return observed; }
-        public int typeIndex() { return typeIndex; }
         public WireValue typeRef() { return typeRef; }
+        public WireValue origin() { return origin; }
         public List<WireValue> referenceTrace() { return referenceTrace; }
+        public List<WireValue> obligations() { return obligations; }
+        private static ValueFailure unresolved(List<WireValue> obligations) {
+            WireValue first = obligations.getFirst();
+            return new ValueFailure(f(first, "type_ref"), a(f(first, "value_path")), "Unresolved", List.of(), null, obligations);
+        }
+    }
+
+    public record DefaultApplication(List<WireValue> valuePath, WireValue typeRef, WireValue origin, WireValue value) {
+        public DefaultApplication { valuePath = List.copyOf(valuePath); }
+    }
+    public static final class DefaultedValue {
+        private final WireValue value;
+        private final List<DefaultApplication> applications;
+        private DefaultedValue(WireValue value, List<DefaultApplication> applications) {
+            this.value = value; this.applications = List.copyOf(applications);
+        }
+        public WireValue value() { return value; }
+        public List<DefaultApplication> applications() { return applications; }
     }
 
     static boolean unicodeValid(String text) {
@@ -152,17 +175,11 @@ public final class SemanticValues {
         for (int i = 0; i < fields.length; i += 2) result.add(new Member((String) fields[i], (WireValue) fields[i + 1]));
         return new ObjectValue(result);
     }
-    private static WireValue signatureTypeRef(String definition) {
-        return obj(
-                "source", obj(
-                        "repository", str("ncoh-type-signatures"),
-                        "revision", str("1"),
-                        "path", str(""),
-                        "content_digest", str(""),
-                        "document_id", str(""),
-                        "declared_revision", NIL),
-                "definition_name", str(definition),
-                "pointer", arr(List.of()));
+    public static ObjectValue orderedObject(List<Member> members, List<String> memberOrder) {
+        List<Member> ordered = new ArrayList<>();
+        memberOrder.stream().distinct().forEach(key -> members.stream().filter(member -> member.key().equals(key)).forEach(ordered::add));
+        members.stream().filter(member -> !memberOrder.contains(member.key())).forEach(ordered::add);
+        return new ObjectValue(ordered);
     }
     public static WireValue variant(String name) { return obj("tag", str(name)); }
     public static WireValue variant(String name, WireValue value) { return obj("tag", str(name), "value", value); }
@@ -282,7 +299,7 @@ public final class SemanticValues {
         private final Map<String, WireValue> integerDomains;
         private final ThreadLocal<List<Active>> activeProof = new ThreadLocal<>();
         private final Set<Integer> meaningful = new HashSet<>();
-        Context(WireValue graph) {
+        public Context(WireValue graph) {
             this.graph = graph; this.profile = f(graph, "profile"); this.nodes = a(f(graph, "nodes"));
             Map<WireValue, Integer> indices = new LinkedHashMap<>();
             for (int i = 0; i < nodes.size(); i++) {
@@ -356,43 +373,69 @@ public final class SemanticValues {
             }
             return null;
         }
+        private List<WireValue> nodeMeaningReasons(WireValue reference) {
+            Integer type = indices.get(reference);
+            if (type == null) return List.of(variant("UnresolvedType"));
+            WireValue shape = shape(type);
+            WireValue spec = o(shape).get("value") == null ? o(shape).get("fields") : o(shape).get("value");
+            String kind = tag(shape);
+            List<WireValue> reasons = new ArrayList<>();
+            if (kind.equals("String")) {
+                if (a(f(spec, "lengths")).stream().anyMatch(bound -> tag(f(bound, "unit")).equals("Graphemes")) && nil(graphemeRules)) reasons.add(variant("MissingGraphemeRules"));
+                WireValue use = f(spec, "format");
+                if (!nil(use) && tag(use).equals("Named") && !formats.containsKey(s(payload(use)))) reasons.add(variant("UnknownFormat", payload(use)));
+                if (!nil(f(spec, "wrapper"))) {
+                    WireValue name = f(spec, "wrapper"), wrapper = namedWrapper(s(name));
+                    if (wrapper == null) reasons.add(variant("UnknownWrapper", name));
+                    else if (!tag(f(wrapper, "payload")).equals("Text")) reasons.add(variant("WrapperPayload", name));
+                }
+            } else if (kind.equals("Integer")) {
+                WireValue name = nil(f(spec, "domain")) ? f(profile, "default_integer_domain") : f(spec, "domain");
+                if (integerBinding(spec) == null) reasons.add(variant("UnknownIntegerDomain", name));
+                else if (!integerBoundsInsideDomain(spec)) reasons.add(variant("IntegerBound"));
+            } else if (kind.equals("Decimal") && !b(f(f(profile, "numbers"), "decimals"))) reasons.add(variant("DecimalNotAdmitted"));
+            else if ((kind.equals("Bytes") || kind.equals("RawBody")) && nil(f(profile, "bytes_policy"))) reasons.add(variant("MissingBytesPolicy"));
+            else if (kind.equals("Sealed") && (nil(tagModel()) || a(f(tagModel(), "sealed")).stream().noneMatch(form -> f(form, "tag").equals(f(spec, "tag"))))) reasons.add(variant("UnknownSealedTag", f(spec, "tag")));
+            else if (kind.equals("TaggedUnion") && nil(tagModel()) && a(f(spec, "branches")).stream().anyMatch(branch -> tag(f(branch, "selector")).equals("InternalTag"))) reasons.add(variant("MissingTagModel"));
+            else if (kind.equals("Opaque")) reasons.add(variant("OpaqueType", f(spec, "type_name")));
+            return reasons;
+        }
+        public List<WireValue> meaningObligations(WireValue reference) {
+            List<WireValue> pending = new ArrayList<>(List.of(reference)), reachable = new ArrayList<>();
+            Set<WireValue> seen = new HashSet<>();
+            int edges = nodes.stream().mapToInt(node -> children(f(node, "shape")).size()).sum();
+            for (int fuel = 1 + nodes.size() + edges + 1; fuel > 0 && !pending.isEmpty(); fuel--) {
+                WireValue current = pending.removeFirst();
+                if (!seen.add(current)) continue;
+                reachable.addFirst(current);
+                Integer type = indices.get(current);
+                if (type != null) pending.addAll(0, children(shape(type)));
+            }
+            List<WireValue> obligations = new ArrayList<>();
+            for (WireValue current : reachable) for (WireValue reason : nodeMeaningReasons(current)) obligations.add(obj(
+                    "type_ref", current, "origin", obj("source", f(current, "source"), "pointer", f(current, "pointer")),
+                    "value_path", arr(List.of()), "profile", f(profile, "reference"), "reason", reason));
+            return List.copyOf(obligations);
+        }
         synchronized void meaning(int index) throws ValueFailure {
             if (meaningful.contains(index)) return;
-            Set<Integer> reached = new HashSet<>(); List<Integer> pending = new ArrayList<>(); pending.add(index);
-            while (!pending.isEmpty()) {
-                int at = pending.remove(pending.size() - 1);
-                if (!reached.add(at)) continue;
-                WireValue shape = shape(at); String kind = tag(shape);
-                WireValue spec = o(shape).get("value"); if (spec == null) spec = o(shape).get("fields");
-                if (kind.equals("Opaque")) fail(at, List.of(), "MO10");
-                if (kind.equals("Decimal") && !b(f(f(profile, "numbers"), "decimals"))) fail(at, List.of(), "MO08");
-                if ((kind.equals("Bytes") || kind.equals("RawBody")) && nil(f(profile, "bytes_policy"))) fail(at, List.of(), "MO03");
-                if (kind.equals("Integer") && !nil(f(spec, "domain"))
-                        && !integerDomains.containsKey(s(f(spec, "domain")))) fail(at, List.of(), "MO04");
-                if (kind.equals("Integer") && !integerBoundsInsideDomain(spec)) fail(at, List.of(), "MO09");
-                if (kind.equals("String")) {
-                    WireValue use = f(spec, "format");
-                    if (!nil(use) && tag(use).equals("Named") && !formats.containsKey(s(payload(use)))) fail(at, List.of(), "MO01");
-                    for (WireValue bound : a(f(spec, "lengths")))
-                        if (tag(f(bound, "unit")).equals("Graphemes") && nil(graphemeRules)) fail(at, List.of(), "MO02");
-                    if (!nil(f(spec, "wrapper"))) {
-                        WireValue wrapper = namedWrapper(s(f(spec, "wrapper")));
-                        if (wrapper == null) fail(at, List.of(), "MO05");
-                        if (!tag(f(wrapper, "payload")).equals("Text")) fail(at, List.of(), "MO06");
-                    }
-                }
-                if (kind.equals("Sealed")) {
-                    if (nil(tagModel())) fail(at, List.of(), "MO11");
-                    String sealedTag = s(f(spec, "tag"));
-                    if (a(f(tagModel(), "sealed")).stream().noneMatch(form -> s(f(form, "tag")).equals(sealedTag)))
-                        fail(at, List.of(), "MO07");
-                }
-                if (kind.equals("TaggedUnion"))
-                    for (WireValue branch : a(f(spec, "branches")))
-                        if (tag(f(branch, "selector")).equals("InternalTag") && nil(tagModel())) fail(at, List.of(), "MO11");
-                for (WireValue child : children(shape)) pending.add(index(child));
+            for (WireValue obligation : meaningObligations(reference(index))) {
+                String predicate = switch (tag(f(obligation, "reason"))) {
+                    case "UnknownFormat" -> "MO01"; case "MissingGraphemeRules" -> "MO02";
+                    case "MissingBytesPolicy" -> "MO03"; case "UnknownIntegerDomain" -> "MO04";
+                    case "UnknownWrapper" -> "MO05"; case "WrapperPayload" -> "MO06";
+                    case "UnknownSealedTag" -> "MO07"; case "DecimalNotAdmitted" -> "MO08";
+                    case "IntegerBound" -> "MO09"; case "OpaqueType" -> "MO10"; case "MissingTagModel" -> "MO11";
+                    default -> null;
+                };
+                if (predicate != null) fail(this.index(f(obligation, "type_ref")), List.of(), predicate);
             }
-            meaningful.addAll(reached);
+            meaningful.add(index);
+        }
+        private void checkedMaterializationValue(WireValue reference, WireValue value) throws ValueFailure {
+            List<WireValue> obligations = meaningObligations(reference);
+            if (!obligations.isEmpty()) throw ValueFailure.unresolved(obligations);
+            validate(reference, value);
         }
         static List<WireValue> children(WireValue shape) {
             String kind = tag(shape); List<WireValue> result = new ArrayList<>();
@@ -409,32 +452,53 @@ public final class SemanticValues {
             }
             return result;
         }
-        public WireValue decode(int type, String text) throws ValueFailure {
+        public WireValue decode(WireValue reference, String text) throws ValueFailure {
             WireValue value;
             try { value = SemanticGeneration.readJson(text); }
-            catch (RuntimeException error) { throw new ValueFailure(definition(type), List.of(), "InvalidJson: " + error.getMessage()); }
-            validate(type, value); return value;
+            catch (RuntimeException error) { throw new ValueFailure(reference, List.of(), "InvalidJson: " + error.getMessage()); }
+            validate(reference, value); return value;
         }
-        public WireValue decodeWithDefaults(int type, String text) throws ValueFailure {
+        public DefaultedValue decodeWithDefaults(WireValue reference, String text) throws ValueFailure {
             WireValue value;
             try { value = SemanticGeneration.readJson(text); }
-            catch (RuntimeException error) { throw new ValueFailure(definition(type), List.of(), "InvalidJson: " + error.getMessage()); }
-            meaning(type); value = defaults(type, value, new HashSet<>()); validate(type, value); return value;
+            catch (RuntimeException error) { throw new ValueFailure(reference, List.of(), "InvalidJson: " + error.getMessage()); }
+            String duplicate = duplicateWireMember(value);
+            if (duplicate != null) throw new ValueFailure(reference, List.of(), "InvalidJson: DuplicateField:" + duplicate);
+            return materializeDefaults(reference, value);
         }
-        public void validate(int type, WireValue value) throws ValueFailure {
+        private String duplicateWireMember(WireValue value) {
+            if (value instanceof ObjectValue object) {
+                Set<String> keys = new HashSet<>();
+                for (Member member : object.members()) if (!keys.add(member.key())) return member.key();
+                for (Member member : object.members()) {
+                    String duplicate = duplicateWireMember(member.value());
+                    if (duplicate != null) return duplicate;
+                }
+            } else if (value instanceof ArrayValue array) {
+                for (WireValue item : array.items()) {
+                    String duplicate = duplicateWireMember(item);
+                    if (duplicate != null) return duplicate;
+                }
+            }
+            return null;
+        }
+        public void validate(WireValue reference, WireValue value) throws ValueFailure {
+            Integer type = indices.get(reference);
+            if (type == null) throw new ValueFailure(reference, List.of(), "UnresolvedType");
+            validateIndex(type, value);
+        }
+        private void validateIndex(int type, WireValue value) throws ValueFailure {
             if (value == null) fail(type, List.of(), "NullNotAllowed");
             meaning(type); List<Active> active = new ArrayList<>(), previous = activeProof.get(); activeProof.set(active);
             try { evaluate(type, value, new ArrayList<>(), active); } finally { if (previous == null) activeProof.remove(); else activeProof.set(previous); }
         }
         void validateDeclaredDefault(int type, WireValue value) throws ValueFailure {
-            List<Active> active = new ArrayList<>(), previous = activeProof.get(); activeProof.set(active);
-            try { evaluate(type, value, new ArrayList<>(), active); } finally { if (previous == null) activeProof.remove(); else activeProof.set(previous); }
+            validateIndex(type, value);
         }
-        public Bytes decodeBytes(int type, WireValue value) throws ValueFailure {
-            validate(type, value);
+        public Bytes decodeBytes(WireValue reference, WireValue value) throws ValueFailure {
+            validate(reference, value);
             String encoding = bytesText(value);
-            String alphabet = tag(f(f(profile, "bytes_policy"), "alphabet"));
-            return new Bytes(bytesDecoder(alphabet, encoding).decode(padBase64(encoding)), encoding);
+            return new Bytes(decodeBase64(encoding), encoding);
         }
         public WireValue encodeBytes(Bytes value) {
             String text = value.base64();
@@ -442,32 +506,34 @@ public final class SemanticValues {
             if (!nil(f(policy, "wrapper"))) return wrapEncode(profile, s(f(policy, "wrapper")), text);
             return str(text);
         }
-        public String decodeText(int type, WireValue value) {
-            WireValue spec = payload(shape(type));
+        public String decodeText(WireValue reference, WireValue value) {
+            WireValue spec = payload(shape(index(reference)));
             return nil(f(spec, "wrapper")) ? s(value) : wrapDecode(profile, s(f(spec, "wrapper")), value);
         }
-        public WireValue encodeText(int type, String value) {
-            WireValue spec = payload(shape(type));
+        public WireValue encodeText(WireValue reference, String value) {
+            WireValue spec = payload(shape(index(reference)));
             return nil(f(spec, "wrapper")) ? str(value) : wrapEncode(profile, s(f(spec, "wrapper")), value);
         }
-        public int selectBranch(int type, WireValue value) {
-            WireValue shape = resolve(reference(type));
+        public int selectBranch(WireValue reference, WireValue value) {
+            WireValue shape = resolve(reference);
             if (shape == null || !tag(shape).equals("TaggedUnion")) return -1;
             List<WireValue> branches = a(f(payload(shape), "branches"));
             for (int index = 0; index < branches.size(); index++)
                 if (selectorAccepts(f(branches.get(index), "selector"), s(f(branches.get(index), "wire_tag")), value)) return index;
             return -1;
         }
-        public void validateSlot(int type, boolean required, boolean nullable, Slot<WireValue> value) throws ValueFailure {
+        public void validateSlot(WireValue reference, boolean required, boolean nullable, Slot<WireValue> value) throws ValueFailure {
+            Integer type = indices.get(reference);
+            if (type == null) throw new ValueFailure(reference, List.of(), "UnresolvedType");
             if (value == null) fail(type, List.of(), "NullNotAllowed");
             List<Active> active = new ArrayList<>(), previous = activeProof.get(); activeProof.set(active);
             try { validateSlot(type, required, nullable, value, new ArrayList<>(), active); } finally { if (previous == null) activeProof.remove(); else activeProof.set(previous); }
         }
         public void validateContract(WireValue contract, Slot<WireValue> value) throws ValueFailure {
-            validateSlot(index(f(contract, "type_ref")), b(f(contract, "required")), b(f(contract, "nullable")), value);
+            validateSlot(f(contract, "type_ref"), b(f(contract, "required")), b(f(contract, "nullable")), value);
         }
         private void validateSlot(int type, boolean required, boolean nullable, Slot<WireValue> value,
-                List<String> path, List<Active> active) throws ValueFailure {
+                List<WireValue> path, List<Active> active) throws ValueFailure {
             meaning(type);
             switch (value) {
                 case Absent<WireValue> unused -> { if (required) fail(type, path, "MissingRequired"); }
@@ -476,7 +542,7 @@ public final class SemanticValues {
             }
         }
         private void validateElement(int type, boolean nullable, WireValue value,
-                List<String> path, List<Active> active) throws ValueFailure {
+                List<WireValue> path, List<Active> active) throws ValueFailure {
             meaning(type);
             if (nil(value) && nullable) return;
             evaluate(type, value, path, active);
@@ -494,21 +560,21 @@ public final class SemanticValues {
         }
         private record Active(int type, WireValue value) {}
         private String definition(int type) {
-            WireValue ref = reference(type); return s(ref);
+            WireValue ref = reference(type); return s(f(ref, "definition_name"));
         }
-        private void fail(int type, List<String> path, String condition) throws ValueFailure {
+        private void fail(int type, List<WireValue> path, String condition) throws ValueFailure {
             List<Active> active = activeProof.get();
             List<WireValue> trace = active == null ? List.of() : active.stream()
                     .limit(Math.max(0, active.size() - 1)).map(entry -> reference(entry.type())).toList();
             WireValue observed = active == null || active.isEmpty() ? shape(type) : active.getFirst().value();
-            for (String step : path) {
-                if (observed instanceof ObjectValue object) observed = object.get(step);
-                else if (observed instanceof ArrayValue array) observed = array.items().get(Integer.parseInt(step));
+            for (WireValue step : path) {
+                if (tag(step).equals("Field") && observed instanceof ObjectValue object) observed = object.get(s(payload(step)));
+                else if (tag(step).equals("Index") && observed instanceof ArrayValue array) observed = array.items().get(n(payload(step)).intValue());
                 else { observed = null; break; }
             }
-            throw new ValueFailure(definition(type), path, condition, type, signatureTypeRef(definition(type)), trace, observed);
+            throw new ValueFailure(reference(type), path, condition, trace, observed);
         }
-        private void evaluate(int type, WireValue value, List<String> path, List<Active> active) throws ValueFailure {
+        private void evaluate(int type, WireValue value, List<WireValue> path, List<Active> active) throws ValueFailure {
             for (Active previous : active) if (previous.type == type && previous.value == value) fail(type, path, "ReferenceCycle");
             active.add(new Active(type, value));
             try {
@@ -535,30 +601,18 @@ public final class SemanticValues {
                         checkDecimalBound(type, path, number, f(spec, "maximum"), false);
                     }
                     case "String" -> {
-                        WireValue actual = value;
-                        if (!nil(f(spec, "wrapper"))) {
-                            String name = s(f(spec, "wrapper"));
-                            try { actual = str(wrapDecode(profile, name, value)); }
-                            catch (IllegalArgumentException failure) { fail(type, path, "InvalidWrapper: " + name); }
+                        String text;
+                        if (nil(f(spec, "wrapper"))) {
+                            if (!(value instanceof StringValue)) fail(type, path, "WrongValueKind: string");
+                            text = s(value);
+                        } else {
+                            WireValue wrapper = value instanceof ObjectValue object && classOf(object).equals("Wrapper")
+                                    ? objectWrapper(object) : null;
+                            if (wrapper == null || !f(wrapper, "name").equals(f(spec, "wrapper")))
+                                fail(type, path, "WrongValueKind: string wrapper");
+                            text = checkedWrapperText(type, wrapper, value, path);
                         }
-                        if (!(actual instanceof StringValue)) fail(type, path, "WrongValueKind: string");
-                        String text = s(actual);
-                        if (!nil(f(spec, "const_value")) && !f(spec, "const_value").equals(actual)) fail(type, path, "ConstMismatch");
-                        if (!nil(f(spec, "enum_values")) && !a(f(spec, "enum_values")).contains(actual)) fail(type, path, "EnumMismatch");
-                        for (WireValue bound : a(f(spec, "lengths"))) {
-                            long count = switch (tag(f(bound, "unit"))) {
-                                case "Utf8Bytes" -> utf8Length(text);
-                                case "Graphemes" -> graphemeCount(graphemeRules, text);
-                                default -> text.codePointCount(0, text.length());
-                            };
-                            if (!bounds(count, f(bound, "minimum"), f(bound, "maximum"))) fail(type, path, "StringLength");
-                        }
-                        WireValue use = f(spec, "format");
-                        if (!nil(use)) {
-                            String name = tag(use).equals("Named") ? s(payload(use)) : "inline";
-                            WireValue rule = tag(use).equals("Named") ? formats.get(name) : payload(use);
-                            if (!recognize(rule, text)) fail(type, path, "Format: " + name);
-                        }
+                        validateString(type, spec, text, path);
                     }
                     case "Bytes", "RawBody" -> {
                         int count = decodedBytesLength(type, value, path);
@@ -571,7 +625,7 @@ public final class SemanticValues {
                         if (!bounds(values.size(), f(spec, "min_length"), f(spec, "max_length"))) fail(type, path, "ArrayLength");
                         WireValue item = f(spec, "item"); int itemType = index(f(item, "type_ref"));
                         for (int i = 0; i < values.size(); i++) {
-                            path.add(Integer.toString(i));
+                            path.add(variant("Index", str(Integer.toString(i))));
                             validateElement(itemType, b(f(item, "nullable")), values.get(i), path, active);
                             path.remove(path.size() - 1);
                         }
@@ -632,7 +686,7 @@ public final class SemanticValues {
             } catch (ArithmeticException ignored) {}
             return null;
         }
-        private void checkDecimalBound(int type, List<String> path, java.math.BigDecimal number,
+        private void checkDecimalBound(int type, List<WireValue> path, java.math.BigDecimal number,
                 WireValue encoded, boolean minimum) throws ValueFailure {
             if (nil(encoded)) return;
             BigInteger mantissa = n(f(encoded, "mantissa")); int scale = n(f(encoded, "scale")).intValueExact();
@@ -641,14 +695,14 @@ public final class SemanticValues {
             if (minimum ? order < 0 || exclusive && order == 0 : order > 0 || exclusive && order == 0)
                 fail(type, path, minimum ? "BelowMinimum" : "AboveMaximum");
         }
-        private void objectMembers(int type, ObjectValue object, List<String> path) throws ValueFailure {
+        private void objectMembers(int type, ObjectValue object, List<WireValue> path) throws ValueFailure {
             Set<String> seen = new HashSet<>();
             for (Member member : object.members())
                 if (!seen.add(member.key())) fail(type, path, "DuplicateField: " + member.key());
             if (nil(tagModel())) return;
             WireValue value = object.get(tagKey());
             if (value == null) return;
-            path.add(tagKey());
+            path.add(variant("Field", str(tagKey())));
             if (value instanceof StringValue text) {
                 if (!unicodeValid(text.value())) fail(type, path, "InvalidDataModel");
                 if (!tagTextAccepted(text.value())) fail(type, path, "InvalidTag");
@@ -657,7 +711,7 @@ public final class SemanticValues {
             }
             path.remove(path.size() - 1);
         }
-        private void product(int type, WireValue value, WireValue spec, List<String> path, List<Active> active) throws ValueFailure {
+        private void product(int type, WireValue value, WireValue spec, List<WireValue> path, List<Active> active) throws ValueFailure {
             if (!(value instanceof ObjectValue)) fail(type, path, "WrongValueKind: object");
             ObjectValue object = (ObjectValue) value;
             objectMembers(type, object, path);
@@ -665,13 +719,13 @@ public final class SemanticValues {
             Set<String> known = new HashSet<>();
             for (WireValue field : a(f(spec, "fields"))) {
                 String name = s(f(field, "wire_name")); known.add(name); WireValue contract = f(field, "slot");
-                path.add(name); validateSlot(index(f(contract, "type_ref")), b(f(contract, "required")),
+                path.add(variant("Field", str(name))); validateSlot(index(f(contract, "type_ref")), b(f(contract, "required")),
                         b(f(contract, "nullable")), slot(object.get(name)), path, active); path.remove(path.size() - 1);
             }
             WireValue extras = f(spec, "extras");
             for (Member member : object.members()) {
                 if (known.contains(member.key()) || !nil(tagModel()) && member.key().equals(tagKey())) continue;
-                path.add(member.key());
+                path.add(variant("Field", str(member.key())));
                 if (tag(extras).equals("Reject")) fail(type, path, "UnexpectedField: " + member.key());
                 WireValue fields = payload(extras), use = f(fields, "key_format");
                 if (!nil(use)) {
@@ -691,9 +745,51 @@ public final class SemanticValues {
                         && a(f(tagModel(), "sealed")).stream().anyMatch(form -> s(f(form, "tag")).equals(text.value())))
                     return "Sealed";
             }
-            for (WireValue wrapper : a(f(profile, "wrappers")))
-                if (value.members().size() == 1 && value.get(s(f(wrapper, "key"))) != null) return "Wrapper";
-            return "Ordinary";
+            return objectWrapper(value) == null ? "Ordinary" : "Wrapper";
+        }
+        private WireValue objectWrapper(ObjectValue value) {
+            return a(f(profile, "wrappers")).stream()
+                    .filter(wrapper -> value.get(s(f(wrapper, "key"))) != null).findFirst().orElse(null);
+        }
+        private String wrapperPayloadText(WireValue wrapper, WireValue value) {
+            if (!(value instanceof ObjectValue object) || object.members().size() != 1
+                    || !(object.get(s(f(wrapper, "key"))) instanceof StringValue text)) return null;
+            WireValue payload = f(wrapper, "payload");
+            if (tag(payload).equals("Bytes"))
+                return decodeBase64(text.value()) == null ? null : text.value();
+            WireValue format = SemanticValues.payload(payload);
+            return unicodeValid(text.value()) && (nil(format) || recognize(formats.get(s(format)), text.value()))
+                    ? text.value() : null;
+        }
+        private String checkedWrapperText(int type, WireValue wrapper, WireValue value, List<WireValue> path)
+                throws ValueFailure {
+            String text = wrapperPayloadText(wrapper, value);
+            if (text != null) return text;
+            WireValue payload = f(wrapper, "payload");
+            if (tag(payload).equals("Bytes")) fail(type, path, "InvalidBytes");
+            WireValue format = SemanticValues.payload(payload);
+            fail(type, path, nil(format) ? "WrongValueKind: wrapper text" : "Format: " + s(format));
+            return null;
+        }
+        private void validateString(int type, WireValue spec, String text, List<WireValue> path) throws ValueFailure {
+            if (!unicodeValid(text)) fail(type, path, "InvalidDataModel");
+            WireValue actual = str(text);
+            if (!nil(f(spec, "const_value")) && !f(spec, "const_value").equals(actual)) fail(type, path, "ConstMismatch");
+            if (!nil(f(spec, "enum_values")) && !a(f(spec, "enum_values")).contains(actual)) fail(type, path, "EnumMismatch");
+            for (WireValue bound : a(f(spec, "lengths"))) {
+                long count = switch (tag(f(bound, "unit"))) {
+                    case "Utf8Bytes" -> utf8Length(text);
+                    case "Graphemes" -> graphemeCount(graphemeRules, text);
+                    default -> text.codePointCount(0, text.length());
+                };
+                if (!bounds(count, f(bound, "minimum"), f(bound, "maximum"))) fail(type, path, "StringLength");
+            }
+            WireValue use = f(spec, "format");
+            if (!nil(use)) {
+                String name = tag(use).equals("Named") ? s(payload(use)) : "inline";
+                WireValue rule = tag(use).equals("Named") ? formats.get(name) : payload(use);
+                if (!recognize(rule, text)) fail(type, path, "Format: " + name);
+            }
         }
         private boolean selectorAccepts(WireValue selector, String wireTag, WireValue value) {
             return switch (tag(selector)) {
@@ -722,7 +818,7 @@ public final class SemanticValues {
                 default -> false;
             };
         }
-        private void sealed(int type, WireValue value, WireValue spec, List<String> path, List<Active> active) throws ValueFailure {
+        private void sealed(int type, WireValue value, WireValue spec, List<WireValue> path, List<Active> active) throws ValueFailure {
             if (!(value instanceof ObjectValue)) fail(type, path, "WrongValueKind: sealed object");
             ObjectValue object = (ObjectValue) value;
             objectMembers(type, object, path);
@@ -736,78 +832,64 @@ public final class SemanticValues {
             Set<String> known = new HashSet<>(List.of(tagKey()));
             for (WireValue field : a(f(form, "fields"))) {
                 String key = s(f(field, "key")); known.add(key); WireValue member = object.get(key);
-                path.add(key);
+                path.add(variant("Field", str(key)));
                 if (member == null && b(f(field, "required"))) fail(type, path, "MissingRequired");
                 if (member != null) sealedLeaf(type, member, f(field, "leaf"), path, active);
                 path.remove(path.size() - 1);
             }
             for (WireValue refinement : a(f(spec, "refinements"))) {
                 String key = s(f(refinement, "key")); WireValue member = object.get(key);
-                if (member != null) { path.add(key); sealedLeaf(type, member, f(refinement, "leaf"), path, active); path.remove(path.size() - 1); }
+                if (member != null) { path.add(variant("Field", str(key))); sealedLeaf(type, member, f(refinement, "leaf"), path, active); path.remove(path.size() - 1); }
             }
             for (Member member : object.members()) if (!known.contains(member.key())) {
-                path.add(member.key());
+                path.add(variant("Field", str(member.key())));
                 if (tag(f(form, "extras")).equals("Reject")) fail(type, path, "UnexpectedField: " + member.key());
                 data(type, member.value(), path, active); path.remove(path.size() - 1);
             }
         }
-        private void sealedLeaf(int type, WireValue value, WireValue leaf, List<String> path, List<Active> active) throws ValueFailure {
-            WireValue synthetic = variant(tag(leaf), payload(leaf));
-            WireValue old = nodes.get(type), replacement = obj("reference", f(old, "reference"), "shape", synthetic);
-            List<WireValue> mutable = new ArrayList<>(nodes); mutable.set(type, replacement);
-            evaluateLeaf(type, value, synthetic, path, active);
-        }
-        private void evaluateLeaf(int type, WireValue value, WireValue shape, List<String> path, List<Active> active) throws ValueFailure {
-            String kind = tag(shape); WireValue spec = payload(shape);
+        private void sealedLeaf(int type, WireValue value, WireValue leaf, List<WireValue> path, List<Active> active) throws ValueFailure {
+            String kind = tag(leaf); WireValue spec = payload(leaf);
             if (kind.equals("String")) {
-                WireValue actual = value;
-                if (!nil(f(spec, "wrapper"))) {
-                    String name = s(f(spec, "wrapper"));
-                    try { actual = str(wrapDecode(profile, name, value)); }
-                    catch (IllegalArgumentException failure) { fail(type, path, "InvalidWrapper: " + name); }
+                String text;
+                if (value instanceof StringValue raw) {
+                    text = raw.value();
+                } else if (value instanceof ObjectValue object && classOf(object).equals("Wrapper")) {
+                    text = checkedWrapperText(type, objectWrapper(object), value, path);
+                } else {
+                    fail(type, path, "WrongValueKind: string");
+                    return;
                 }
-                if (!(actual instanceof StringValue)) fail(type, path, "WrongValueKind: string");
-                String text = s(actual);
-                if (!nil(f(spec, "const_value")) && !f(spec, "const_value").equals(actual)) fail(type, path, "ConstMismatch");
-                if (!nil(f(spec, "enum_values")) && !a(f(spec, "enum_values")).contains(actual)) fail(type, path, "EnumMismatch");
-                for (WireValue bound : a(f(spec, "lengths"))) {
-                    long count = tag(f(bound, "unit")).equals("Utf8Bytes") ? utf8Length(text)
-                            : tag(f(bound, "unit")).equals("Graphemes") ? graphemeCount(graphemeRules, text)
-                            : text.codePointCount(0, text.length());
-                    if (!bounds(count, f(bound, "minimum"), f(bound, "maximum"))) fail(type, path, "StringLength");
-                }
-                WireValue use = f(spec, "format");
-                if (!nil(use)) {
-                    String name = tag(use).equals("Named") ? s(payload(use)) : "inline";
-                    WireValue rule = tag(use).equals("Named") ? formats.get(name) : payload(use);
-                    if (!recognize(rule, text)) fail(type, path, "Format: " + name);
-                }
+                validateString(type, spec, text, path);
             } else {
                 BigInteger number = integerValue(spec, value);
                 if (number == null) fail(type, path, "WrongValueKind: integer");
                 if (!integerInDomain(spec, number)) fail(type, path, "IntegerDomain");
             }
         }
-        private void data(int type, WireValue value, List<String> path, List<Active> active) throws ValueFailure {
+        private void data(int type, WireValue value, List<WireValue> path, List<Active> active) throws ValueFailure {
             if (value instanceof DecimalValue && !b(f(f(profile, "numbers"), "decimals")))
                 fail(type, path, "InvalidDataModel");
             if (value instanceof StringValue text && !unicodeValid(text.value()))
                 fail(type, path, "InvalidDataModel");
             if (value instanceof ObjectValue object) {
                 objectMembers(type, object, path);
-                dataMembers(type, object, path, active);
+                switch (classOf(object)) {
+                    case "Wrapper" -> checkedWrapperText(type, objectWrapper(object), value, path);
+                    case "Sealed" -> sealed(type, value, obj("tag", object.get(tagKey()), "refinements", arr(List.of())), path, active);
+                    default -> dataMembers(type, object, path, active);
+                }
             } else if (value instanceof ArrayValue array) {
                 for (int i = 0; i < array.items().size(); i++) {
-                    path.add(Integer.toString(i));
+                    path.add(variant("Index", str(Integer.toString(i))));
                     data(type, array.items().get(i), path, active);
                     path.remove(path.size() - 1);
                 }
             }
         }
-        private void dataMembers(int type, ObjectValue object, List<String> path, List<Active> active)
+        private void dataMembers(int type, ObjectValue object, List<WireValue> path, List<Active> active)
                 throws ValueFailure {
             for (Member member : object.members()) {
-                path.add(member.key());
+                path.add(variant("Field", str(member.key())));
                 if (!unicodeValid(member.key())) fail(type, path, "InvalidDataModel");
                 data(type, member.value(), path, active);
                 path.remove(path.size() - 1);
@@ -815,60 +897,156 @@ public final class SemanticValues {
         }
         private String bytesText(WireValue value) {
             WireValue policy = f(profile, "bytes_policy");
-            if (!nil(f(policy, "wrapper"))) return wrapDecode(profile, s(f(policy, "wrapper")), value);
-            return s(value);
+            if (!nil(f(policy, "wrapper")))
+                return wrapperPayloadText(namedWrapper(s(f(policy, "wrapper"))), value);
+            return value instanceof StringValue text ? text.value() : null;
         }
-        private String padBase64(String value) { return value + "=".repeat((4 - value.length() % 4) % 4); }
-        private Base64.Decoder bytesDecoder(String alphabet, String value) {
-            return alphabet.equals("UrlSafe") || alphabet.equals("Either") && (value.indexOf('-') >= 0 || value.indexOf('_') >= 0)
-                    ? Base64.getUrlDecoder() : Base64.getDecoder();
+        private byte[] decodeBase64(String text) {
+            WireValue policy = f(profile, "bytes_policy");
+            if (text == null || nil(policy)) return null;
+            int firstPadding = text.indexOf('=');
+            String body = firstPadding < 0 ? text : text.substring(0, firstPadding);
+            int padding = text.length() - body.length();
+            if (padding > 2 || firstPadding >= 0 && !text.substring(firstPadding).equals("=".repeat(padding)))
+                return null;
+            String alphabet = tag(f(policy, "alphabet"));
+            String digits = switch (alphabet) {
+                case "Standard" -> "[A-Za-z0-9+/]*";
+                case "UrlSafe" -> "[A-Za-z0-9_-]*";
+                default -> "[A-Za-z0-9+/_-]*";
+            };
+            if (!body.matches(digits)) return null;
+            int remainder = body.length() % 4;
+            if (remainder == 1) return null;
+            String normalized = body.replace('-', '+').replace('_', '/');
+            if (b(f(policy, "strict_pad_bits")) && remainder != 0) {
+                int last = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+                        .indexOf(normalized.charAt(normalized.length() - 1));
+                if (last % (remainder == 2 ? 16 : 4) != 0) return null;
+            }
+            if (padding > 0 && (text.length() % 4 != 0 || padding != (4 - remainder) % 4)) return null;
+            if (padding == 0 && !b(f(policy, "padding_optional")) && remainder != 0) return null;
+            return Base64.getDecoder().decode(normalized);
         }
-        private int decodedBytesLength(int type, WireValue value, List<String> path) throws ValueFailure {
-            String text;
-            try { text = bytesText(value); }
-            catch (RuntimeException failure) { fail(type, path, "InvalidBytes"); return -1; }
-            WireValue policy = f(profile, "bytes_policy"); String alphabet = tag(f(policy, "alphabet"));
-            String digits = alphabet.equals("Standard") ? "[A-Za-z0-9+/]*={0,2}" :
-                    alphabet.equals("UrlSafe") ? "[A-Za-z0-9_-]*={0,2}" : "[A-Za-z0-9+/_-]*={0,2}";
-            if (!text.matches(digits) || !b(f(policy, "padding_optional")) && text.length() % 4 != 0)
+        private int decodedBytesLength(int type, WireValue value, List<WireValue> path) throws ValueFailure {
+            byte[] decoded = decodeBase64(bytesText(value));
+            if (decoded == null) {
                 fail(type, path, "InvalidBytes");
-            try {
-                return bytesDecoder(alphabet, text).decode(padBase64(text)).length;
-            } catch (IllegalArgumentException failure) { fail(type, path, "InvalidBytes"); return -1; }
+                return -1;
+            }
+            return decoded.length;
         }
-        private WireValue defaults(int type, WireValue value, Set<Active> active) throws ValueFailure {
-            Active key = new Active(type, value);
-            if (!active.add(key)) fail(type, List.of(), "ReferenceCycle");
-            WireValue shape = shape(type); String kind = tag(shape);
-            WireValue spec = o(shape).get("value"); if (spec == null) spec = o(shape).get("fields");
-            WireValue result = value;
-            if (kind.equals("Alias")) result = defaults(index(f(spec, "target")), value, active);
-            else if (kind.equals("Array") && value instanceof ArrayValue) {
+        private record DefaultDraft(WireValue value, List<DefaultApplication> applications) {}
+        private record DeclaredDefault(WireValue reference, WireValue value) {}
+        private WireValue typeDefault(WireValue shape) {
+            String kind = tag(shape);
+            if (!Set.of("Boolean", "Integer", "String").contains(kind)) return null;
+            WireValue value = f(payload(shape), "default_value");
+            if (nil(value)) return null;
+            return kind.equals("Integer") ? new IntegerValue(n(value)) : value;
+        }
+        private DeclaredDefault declaredDefault(WireValue reference) {
+            for (int fuel = nodes.size() + 1; fuel > 0; fuel--) {
+                Integer index = indices.get(reference);
+                if (index == null) return null;
+                WireValue shape = shape(index);
+                if (tag(shape).equals("Alias")) reference = f(payload(shape), "target");
+                else { WireValue value = typeDefault(shape); return value == null ? null : new DeclaredDefault(reference, value); }
+            }
+            return null;
+        }
+        private WireValue defaultOrigin(WireValue reference) {
+            List<WireValue> pointer = new ArrayList<>(a(f(reference, "pointer")));
+            pointer.add(str("default"));
+            return obj("source", f(reference, "source"), "pointer", arr(pointer));
+        }
+        private List<WireValue> childPath(List<WireValue> path, WireValue step) {
+            List<WireValue> result = new ArrayList<>(path); result.add(step); return result;
+        }
+        private DefaultDraft defaultDraft(WireValue reference, WireValue value, List<WireValue> path, long fuel) throws ValueFailure {
+            if (fuel == 0) throw new ValueFailure(reference, path, "MembershipBound");
+            Integer type = indices.get(reference);
+            if (type == null) throw new ValueFailure(reference, path, "UnresolvedType");
+            WireValue shape = shape(type);
+            String kind = tag(shape);
+            if (kind.equals("Alias")) return defaultDraft(f(payload(shape), "target"), value, path, fuel - 1);
+            if (kind.equals("TaggedUnion") && value instanceof ObjectValue object) {
+                WireValue spec = payload(shape);
+                WireValue tag = object.get(tagKey());
+                if (tag instanceof StringValue) for (WireValue branch : a(f(spec, "branches")))
+                    if (f(branch, "wire_tag").equals(tag)) return defaultDraft(f(branch, "target"), value, path, fuel - 1);
+            }
+            List<DefaultApplication> applications = new ArrayList<>();
+            if (kind.equals("Array") && value instanceof ArrayValue array) {
+                WireValue spec = payload(shape);
                 List<WireValue> items = new ArrayList<>();
-                for (WireValue item : a(value)) items.add(defaults(index(f(f(spec, "item"), "type_ref")), item, active));
-                result = arr(items);
-            } else if (kind.equals("Product") && value instanceof ObjectValue) {
-                List<Member> members = new ArrayList<>(); Set<String> present = new HashSet<>();
-                for (Member member : o(value).members()) {
-                    WireValue field = a(f(spec, "fields")).stream().filter(candidate -> s(f(candidate, "wire_name")).equals(member.key())).findFirst().orElse(null);
-                    members.add(field == null || nil(member.value()) ? member : new Member(member.key(), defaults(index(f(f(field, "slot"), "type_ref")), member.value(), active)));
-                    present.add(member.key());
+                for (int i = 0; i < array.items().size(); i++) {
+                    DefaultDraft child = defaultDraft(f(f(spec, "item"), "type_ref"), array.items().get(i), childPath(path, variant("Index", str(Integer.toString(i)))), fuel - 1);
+                    items.add(child.value()); applications.addAll(child.applications());
                 }
-                for (WireValue field : a(f(spec, "fields"))) {
-                    String name = s(f(field, "wire_name")); if (present.contains(name)) continue;
-                    WireValue resolved = resolve(f(f(field, "slot"), "type_ref"));
-                    if (resolved != null && Set.of("Boolean", "Integer", "String").contains(tag(resolved))) {
-                        WireValue defaultValue = f(payload(resolved), "default_value");
-                        if (!nil(defaultValue)) members.add(new Member(name, defaultValue));
+                return new DefaultDraft(arr(items), applications);
+            }
+            if (kind.equals("Product") && value instanceof ObjectValue object) {
+                WireValue spec = payload(shape);
+                List<Member> members = new ArrayList<>();
+                for (Member member : object.members()) {
+                    WireValue field = a(f(spec, "fields")).stream().filter(candidate -> s(f(candidate, "wire_name")).equals(member.key())).findFirst().orElse(null);
+                    if (field == null || nil(member.value())) members.add(member);
+                    else {
+                        DefaultDraft child = defaultDraft(f(f(field, "slot"), "type_ref"), member.value(), childPath(path, variant("Field", str(member.key()))), fuel - 1);
+                        members.add(new Member(member.key(), child.value())); applications.addAll(child.applications());
                     }
                 }
-                result = new ObjectValue(members);
-            } else if (kind.equals("TaggedUnion")) {
-                for (WireValue branch : a(f(spec, "branches")))
-                    if (selectorAccepts(f(branch, "selector"), s(f(branch, "wire_tag")), value))
-                        result = defaults(index(f(branch, "target")), value, active);
+                for (WireValue field : a(f(spec, "fields"))) {
+                    String name = s(f(field, "wire_name"));
+                    if (object.get(name) != null) continue;
+                    DeclaredDefault declared = declaredDefault(f(f(field, "slot"), "type_ref"));
+                    if (declared == null) continue;
+                    checkedMaterializationValue(declared.reference(), declared.value());
+                    applications.add(new DefaultApplication(childPath(path, variant("Field", str(name))), declared.reference(), defaultOrigin(declared.reference()), declared.value()));
+                    members.add(new Member(name, declared.value()));
+                }
+                return new DefaultDraft(new ObjectValue(members), applications);
             }
-            active.remove(key); return result;
+            return new DefaultDraft(value, applications);
+        }
+        private long jsonSize(WireValue value) {
+            if (value instanceof ArrayValue array) return 1 + array.items().stream().mapToLong(this::jsonSize).sum();
+            if (value instanceof ObjectValue object) return 1 + object.members().stream().mapToLong(member -> jsonSize(member.value())).sum();
+            return 1;
+        }
+        private Slot<WireValue> valueAtPath(WireValue value, List<WireValue> path) {
+            if (path.isEmpty()) return new Present<>(value);
+            for (WireValue step : path) {
+                if (nil(value)) return new NullSlot<>();
+                if (tag(step).equals("Field") && value instanceof ObjectValue object) value = object.get(s(payload(step)));
+                else if (tag(step).equals("Index") && value instanceof ArrayValue array) {
+                    BigInteger index = n(payload(step));
+                    if (index.signum() < 0 || index.compareTo(BigInteger.valueOf(array.items().size())) >= 0) return new Absent<>();
+                    value = array.items().get(index.intValue());
+                } else if (tag(step).equals("Variant") && value instanceof ObjectValue object) {
+                    if (!payload(step).equals(object.get(tagKey()))) return new Absent<>();
+                } else return new Absent<>();
+                if (value == null) return new Absent<>();
+                if (nil(value)) return new NullSlot<>();
+            }
+            return new Present<>(value);
+        }
+        public boolean checkDefaultApplications(WireValue before, WireValue after, List<DefaultApplication> applications) {
+            return applications.stream().allMatch(application -> {
+                Integer type = indices.get(application.typeRef());
+                return valueAtPath(before, application.valuePath()) instanceof Absent<?>
+                        && valueAtPath(after, application.valuePath()).equals(new Present<>(application.value()))
+                        && application.origin().equals(defaultOrigin(application.typeRef()))
+                        && type != null && application.value().equals(typeDefault(shape(type)));
+            });
+        }
+        public DefaultedValue materializeDefaults(WireValue reference, WireValue value) throws ValueFailure {
+            DefaultDraft draft = defaultDraft(reference, value, List.of(), (jsonSize(value) + 1) * (nodes.size() + 1L));
+            checkedMaterializationValue(reference, draft.value());
+            if (!checkDefaultApplications(value, draft.value(), draft.applications()))
+                throw new ValueFailure(reference, List.of(), "CertificateMismatch: default source, absence, or result");
+            return new DefaultedValue(draft.value(), draft.applications());
         }
     }
 
@@ -910,34 +1088,108 @@ public final class SemanticValues {
         for (int i = 0; i < text.length();) { offsets.add(i); i += Character.charCount(text.codePointAt(i)); }
         offsets.add(text.length()); return offsets;
     }
-    private static boolean sequenceAccepts(List<WireValue> rules, String text, int index) {
-        if (index == rules.size()) return text.isEmpty();
-        for (int cut : scalarOffsets(text)) if (recognize(rules.get(index), text.substring(0, cut)) && sequenceAccepts(rules, text.substring(cut), index + 1)) return true;
-        return false;
+    private record FormatSpanNode(int id, String kind, WireValue spec, List<FormatSpanNode> children) {}
+    private static FormatSpanNode binaryFormatSequence(List<FormatSpanNode> children, int start, int end, List<FormatSpanNode> nodes) {
+        if (end - start == 1) return children.get(start);
+        List<FormatSpanNode> pair = List.of();
+        if (start < end) {
+            int middle = start + (end - start) / 2;
+            pair = List.of(binaryFormatSequence(children, start, middle, nodes), binaryFormatSequence(children, middle, end, nodes));
+        }
+        FormatSpanNode node = new FormatSpanNode(nodes.size(), "Sequence", null, pair);
+        nodes.add(node);
+        return node;
     }
-    static boolean labels(String text, WireValue separator, WireValue minimum, WireValue maximum, WireValue totalMaximum, WireValue rule) {
-        String delimiter = s(separator);
-        if (delimiter.isEmpty()) return false;
-        List<String> values = new ArrayList<>(); int start = 0;
-        for (int found = text.indexOf(delimiter); found >= 0; found = text.indexOf(delimiter, start)) { values.add(text.substring(start, found)); start = found + delimiter.length(); }
-        values.add(text.substring(start));
-        if (values.size() < n(minimum).intValue() || !nil(maximum) && values.size() > n(maximum).intValue() || !nil(totalMaximum) && scalarLength(text) > n(totalMaximum).intValue()) return false;
-        for (String value : values) if (!recognize(rule, value)) return false;
-        return true;
+    private static FormatSpanNode compileFormatSpan(WireValue rule, List<FormatSpanNode> nodes) {
+        String kind = tag(rule);
+        WireValue spec = o(rule).get("value"); if (spec == null) spec = o(rule).get("fields");
+        List<FormatSpanNode> children = new ArrayList<>();
+        if (kind.equals("Sequence") || kind.equals("Choice")) {
+            for (WireValue child : a(spec)) children.add(compileFormatSpan(child, nodes));
+        } else if (kind.equals("Optional") || kind.equals("Not")) {
+            children.add(compileFormatSpan(spec, nodes));
+        } else if (kind.equals("Bounded") || kind.equals("Labels")) {
+            children.add(compileFormatSpan(f(spec, "rule"), nodes));
+        }
+        if (kind.equals("Sequence")) return binaryFormatSequence(children, 0, children.size(), nodes);
+        FormatSpanNode node = new FormatSpanNode(nodes.size(), kind, spec, List.copyOf(children));
+        nodes.add(node);
+        return node;
+    }
+    private static final class FormatSpan {
+        private record Key(int node, int start, int end) {}
+        private final String source;
+        private final List<Integer> offsets;
+        private final Map<Key, Boolean> memo = new HashMap<>();
+        private FormatSpan(String source) { this.source = source; offsets = scalarOffsets(source); }
+        private boolean accepts(FormatSpanNode node, int start, int end) {
+            Key key = new Key(node.id(), start, end);
+            Boolean known = memo.get(key);
+            if (known != null) return known;
+            boolean accepted;
+            WireValue spec = node.spec();
+            List<FormatSpanNode> children = node.children();
+            switch (node.kind()) {
+                case "Sequence": {
+                    accepted = children.isEmpty() && start == end;
+                    if (children.size() == 2) for (int split = start; split <= end; split++) {
+                        if (accepts(children.get(0), start, split) && accepts(children.get(1), split, end)) { accepted = true; break; }
+                    }
+                    break;
+                }
+                case "Choice": {
+                    accepted = false;
+                    for (FormatSpanNode child : children) if (accepts(child, start, end)) { accepted = true; break; }
+                    break;
+                }
+                case "Optional": accepted = start == end || accepts(children.getFirst(), start, end); break;
+                case "Not": accepted = !accepts(children.getFirst(), start, end); break;
+                case "Bounded": {
+                    int length = tag(f(spec, "unit")).equals("Utf8Bytes")
+                            ? source.substring(offsets.get(start), offsets.get(end)).getBytes(StandardCharsets.UTF_8).length : end - start;
+                    accepted = length <= n(f(spec, "maximum")).intValue() && accepts(children.getFirst(), start, end);
+                    break;
+                }
+                case "Labels": {
+                    String delimiter = s(f(spec, "separator"));
+                    String text = source.substring(offsets.get(start), offsets.get(end));
+                    List<Integer> cuts = new ArrayList<>();
+                    if (!delimiter.isEmpty()) {
+                        int cursor = 0;
+                        for (int found = text.indexOf(delimiter); found >= 0; found = text.indexOf(delimiter, cursor)) {
+                            cuts.add(found); cursor = found + delimiter.length();
+                        }
+                    }
+                    cuts.add(text.length());
+                    accepted = !delimiter.isEmpty() && cuts.size() >= n(f(spec, "min_count")).intValue()
+                            && (nil(f(spec, "max_count")) || cuts.size() <= n(f(spec, "max_count")).intValue())
+                            && (nil(f(spec, "total_max")) || end - start <= n(f(spec, "total_max")).intValue());
+                    if (accepted) {
+                        int cursor = start;
+                        int charCursor = 0;
+                        for (int cut : cuts) {
+                            int length = scalarLength(text.substring(charCursor, cut));
+                            if (!accepts(children.getFirst(), cursor, cursor + length)) { accepted = false; break; }
+                            cursor += length + scalarLength(delimiter);
+                            charCursor = cut + delimiter.length();
+                        }
+                    }
+                    break;
+                }
+                default: accepted = recognizeFormatLeaf(node.kind(), spec, source.substring(offsets.get(start), offsets.get(end)));
+            }
+            memo.put(key, accepted);
+            return accepted;
+        }
     }
     static boolean recognize(WireValue rule, String text) {
         if (rule == null) return false;
-        WireValue spec = o(rule).get("value"); if (spec == null) spec = o(rule).get("fields");
-        switch (tag(rule)) {
+        FormatSpan span = new FormatSpan(text);
+        return span.accepts(compileFormatSpan(rule, new ArrayList<>()), 0, span.offsets.size() - 1);
+    }
+    private static boolean recognizeFormatLeaf(String kind, WireValue spec, String text) {
+        switch (kind) {
             case "Literal": return s(spec).equals(text);
-            case "Sequence": return sequenceAccepts(a(spec), text, 0);
-            case "Optional": return text.isEmpty() || recognize(spec, text);
-            case "Labels": return labels(text, f(spec, "separator"), f(spec, "min_count"), f(spec, "max_count"), f(spec, "total_max"), f(spec, "rule"));
-            case "Bounded": {
-                String unit = tag(f(spec, "unit"));
-                int length = unit.equals("Utf8Bytes") ? text.getBytes(StandardCharsets.UTF_8).length : scalarLength(text);
-                return length <= n(f(spec, "maximum")).intValue() && recognize(f(spec, "rule"), text);
-            }
             case "Identifier": {
                 if (!ascii(text) || text.isEmpty() || !bounds(text.length(), f(spec, "min_length"), f(spec, "max_length")) || !nil(f(spec, "exact_length")) && !BigInteger.valueOf(text.length()).equals(n(f(spec, "exact_length"))) || a(f(spec, "forbidden")).contains(str(text)) || !s(f(spec, "first_alphabet")).contains(text.substring(0, 1))) return false;
                 String alphabet = s(f(spec, "rest_alphabet")); for (int i = 1; i < text.length(); i++) if (alphabet.indexOf(text.charAt(i)) < 0) return false;
@@ -946,9 +1198,7 @@ public final class SemanticValues {
             case "Timestamp": return timestamp(spec, text);
             case "AbsoluteUri": return absoluteUri(text, nil(f(spec, "max_bytes")) ? BigInteger.valueOf(Integer.MAX_VALUE) : n(f(spec, "max_bytes")));
             case "LanguageTag": return language(text, a(f(spec, "grandfathered")));
-            case "Choice": { for (WireValue choice : a(spec)) if (recognize(choice, text)) return true; return false; }
             case "Text": return true;
-            case "Not": return !recognize(spec, text);
             case "AsciiDfa": {
                 if (!ascii(text)) return false;
                 WireValue state = f(spec, "initial_state");
@@ -1120,15 +1370,8 @@ public final class SemanticValues {
     }
 
     public interface HostAdapter {
-        JavaHttpAdapter.StartResult start(NetworkEffect.SendCommand command);
-        JavaHttpAdapter.PollResult observe(NetworkEffect.StartedAttempt started);
-        static HostAdapter javaHttp(JavaHttpAdapter adapter) {
-            Objects.requireNonNull(adapter);
-            return new HostAdapter() {
-                public JavaHttpAdapter.StartResult start(NetworkEffect.SendCommand command) { return adapter.start(command); }
-                public JavaHttpAdapter.PollResult observe(NetworkEffect.StartedAttempt started) { return adapter.observe(started); }
-            };
-        }
+        NetworkEffect.StartObservation start(NetworkEffect.SendCommand command);
+        NetworkEffect.HostObservation observe(NetworkEffect.StartedAttempt started);
     }
     @FunctionalInterface public interface OwnerEncoder<I> { NetworkEffect.AttemptInput encode(I input) throws Exception; }
     @FunctionalInterface public interface OwnerDecoder<O> { O decode(NetworkEffect.SettledAttempt settled) throws Exception; }
@@ -1142,13 +1385,6 @@ public final class SemanticValues {
     public record HttpCompleted<O>(NetworkEffect.NetworkState state, NetworkEffect.SettledAttempt settled, O outcome) implements HttpResult<O> {}
     public record HttpPending<O>(HttpContinuation<O> continuation) implements HttpResult<O> {}
     public record HttpRejected<O>(NetworkEffect.NetworkState state, HttpFailure failure, boolean commandIssued) implements HttpResult<O> {}
-    private static NetworkEffect.HostObservation hostObservation(JavaHttpAdapter.PollResult result) {
-        return switch (result) {
-            case JavaHttpAdapter.PollResult.Pending pending -> pending.observation();
-            case JavaHttpAdapter.PollResult.Delivered delivered -> delivered.observation();
-            case JavaHttpAdapter.PollResult.Closed closed -> closed.observation();
-        };
-    }
     public static final class HttpContinuation<O> {
         private NetworkEffect.NetworkState state;
         private final NetworkEffect.StartedAttempt started;
@@ -1163,7 +1399,7 @@ public final class SemanticValues {
         public synchronized HttpResult<O> resume() {
             if (completed) return new HttpRejected<>(state, new ClosedContinuation(), true);
             NetworkEffect.NetworkStep step;
-            try { step = NetworkEffect.observe(state, hostObservation(adapter.observe(started))); }
+            try { step = NetworkEffect.observe(state, adapter.observe(started)); }
             catch (RuntimeException error) { return new HttpRejected<>(state, new AdapterFailure(error), true); }
             if (step instanceof NetworkEffect.NetworkStep.Pending pending) { state = pending.state(); return new HttpPending<>(this); }
             if (step instanceof NetworkEffect.NetworkStep.Terminal terminal) {
@@ -1187,9 +1423,9 @@ public final class SemanticValues {
         NetworkEffect.CommandStep<NetworkEffect.SendCommand> commandStep = NetworkEffect.sendCommand(prepared.state(), prepared.prepared());
         if (commandStep instanceof NetworkEffect.CommandStep.Rejected<NetworkEffect.SendCommand> rejected) return new HttpRejected<>(rejected.state(), new LedgerFailure(rejected.failure()), false);
         NetworkEffect.CommandStep.CommandReady<NetworkEffect.SendCommand> command = (NetworkEffect.CommandStep.CommandReady<NetworkEffect.SendCommand>) commandStep;
-        JavaHttpAdapter.StartResult start;
+        NetworkEffect.StartObservation start;
         try { start = adapter.start(command.command()); } catch (RuntimeException error) { return new HttpRejected<>(command.state(), new AdapterFailure(error), true); }
-        NetworkEffect.NetworkStep observed = NetworkEffect.observeStart(command.state(), prepared.prepared(), start.observation());
+        NetworkEffect.NetworkStep observed = NetworkEffect.observeStart(command.state(), prepared.prepared(), start);
         if (observed instanceof NetworkEffect.NetworkStep.Rejected rejected) return new HttpRejected<>(rejected.state(), new LedgerFailure(rejected.failure()), true);
         if (observed instanceof NetworkEffect.NetworkStep.Terminal terminal) {
             try { return new HttpCompleted<>(terminal.state(), terminal.settled(), decoder.decode(terminal.settled())); }

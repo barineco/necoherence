@@ -1,13 +1,7 @@
 -- SPDX-FileCopyrightText: 2026 barineco
 -- SPDX-License-Identifier: MIT
 
-/-
-Call provenance as data.
 
-An edge holds where a later call's basis reads the resource an earlier call
-settled on. Absence of an edge witnesses that two calls touched disjoint
-coordinates.
--/
 
 import Necoherence.Core
 

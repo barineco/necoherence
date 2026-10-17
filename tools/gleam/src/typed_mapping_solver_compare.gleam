@@ -32,10 +32,6 @@ pub type Json {
   JObj(List(#(String, Json)))
 }
 
-// ---------------------------------------------------------------------------
-// JSON reader (recursive descent over graphemes)
-// ---------------------------------------------------------------------------
-
 type PResult =
   Result(#(Json, List(String)), String)
 
@@ -152,10 +148,6 @@ fn parse_json(text: String) -> Result(Json, String) {
     _ -> Error("trailing input after JSON document")
   }
 }
-
-// ---------------------------------------------------------------------------
-// decoding the solver input vocabulary
-// ---------------------------------------------------------------------------
 
 fn jfield(json: Json, key: String) -> Result(Json, String) {
   case json {
@@ -378,10 +370,6 @@ fn dec_input(j: Json) -> Result(solver.SolverInput, String) {
     ),
   ))
 }
-
-// ---------------------------------------------------------------------------
-// canonical result encoding
-// ---------------------------------------------------------------------------
 
 fn esc(text: String) -> String {
   let body =

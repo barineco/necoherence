@@ -5,9 +5,6 @@ import gleam/list
 import necoherence/typed_mapping as solver
 import necoherence_tools/typed_mapping_solver as search
 
-// Scenario A: one transition t1 consuming a res-a token at p1 and
-// producing a token at `p2`; the goal asks for a token at `p2`.
-
 fn place(identity: String) -> solver.TypedPlace {
   solver.TypedPlace(identity: identity, token_type: "tok", revision: 1)
 }
@@ -133,10 +130,6 @@ pub fn check_deadlock_goal_satisfied_is_not_deadlocked_test() {
   let assert Ok(solver.NotDeadlocked(_)) = search.check_deadlock(input)
 }
 
-// Scenario B: a self-loop transition `t2` that reads (never consumes) a
-// `res-b` token at `p2` and declares no output places, so applying its
-// branch reproduces the same marking and closes a cycle.
-
 fn scenario_b(max_search_steps: Int) -> solver.SolverInput {
   let marking = solver.Marking(places: [#("p2", [token("res-b", 0, 1)])])
   solver.SolverInput(
@@ -189,8 +182,6 @@ pub fn check_well_foundedness_non_decreasing_cycle_is_not_well_founded_test() {
 }
 
 pub fn check_well_foundedness_bound_exhausted_is_unknown_test() {
-  // A bound of zero leaves the frontier unexplored, so the outcome is
-  // Unknown rather than a well-foundedness verdict.
   let input = scenario_b(0)
   let assert Ok(solver.WellFoundednessUnknown(reason)) =
     search.check_well_foundedness(input)
@@ -198,7 +189,6 @@ pub fn check_well_foundedness_bound_exhausted_is_unknown_test() {
 }
 
 pub fn invalid_declaration_is_reported_by_every_operation_test() {
-  // A binding whose place is not a declared input place of its transition.
   let bad_binding =
     solver.InputBinding(
       transition_id: "t1",
@@ -230,10 +220,6 @@ pub fn invalid_declaration_is_reported_by_every_operation_test() {
     "p2",
   ))) = search.check_well_foundedness(input)
 }
-
-// Regression fixtures: a convergent
-// diamond whose paths T-A/T-AX and T-B/T-BC/T-CX converge on one
-// marking, so the marking graph is a DAG with no back edge.
 
 fn conv_transitions() -> List(solver.TypedTransition) {
   [
@@ -303,8 +289,6 @@ fn conv_input() -> solver.SolverInput {
   )
 }
 
-/// A marking the search reaches by two distinct paths is a convergence
-/// edge, not a cycle: the convergent DAG is well-founded.
 pub fn convergent_dag_is_well_founded_test() {
   let assert Ok(solver.WellFounded(witness)) =
     search.check_well_foundedness(conv_input())
@@ -313,9 +297,6 @@ pub fn convergent_dag_is_well_founded_test() {
   assert witness.frontier == []
 }
 
-/// The closure witness records each explored marking exactly once: the
-/// convergent marking, reached from two distinct parents, is enqueued
-/// and reported a single time.
 pub fn closure_witness_records_distinct_markings_test() {
   let assert Ok(solver.Unreachable(witness)) =
     search.check_reachability(conv_input())
@@ -324,8 +305,6 @@ pub fn closure_witness_records_distinct_markings_test() {
   assert list.unique(witness.explored_markings) == witness.explored_markings
 }
 
-/// A `Consume` binding with multiplicity one removes exactly one
-/// occurrence of a duplicated token, retaining the second.
 pub fn consume_removes_only_selected_occurrences_test() {
   let marking =
     solver.Marking(places: [
@@ -345,9 +324,6 @@ pub fn consume_removes_only_selected_occurrences_test() {
   assert retained == [token("res-a", 0, 1)]
 }
 
-/// Exceeding the declared `max_bindings` is
-/// `Unknown(BindingBoundExhausted(_))`, never `Unreachable` or settled,
-/// including the `max_bindings = 0` case with candidates present.
 pub fn binding_bound_exhaustion_reports_unknown_test() {
   let base = scenario_a(initial_marking(), solver.PlaceHasAtLeast("p2", 1), 8)
   let input =
@@ -363,8 +339,6 @@ pub fn binding_bound_exhaustion_reports_unknown_test() {
     search.check_well_foundedness(input)
 }
 
-/// An output place outside the declared place set is an `Invalid`
-/// dependency mismatch, not a marking-minting success.
 pub fn undeclared_output_place_is_invalid_test() {
   let base = scenario_a(initial_marking(), solver.PlaceHasAtLeast("p2", 1), 8)
   let input =
@@ -387,8 +361,6 @@ pub fn undeclared_output_place_is_invalid_test() {
   ))) = search.check_reachability(input)
 }
 
-/// A failure place outside the declared place set is equally an
-/// `Invalid` dependency mismatch.
 pub fn undeclared_failure_place_is_invalid_test() {
   let base = scenario_a(initial_marking(), solver.PlaceHasAtLeast("p2", 1), 8)
   let input =

@@ -68,7 +68,7 @@ public class IterationTest {
         assertEquals(List.of("value"), stopped.stopped().failure().fields());
     }
 
-    /** fold's round count never exceeds the requested count, over a finite domain of counts. */
+
     @Test
     void foldTraceLengthBoundedByCountProperty() {
         Immediate<BigInteger, BigInteger> increment =
@@ -126,8 +126,7 @@ public class IterationTest {
         assertEquals(List.of("state"), failed.stopped().failure().fields());
     }
 
-    /** A strictly-decreasing measure over a random finite starting bound always settles within
-     * that many rounds, and never reports didNotDecrease. */
+
     @Test
     void recurseStrictlyDecreasingMeasureAlwaysSettlesProperty() {
         Random random = new Random(20260819);
@@ -190,8 +189,7 @@ public class IterationTest {
         assertEquals(List.of("elements"), failed.stopped().failure().fields());
     }
 
-    /** closure over a random finite reachability graph never exceeds the carrier's own size in
-     * steps, and its fixpoint is always a subset of the carrier. */
+
     @Test
     void closureBoundedByCarrierSizeProperty() {
         Random random = new Random(20260820);

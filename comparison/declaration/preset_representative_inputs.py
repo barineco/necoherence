@@ -7,6 +7,7 @@ import copy
 import hashlib
 import importlib.util
 import json
+from collections import deque
 from pathlib import Path
 from typing import Any
 
@@ -86,6 +87,30 @@ def _identifier_witness(fields: dict[str, Any]) -> str:
     return candidate
 
 
+def _ascii_dfa_witness(spec: dict[str, Any]) -> str:
+    accepting = set(spec["accepting_states"])
+    pending = deque([(spec["initial_state"], b"")])
+    visited = {spec["initial_state"]}
+    while pending:
+        state, prefix = pending.popleft()
+        if state in accepting:
+            return prefix.decode("ascii")
+        transitions = sorted(
+            (row for row in spec["transitions"] if row["from_state"] == state),
+            key=lambda row: (int(row["last"]) < 33, int(row["first"])),
+        )
+        for transition in transitions:
+            destination = transition["to_state"]
+            if destination in visited:
+                continue
+            first = int(transition["first"])
+            last = int(transition["last"])
+            byte = max(first, 33) if max(first, 33) <= last else first
+            visited.add(destination)
+            pending.append((destination, prefix + bytes([byte])))
+    raise ValueError("DFA has no accepting state reachable from its initial state")
+
+
 def _rule_witness(rule: dict[str, Any]) -> str:
     tag = rule["tag"]
     value = rule.get("value")
@@ -102,6 +127,8 @@ def _rule_witness(rule: dict[str, Any]) -> str:
         return ""
     if tag == "Bounded":
         return _rule_witness(fields["rule"])
+    if tag == "AsciiDfa":
+        return _ascii_dfa_witness(value)
     if tag == "Labels":
         count = int(fields.get("min_count") or "1")
         return ".".join(_rule_witness(fields["rule"]) for _ in range(count))

@@ -1,7 +1,6 @@
 # SPDX-FileCopyrightText: 2026 barineco
 # SPDX-License-Identifier: MIT
 
-"""Deterministic, I/O-free adapter actions for lifecycle and race checks."""
 
 from __future__ import annotations
 
@@ -96,7 +95,6 @@ class MockRun:
 
 
 class MockAdapter:
-    """A stable-handle queue adapter whose actions never perform host I/O."""
 
     def __init__(self, actions: Iterable[Any] = ()) -> None:
         self._actions = tuple(actions)

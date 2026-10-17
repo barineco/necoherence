@@ -12,6 +12,7 @@ import necoherence/exact_json as kdl
 pub type ValueCodecFailure {
   InvalidSyntax
   InvalidExactValue
+  DuplicateField(name: String)
 }
 
 type Parsed {
@@ -28,6 +29,34 @@ pub fn parse_wire(text: String) -> Result(kdl.JsonValue, ValueCodecFailure) {
     [] -> Ok(parsed.value)
     _ -> Error(InvalidSyntax)
   }
+}
+
+fn wire_uniqueness(value: kdl.JsonValue) -> Result(Nil, ValueCodecFailure) {
+  case value {
+    kdl.JsonValueObj(members) -> {
+      use _ <- result.try(
+        list.try_fold(members, [], fn(seen, member) {
+          case list.contains(seen, member.0) {
+            True -> Error(DuplicateField(member.0))
+            False -> Ok([member.0, ..seen])
+          }
+        }),
+      )
+      list.try_map(members, fn(member) { wire_uniqueness(member.1) })
+      |> result.map(fn(_) { Nil })
+    }
+    kdl.JsonValueArr(items) ->
+      list.try_map(items, wire_uniqueness) |> result.map(fn(_) { Nil })
+    _ -> Ok(Nil)
+  }
+}
+
+pub fn parse_unique_wire(
+  text: String,
+) -> Result(kdl.JsonValue, ValueCodecFailure) {
+  use value <- result.try(parse_wire(text))
+  use _ <- result.try(wire_uniqueness(value))
+  Ok(value)
 }
 
 pub fn encode_wire(value: kdl.JsonValue) -> Result(String, ValueCodecFailure) {

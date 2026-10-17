@@ -1,10 +1,14 @@
 // SPDX-FileCopyrightText: 2026 barineco
 // SPDX-License-Identifier: MIT
 
+pub use crate::default_materialization::{
+    check_default_applications, decode_with_defaults, materialize_defaults, DefaultApplication,
+    DefaultFailure, DefaultedValue,
+};
 use crate::semantic_types::*;
 use num_bigint::{BigInt, BigUint};
 use num_traits::Zero;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::net::Ipv6Addr;
 
 fn valid_ref(r: &ProfileRef) -> bool {
@@ -709,36 +713,180 @@ pub fn recognize_language_tag<S: AsRef<str>>(text: &str, grandfathered: &[S]) ->
     }
     parts.next().is_none()
 }
-pub fn recognize_format(r: &FormatRule, s: &str) -> bool {
-    match r {
-        FormatRule::Literal(x) => x == s,
-        FormatRule::Text => true,
-        FormatRule::Not(x) => !recognize_format(x, s),
-        FormatRule::Optional(x) => s.is_empty() || recognize_format(x, s),
-        FormatRule::Choice(v) => v.iter().any(|x| recognize_format(x, s)),
+struct FormatSpanNode<'a> {
+    id: usize,
+    kind: FormatSpanKind<'a>,
+}
+
+enum FormatSpanKind<'a> {
+    Epsilon,
+    Sequence(Box<FormatSpanNode<'a>>, Box<FormatSpanNode<'a>>),
+    Not(Box<FormatSpanNode<'a>>),
+    Optional(Box<FormatSpanNode<'a>>),
+    Choice(Vec<FormatSpanNode<'a>>),
+    Bounded(&'a StringLengthUnit, &'a BigUint, Box<FormatSpanNode<'a>>),
+    Labels(
+        &'a str,
+        &'a BigUint,
+        &'a Option<BigUint>,
+        &'a Option<BigUint>,
+        Box<FormatSpanNode<'a>>,
+    ),
+    Leaf(&'a FormatRule),
+}
+
+fn format_span_node<'a>(kind: FormatSpanKind<'a>, next: &mut usize) -> FormatSpanNode<'a> {
+    let id = *next;
+    *next += 1;
+    FormatSpanNode { id, kind }
+}
+
+fn binary_format_sequence<'a>(
+    mut children: Vec<FormatSpanNode<'a>>,
+    next: &mut usize,
+) -> FormatSpanNode<'a> {
+    if children.len() > 1 {
+        let right = children.split_off(children.len() / 2);
+        let left = binary_format_sequence(children, next);
+        let right = binary_format_sequence(right, next);
+        return format_span_node(
+            FormatSpanKind::Sequence(Box::new(left), Box::new(right)),
+            next,
+        );
+    }
+    match children.pop() {
+        Some(child) => child,
+        None => format_span_node(FormatSpanKind::Epsilon, next),
+    }
+}
+
+fn compile_format_span<'a>(rule: &'a FormatRule, next: &mut usize) -> FormatSpanNode<'a> {
+    let kind = match rule {
+        FormatRule::Sequence(parts) => {
+            let children: Vec<_> = parts
+                .iter()
+                .map(|part| compile_format_span(part, next))
+                .collect();
+            return binary_format_sequence(children, next);
+        }
+        FormatRule::Not(child) => FormatSpanKind::Not(Box::new(compile_format_span(child, next))),
+        FormatRule::Optional(child) => {
+            FormatSpanKind::Optional(Box::new(compile_format_span(child, next)))
+        }
+        FormatRule::Choice(parts) => FormatSpanKind::Choice(
+            parts
+                .iter()
+                .map(|part| compile_format_span(part, next))
+                .collect(),
+        ),
         FormatRule::Bounded {
             unit,
             maximum,
             rule,
-        } => BigUint::from(length(unit, s)) <= *maximum && recognize_format(rule, s),
+        } => FormatSpanKind::Bounded(unit, maximum, Box::new(compile_format_span(rule, next))),
         FormatRule::Labels {
             separator,
             min_count,
             max_count,
             total_max,
             rule,
-        } => {
-            let parts: Vec<_> = s.split(separator).collect();
-            !separator.is_empty()
-                && BigUint::from(parts.len()) >= *min_count
-                && max_count
-                    .as_ref()
-                    .is_none_or(|m| BigUint::from(parts.len()) <= *m)
-                && total_max
-                    .as_ref()
-                    .is_none_or(|m| BigUint::from(s.len()) <= *m)
-                && parts.iter().all(|x| recognize_format(rule, x))
+        } => FormatSpanKind::Labels(
+            separator,
+            min_count,
+            max_count,
+            total_max,
+            Box::new(compile_format_span(rule, next)),
+        ),
+        _ => FormatSpanKind::Leaf(rule),
+    };
+    format_span_node(kind, next)
+}
+
+struct FormatSpan<'a> {
+    source: &'a str,
+    offsets: Vec<usize>,
+    memo: HashMap<(usize, usize, usize), bool>,
+}
+
+impl<'a> FormatSpan<'a> {
+    fn text(&self, start: usize, end: usize) -> Option<&'a str> {
+        self.offsets
+            .get(start)
+            .zip(self.offsets.get(end))
+            .and_then(|(&first, &last)| self.source.get(first..last))
+    }
+
+    fn accepts(&mut self, node: &FormatSpanNode<'_>, start: usize, end: usize) -> bool {
+        let key = (node.id, start, end);
+        if let Some(&accepted) = self.memo.get(&key) {
+            return accepted;
         }
+        let accepted = match &node.kind {
+            FormatSpanKind::Epsilon => start == end,
+            FormatSpanKind::Sequence(left, right) => (start..=end)
+                .any(|split| self.accepts(left, start, split) && self.accepts(right, split, end)),
+            FormatSpanKind::Not(child) => !self.accepts(child, start, end),
+            FormatSpanKind::Optional(child) => start == end || self.accepts(child, start, end),
+            FormatSpanKind::Choice(children) => {
+                children.iter().any(|child| self.accepts(child, start, end))
+            }
+            FormatSpanKind::Bounded(unit, maximum, child) => {
+                self.text(start, end)
+                    .is_some_and(|text| BigUint::from(length(unit, text)) <= **maximum)
+                    && self.accepts(child, start, end)
+            }
+            FormatSpanKind::Labels(separator, minimum, maximum, total, child) => {
+                if let Some(text) = self.text(start, end) {
+                    let parts: Vec<_> = text.split(*separator).collect();
+                    let valid = !separator.is_empty()
+                        && BigUint::from(parts.len()) >= **minimum
+                        && maximum
+                            .as_ref()
+                            .is_none_or(|bound| BigUint::from(parts.len()) <= *bound)
+                        && total
+                            .as_ref()
+                            .is_none_or(|bound| BigUint::from(text.len()) <= *bound);
+                    let mut cursor = start;
+                    valid
+                        && parts.iter().all(|part| {
+                            let end = cursor + part.chars().count();
+                            let accepted = self.accepts(child, cursor, end);
+                            cursor = end + separator.chars().count();
+                            accepted
+                        })
+                } else {
+                    false
+                }
+            }
+            FormatSpanKind::Leaf(rule) => self
+                .text(start, end)
+                .is_some_and(|text| recognize_format_leaf(rule, text)),
+        };
+        self.memo.insert(key, accepted);
+        accepted
+    }
+}
+
+pub fn recognize_format(rule: &FormatRule, text: &str) -> bool {
+    let root = compile_format_span(rule, &mut 0);
+    let offsets: Vec<_> = text
+        .char_indices()
+        .map(|(index, _)| index)
+        .chain([text.len()])
+        .collect();
+    let end = offsets.len() - 1;
+    FormatSpan {
+        source: text,
+        offsets,
+        memo: HashMap::new(),
+    }
+    .accepts(&root, 0, end)
+}
+
+fn recognize_format_leaf(r: &FormatRule, s: &str) -> bool {
+    match r {
+        FormatRule::Literal(x) => x == s,
+        FormatRule::Text => true,
         FormatRule::Identifier {
             first_alphabet,
             rest_alphabet,
@@ -776,7 +924,12 @@ pub fn recognize_format(r: &FormatRule, s: &str) -> bool {
             }
             d.accepting_states.contains(&state)
         }
-        FormatRule::Sequence(v) => sequence(v, s),
+        FormatRule::Sequence(_)
+        | FormatRule::Not(_)
+        | FormatRule::Optional(_)
+        | FormatRule::Choice(_)
+        | FormatRule::Bounded { .. }
+        | FormatRule::Labels { .. } => false,
         FormatRule::Timestamp(rule) => timestamp(s, rule),
         FormatRule::AbsoluteUri { max_bytes } => max_bytes.as_ref().map_or_else(
             || absolute_uri(s, &BigUint::from(u64::MAX)),
@@ -785,20 +938,7 @@ pub fn recognize_format(r: &FormatRule, s: &str) -> bool {
         FormatRule::LanguageTag { grandfathered } => recognize_language_tag(s, grandfathered),
     }
 }
-fn sequence(v: &[FormatRule], s: &str) -> bool {
-    fn go(v: &[FormatRule], s: &str) -> bool {
-        let Some((rule, remaining)) = v.split_first() else {
-            return s.is_empty();
-        };
-        (0..=s.len()).filter(|i| s.is_char_boundary(*i)).any(|i| {
-            s.get(..i).zip(s.get(i..)).is_some_and(|(prefix, suffix)| {
-                recognize_format(rule, prefix) && go(remaining, suffix)
-            })
-        })
-    }
-    go(v, s)
-}
-fn parse_integer(binding: &IntegerDomainBinding, v: &JsonValue) -> Option<BigInt> {
+pub(crate) fn parse_integer(binding: &IntegerDomainBinding, v: &JsonValue) -> Option<BigInt> {
     match v {
         JsonValue::Num(n) if binding.forms.contains(&IntegerForm::Number) => Some(n.clone()),
         JsonValue::Dec(text) if binding.forms.contains(&IntegerForm::IntegralDecimal) => {
@@ -1017,43 +1157,63 @@ fn duplicate(m: &[(String, JsonValue)]) -> Option<String> {
         }
     })
 }
-fn base64_digit(c: u8, url: bool) -> Option<u8> {
+fn base64_digit(c: u8, alphabet: &BytesAlphabet) -> Option<u8> {
     match c {
         b'A'..=b'Z' => Some(c - b'A'),
         b'a'..=b'z' => Some(c - b'a' + 26),
         b'0'..=b'9' => Some(c - b'0' + 52),
-        b'+' if !url => Some(62),
-        b'/' if !url => Some(63),
-        b'-' if url => Some(62),
-        b'_' if url => Some(63),
+        b'+' if *alphabet != BytesAlphabet::UrlSafe => Some(62),
+        b'/' if *alphabet != BytesAlphabet::UrlSafe => Some(63),
+        b'-' if *alphabet != BytesAlphabet::Standard => Some(62),
+        b'_' if *alphabet != BytesAlphabet::Standard => Some(63),
         _ => None,
     }
 }
-pub fn base64_length(p: &BytesPolicy, s: &str) -> Option<usize> {
-    let text = s.trim_end_matches('=');
-    let pads = s.len() - text.len();
-    if pads > 2 || (!p.padding_optional && !s.len().is_multiple_of(4)) || text.len() % 4 == 1 {
-        return None;
-    }
-    let alphabets: &[bool] = match p.alphabet {
-        BytesAlphabet::Standard => &[false],
-        BytesAlphabet::UrlSafe => &[true],
-        BytesAlphabet::Either => &[false, true],
-    };
-    if !alphabets
-        .iter()
-        .any(|u| text.bytes().all(|c| base64_digit(c, *u).is_some()))
+fn base64_digits(policy: &BytesPolicy, text: &str) -> Option<Vec<u8>> {
+    let body = text.trim_end_matches('=');
+    let padding = text.len() - body.len();
+    let remainder = body.len() % 4;
+    if padding > 2
+        || remainder == 1
+        || (padding > 0 && (!text.len().is_multiple_of(4) || padding != (4 - remainder) % 4))
+        || (padding == 0 && !policy.padding_optional && remainder != 0)
     {
         return None;
     }
-    let rem = text.len() % 4;
-    if p.strict_pad_bits && rem > 1 {
-        let last = base64_digit(*text.as_bytes().last()?, *alphabets.first()?)?;
-        if rem == 2 && last % 16 != 0 || rem == 3 && last % 4 != 0 {
+    let digits = body
+        .bytes()
+        .map(|byte| base64_digit(byte, &policy.alphabet))
+        .collect::<Option<Vec<_>>>()?;
+    if policy.strict_pad_bits && remainder > 1 {
+        let last = digits.last()?;
+        if remainder == 2 && last % 16 != 0 || remainder == 3 && last % 4 != 0 {
             return None;
         }
     }
-    Some(text.len() * 6 / 8)
+    Some(digits)
+}
+pub fn base64_length(policy: &BytesPolicy, text: &str) -> Option<usize> {
+    base64_digits(policy, text)
+        .map(|digits| digits.len() / 4 * 3 + (digits.len() % 4).saturating_sub(1))
+}
+pub(crate) fn base64_decode(policy: &BytesPolicy, text: &str) -> Option<Vec<u8>> {
+    let digits = base64_digits(policy, text)?;
+    let mut output = Vec::new();
+    for chunk in digits.chunks(4) {
+        let mut value = 0u32;
+        for digit in chunk {
+            value = (value << 6) | u32::from(*digit);
+        }
+        value <<= 6 * (4 - chunk.len());
+        output.push((value >> 16) as u8);
+        if chunk.len() >= 3 {
+            output.push((value >> 8) as u8);
+        }
+        if chunk.len() == 4 {
+            output.push(value as u8);
+        }
+    }
+    Some(output)
 }
 fn wrapper_text(p: &VersionedSemanticProfile, w: &Wrapper, v: &JsonValue) -> Option<String> {
     let JsonValue::Obj(m) = v else { return None };
@@ -1074,6 +1234,15 @@ fn wrapper_text(p: &VersionedSemanticProfile, w: &Wrapper, v: &JsonValue) -> Opt
             .format(f)
             .filter(|r| recognize_format(&r.rule, s))
             .map(|_| s.clone()),
+    }
+}
+fn wrapper_payload_failure(wrapper: &Wrapper) -> ValueCondition {
+    match &wrapper.payload {
+        WrapperPayload::Bytes => ValueCondition::InvalidBytes,
+        WrapperPayload::Text { format: None } => {
+            ValueCondition::WrongValueKind("wrapper text".into())
+        }
+        WrapperPayload::Text { format: Some(name) } => ValueCondition::Format(name.clone()),
     }
 }
 fn bytes_len(p: &VersionedSemanticProfile, v: &JsonValue) -> Option<usize> {
@@ -1097,20 +1266,11 @@ fn sealed_leaf_condition(
 ) -> Option<ValueCondition> {
     match (leaf, value) {
         (SealedLeaf::String(spec), JsonValue::Str(text)) => string_condition(profile, spec, text),
-        (SealedLeaf::String(spec), JsonValue::Obj(_)) => match class_of(
-            profile,
-            match value {
-                JsonValue::Obj(members) => members,
-                _ => unreachable!(),
+        (SealedLeaf::String(spec), JsonValue::Obj(members)) => match class_of(profile, members) {
+            ObjectClass::Wrapper(wrapper) => match wrapper_text(profile, &wrapper, value) {
+                Some(text) => string_condition(profile, spec, &text),
+                None => Some(wrapper_payload_failure(&wrapper)),
             },
-        ) {
-            ObjectClass::Wrapper(wrapper) => wrapper_text(profile, &wrapper, value)
-                .and_then(|text| string_condition(profile, spec, &text))
-                .or_else(|| {
-                    wrapper_text(profile, &wrapper, value)
-                        .is_none()
-                        .then_some(ValueCondition::InvalidWrapper(wrapper.name))
-                }),
             _ => Some(ValueCondition::WrongValueKind("string".into())),
         },
         (SealedLeaf::String(_), _) => Some(ValueCondition::WrongValueKind("string".into())),
@@ -1236,22 +1396,9 @@ fn data_failure(
                 return Some((here, condition, observed));
             }
             match class_of(profile, members) {
-                ObjectClass::Wrapper(wrapper) => {
-                    if wrapper_text(profile, &wrapper, value).is_none() {
-                        Some((
-                            path,
-                            match wrapper.payload {
-                                WrapperPayload::Bytes => ValueCondition::InvalidBytes,
-                                WrapperPayload::Text { .. } => {
-                                    ValueCondition::InvalidWrapper(wrapper.name)
-                                }
-                            },
-                            value.clone(),
-                        ))
-                    } else {
-                        None
-                    }
-                }
+                ObjectClass::Wrapper(wrapper) => wrapper_text(profile, &wrapper, value)
+                    .is_none()
+                    .then(|| (path, wrapper_payload_failure(&wrapper), value.clone())),
                 ObjectClass::Sealed(form) => {
                     let tag = profile.tag.as_ref()?;
                     if let Some((key, condition)) =
@@ -1368,27 +1515,30 @@ pub fn accepts_value(g: &SemanticGraph, r: &TypeRef, v: &JsonValue) -> ValueDeci
             }
             (TypeShape::String(spec), value) => {
                 let text = match (&spec.wrapper, value) {
-                    (None, JsonValue::Str(text)) => Some(text.clone()),
-                    (Some(name), JsonValue::Obj(_)) => g
-                        .profile
-                        .wrappers
-                        .iter()
-                        .find(|wrapper| wrapper.name == *name)
-                        .and_then(|wrapper| wrapper_text(&g.profile, wrapper, value)),
-                    _ => None,
+                    (None, JsonValue::Str(text)) => Ok(text.clone()),
+                    (None, _) => Err(ValueCondition::WrongValueKind("string".into())),
+                    (Some(name), JsonValue::Obj(members)) => match class_of(&g.profile, members) {
+                        ObjectClass::Wrapper(wrapper) if wrapper.name == *name => {
+                            wrapper_text(&g.profile, &wrapper, value)
+                                .ok_or_else(|| wrapper_payload_failure(&wrapper))
+                        }
+                        _ => Err(ValueCondition::WrongValueKind("string wrapper".into())),
+                    },
+                    (Some(_), _) => Err(ValueCondition::WrongValueKind("string wrapper".into())),
                 };
                 match text {
-                    Some(text) => string_condition(&g.profile, spec, &text)
+                    Ok(text) => string_condition(&g.profile, spec, &text)
                         .map_or(ValueDecision::Accepted, reject),
-                    None => reject(ValueCondition::WrongValueKind("string".into())),
+                    Err(condition) => reject(condition),
                 }
             }
-            (TypeShape::Bytes(s), _) => bytes_len(&g.profile, v)
-                .filter(|x| bounded(&BigUint::from(*x), &s.minimum, &s.maximum))
-                .map_or_else(
-                    || reject(ValueCondition::InvalidBytes),
-                    |_| ValueDecision::Accepted,
-                ),
+            (TypeShape::Bytes(s), _) => match bytes_len(&g.profile, v) {
+                None => reject(ValueCondition::InvalidBytes),
+                Some(length) if bounded(&BigUint::from(length), &s.minimum, &s.maximum) => {
+                    ValueDecision::Accepted
+                }
+                Some(_) => reject(ValueCondition::BytesLength),
+            },
             (TypeShape::Array(s), JsonValue::Arr(a)) => {
                 if !bounded(&BigUint::from(a.len()), &s.min_length, &s.max_length) {
                     reject(ValueCondition::ArrayLength)
@@ -1426,7 +1576,15 @@ pub fn accepts_value(g: &SemanticGraph, r: &TypeRef, v: &JsonValue) -> ValueDeci
                                 )
                             }
                             Some(JsonValue::Null) if !f.slot.nullable => {
-                                return reject(ValueCondition::NullNotAllowed)
+                                let mut child_path = path.clone();
+                                child_path.push(PathStep::Field(f.wire_name.clone()));
+                                return failure_with_trace(
+                                    &f.slot.type_ref,
+                                    child_path,
+                                    JsonValue::Null,
+                                    ValueCondition::NullNotAllowed,
+                                    &trace,
+                                );
                             }
                             Some(x) if !matches!(x, JsonValue::Null) => {
                                 let mut p = path.clone();
@@ -1579,29 +1737,859 @@ pub fn accepts_slot(
         _ => ValueDecision::Accepted,
     }
 }
-pub fn check_meaning_defined(g: &SemanticGraph, roots: &[TypeRef]) -> Result<(), MeaningFailure> {
-    let mut pending: Vec<&TypeRef> = roots.iter().collect();
+fn node_meaning_reasons(graph: &SemanticGraph, reference: &TypeRef) -> Vec<SemanticReason> {
+    let Some(node) = graph.find_type(reference) else {
+        return vec![SemanticReason::UnresolvedType];
+    };
+    let mut reasons = Vec::new();
+    match &node.shape {
+        TypeShape::String(spec) => {
+            if spec
+                .lengths
+                .iter()
+                .any(|bound| bound.unit == StringLengthUnit::Graphemes)
+                && graph.profile.grapheme_rules.is_none()
+            {
+                reasons.push(SemanticReason::MissingGraphemeRules);
+            }
+            if let Some(FormatUse::Named(name)) = &spec.format {
+                if graph.profile.format(name).is_none() {
+                    reasons.push(SemanticReason::UnknownFormat(name.clone()));
+                }
+            }
+            if let Some(name) = &spec.wrapper {
+                match graph
+                    .profile
+                    .wrappers
+                    .iter()
+                    .find(|wrapper| &wrapper.name == name)
+                {
+                    None => reasons.push(SemanticReason::UnknownWrapper(name.clone())),
+                    Some(wrapper) if matches!(wrapper.payload, WrapperPayload::Bytes) => {
+                        reasons.push(SemanticReason::WrapperPayload(name.clone()))
+                    }
+                    _ => {}
+                }
+            }
+        }
+        TypeShape::Integer(spec) => match graph.profile.integer_domain(spec.domain.as_deref()) {
+            None => reasons.push(SemanticReason::UnknownIntegerDomain(
+                spec.domain
+                    .clone()
+                    .unwrap_or_else(|| graph.profile.default_integer_domain.clone()),
+            )),
+            Some(binding) => {
+                if let IntegerDomain::Inclusive { minimum, maximum } = &binding.range {
+                    if spec.minimum.as_ref().is_some_and(|bound| bound < minimum)
+                        || spec.maximum.as_ref().is_some_and(|bound| bound > maximum)
+                    {
+                        reasons.push(SemanticReason::IntegerBound);
+                    }
+                }
+            }
+        },
+        TypeShape::Decimal(_) if !graph.profile.numbers.decimals => {
+            reasons.push(SemanticReason::DecimalNotAdmitted)
+        }
+        TypeShape::Bytes(_) | TypeShape::RawBody { .. } if graph.profile.bytes_policy.is_none() => {
+            reasons.push(SemanticReason::MissingBytesPolicy)
+        }
+        TypeShape::Sealed { tag, .. }
+            if !graph
+                .profile
+                .tag
+                .as_ref()
+                .is_some_and(|model| model.sealed.iter().any(|form| &form.tag == tag)) =>
+        {
+            reasons.push(SemanticReason::UnknownSealedTag(tag.clone()))
+        }
+        TypeShape::TaggedUnion(spec)
+            if graph.profile.tag.is_none()
+                && spec
+                    .branches
+                    .iter()
+                    .any(|branch| branch.selector == BranchSelector::InternalTag) =>
+        {
+            reasons.push(SemanticReason::MissingTagModel)
+        }
+        TypeShape::Opaque { type_name } => {
+            reasons.push(SemanticReason::OpaqueType(type_name.clone()))
+        }
+        _ => {}
+    }
+    reasons
+}
+
+pub fn meaning_obligations(graph: &SemanticGraph, roots: &[TypeRef]) -> Vec<SemanticObligation> {
+    let edges: usize = graph
+        .nodes
+        .iter()
+        .map(|node| type_children(&node.shape).len())
+        .sum();
+    let mut pending: std::collections::VecDeque<TypeRef> = roots.iter().cloned().collect();
     let mut seen = HashSet::new();
-    while let Some(r) = pending.pop() {
-        if !seen.insert(r) {
+    let mut reachable = Vec::new();
+    for _ in 0..roots.len() + graph.nodes.len() + edges + 1 {
+        let Some(reference) = pending.pop_front() else {
+            break;
+        };
+        if !seen.insert(reference.clone()) {
             continue;
         }
-        let Some(n) = g.find_type(r) else {
-            return Err(MeaningFailure {
-                type_ref: r.clone(),
-                predicate: MeaningObligation::Mo10,
-                location: vec![],
-            });
+        if let Some(node) = graph.find_type(&reference) {
+            for child in type_children(&node.shape).into_iter().rev() {
+                pending.push_front(child.clone());
+            }
+        }
+        reachable.push(reference);
+    }
+    reachable
+        .into_iter()
+        .rev()
+        .flat_map(|reference| {
+            node_meaning_reasons(graph, &reference)
+                .into_iter()
+                .map(move |reason| SemanticObligation {
+                    type_ref: reference.clone(),
+                    origin: OccurrenceRef::from(&reference),
+                    value_path: vec![],
+                    profile: graph.profile.reference.clone(),
+                    reason,
+                })
+        })
+        .collect()
+}
+
+pub fn check_meaning_defined(g: &SemanticGraph, roots: &[TypeRef]) -> Result<(), MeaningFailure> {
+    for obligation in meaning_obligations(g, roots) {
+        let predicate = match obligation.reason {
+            SemanticReason::UnknownFormat(_) => Some(MeaningObligation::Mo01),
+            SemanticReason::MissingGraphemeRules => Some(MeaningObligation::Mo02),
+            SemanticReason::MissingBytesPolicy => Some(MeaningObligation::Mo03),
+            SemanticReason::UnknownIntegerDomain(_) => Some(MeaningObligation::Mo04),
+            SemanticReason::UnknownWrapper(_) => Some(MeaningObligation::Mo05),
+            SemanticReason::WrapperPayload(_) => Some(MeaningObligation::Mo06),
+            SemanticReason::UnknownSealedTag(_) => Some(MeaningObligation::Mo07),
+            SemanticReason::DecimalNotAdmitted => Some(MeaningObligation::Mo08),
+            SemanticReason::IntegerBound => Some(MeaningObligation::Mo09),
+            SemanticReason::OpaqueType(_) => Some(MeaningObligation::Mo10),
+            SemanticReason::MissingTagModel => Some(MeaningObligation::Mo11),
+            _ => None,
         };
-        pending.extend(type_children(&n.shape));
-        let p=match &n.shape{TypeShape::String(s)if s.format.as_ref().is_some_and(|u|matches!(u,FormatUse::Named(x) if g.profile.format(x).is_none()))=>Some(MeaningObligation::Mo01),TypeShape::String(s)if s.lengths.iter().any(|x|x.unit==StringLengthUnit::Graphemes)&&g.profile.grapheme_rules.is_none()=>Some(MeaningObligation::Mo02),TypeShape::Bytes(_)|TypeShape::RawBody{..}if g.profile.bytes_policy.is_none()=>Some(MeaningObligation::Mo03),TypeShape::Integer(s)if g.profile.integer_domain(s.domain.as_deref()).is_none()=>Some(MeaningObligation::Mo04),TypeShape::String(s)if s.wrapper.as_ref().is_some_and(|x|!g.profile.wrappers.iter().any(|w|w.name==*x))=>Some(MeaningObligation::Mo05),TypeShape::String(s)if s.wrapper.as_ref().is_some_and(|x|g.profile.wrappers.iter().any(|w|w.name==*x&&w.payload==WrapperPayload::Bytes))=>Some(MeaningObligation::Mo06),TypeShape::Sealed{tag,..}if g.profile.tag.as_ref().is_none_or(|t|!t.sealed.iter().any(|x|x.tag==*tag))=>Some(MeaningObligation::Mo07),TypeShape::Decimal(_)if !g.profile.numbers.decimals=>Some(MeaningObligation::Mo08),TypeShape::Integer(s)if g.profile.integer_domain(s.domain.as_deref()).is_some_and(|d|matches!(&d.range,IntegerDomain::Inclusive{minimum,maximum} if s.minimum.as_ref().is_some_and(|x|x<minimum)||s.maximum.as_ref().is_some_and(|x|x>maximum)))=>Some(MeaningObligation::Mo09),TypeShape::Opaque{..}=>Some(MeaningObligation::Mo10),TypeShape::TaggedUnion(s)if s.branches.iter().any(|b|b.selector==BranchSelector::InternalTag)&&g.profile.tag.is_none()=>Some(MeaningObligation::Mo11),_=>None};
-        if let Some(predicate) = p {
+        if let Some(predicate) = predicate {
             return Err(MeaningFailure {
-                type_ref: r.clone(),
+                type_ref: obligation.type_ref,
                 predicate,
                 location: vec![],
             });
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+#[allow(clippy::panic)]
+mod tests {
+    use super::{accepts_value, recognize_format, recognize_language_tag};
+    use crate::semantic_types::*;
+    use num_bigint::BigUint;
+    use std::sync::Arc;
+
+    #[test]
+    fn language_tag_recognition_matches_subtag_structure() {
+        let grandfathered = ["en-GB-oed", "i-klingon", "sgn-BE-FR"];
+        for (text, expected) in [
+            ("x-private", true),
+            ("X-1-AbC", true),
+            ("en", true),
+            ("en-US", true),
+            ("zh-Hant-TW", true),
+            ("en-1901", true),
+            ("en-GB-oed", true),
+            ("I-KLINGON", true),
+            ("sgn-be-fr", true),
+            ("zh-cmn-Hans-CN", true),
+            ("abc-def-ghi-jkl-Latn-419-1901-abcde-a-abc-b-def-x-1", true),
+            ("abcd-Latn-US", true),
+            ("abcdefgh", true),
+            ("en-419", true),
+            ("sl-rozaj-biske-1994", true),
+            ("en-a-abc-b-def", true),
+            ("en-0-ab-9-cd", true),
+            ("en-x-a-12345678", true),
+            ("en-a-12345678-x-a", true),
+            ("en-a", false),
+            ("en-a-abc-a-def", false),
+            ("en-a-abc-A-def", false),
+            ("en-1901-1901", false),
+            ("sl-rozaj-ROZAJ", false),
+            ("", false),
+            ("é", false),
+            ("en-１２３", false),
+            ("x", false),
+            ("x-", false),
+            ("x-123456789", false),
+            ("x-a-!", false),
+            ("e", false),
+            ("abcdefghi", false),
+            ("12", false),
+            ("en-", false),
+            ("en--US", false),
+            ("-en", false),
+            ("en_US", false),
+            ("en US", false),
+            ("en-US\n", false),
+            ("abc-def-ghi-jkl-mno", false),
+            ("abcd-efg", false),
+            ("en-US-Latn", false),
+            ("en-abcd", true),
+            ("en-1abc", true),
+            ("en-123456789", false),
+            ("en-a-b-cd", false),
+            ("en-a-abc-x", false),
+            ("en-x", false),
+            ("en-x-a-", false),
+            ("en-x-123456789", false),
+        ] {
+            assert_eq!(
+                recognize_language_tag(text, &grandfathered),
+                expected,
+                "{text:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn language_tag_recognition_uses_ascii_grandfathered_entries() {
+        for (text, grandfathered, expected) in [
+            ("I-CUSTOM", vec!["i-custom"], true),
+            ("i-custom", vec![], false),
+            ("", vec![""], false),
+            ("é", vec!["é"], false),
+            ("k", vec!["K"], false),
+        ] {
+            assert_eq!(
+                recognize_language_tag(text, &grandfathered),
+                expected,
+                "{text:?}"
+            );
+        }
+    }
+
+    fn wrapper_failure_reference(name: &str) -> TypeRef {
+        TypeRef::new(
+            Arc::new(SourceRef {
+                repository: "repo".into(),
+                revision: "rev".into(),
+                path: "types.json".into(),
+                content_digest: "a".repeat(64),
+                document_id: "wrappers".into(),
+                declared_revision: None,
+            }),
+            name,
+            vec![name.into()],
+        )
+    }
+
+    fn wrapper_failure_graph(bytes_payload: bool) -> SemanticGraph {
+        let field = if bytes_payload { "blob" } else { "cid" };
+        let wrapper = if bytes_payload { "bytes" } else { "cid" };
+        let key = if bytes_payload { "$bytes" } else { "$link" };
+        let profile_ref = ProfileRef {
+            identity: "profile".into(),
+            revision: "1".into(),
+            content_digest: "a".repeat(64),
+        };
+        let product = |field: &str, target: &str| {
+            TypeShape::Product(ProductSpec {
+                fields: vec![FieldSpec {
+                    wire_name: field.into(),
+                    slot: SlotContract {
+                        type_ref: wrapper_failure_reference(target),
+                        required: true,
+                        nullable: false,
+                    },
+                    origin: OccurrenceRef::from(&wrapper_failure_reference(target)),
+                }],
+                extras: ExtraMembers::Reject,
+            })
+        };
+        let leaf = if bytes_payload {
+            TypeShape::Bytes(LengthSpec {
+                minimum: None,
+                maximum: None,
+            })
+        } else {
+            TypeShape::String(StringSpec {
+                format: None,
+                lengths: vec![],
+                wrapper: Some(wrapper.into()),
+                const_value: None,
+                enum_values: None,
+                examples: vec![],
+                default_value: None,
+            })
+        };
+        SemanticGraph {
+            profile: VersionedSemanticProfile {
+                reference: profile_ref.clone(),
+                source_refs: vec![],
+                integer_domains: vec![],
+                default_integer_domain: "integer".into(),
+                numbers: NumberModel { decimals: true },
+                grapheme_rules: None,
+                format_bindings: vec![],
+                bytes_policy: Some(BytesPolicy {
+                    reference: profile_ref,
+                    padding_optional: true,
+                    alphabet: BytesAlphabet::Either,
+                    strict_pad_bits: true,
+                    wrapper: Some("bytes".into()),
+                }),
+                wrappers: vec![Wrapper {
+                    name: wrapper.into(),
+                    key: key.into(),
+                    payload: if bytes_payload {
+                        WrapperPayload::Bytes
+                    } else {
+                        WrapperPayload::Text { format: None }
+                    },
+                }],
+                tag: None,
+            },
+            nodes: [
+                ("leaf", leaf),
+                ("operation", product(field, "leaf")),
+                (
+                    "operations",
+                    TypeShape::Array(ArraySpec {
+                        item: ElementContract {
+                            type_ref: wrapper_failure_reference("operation"),
+                            nullable: false,
+                        },
+                        min_length: None,
+                        max_length: None,
+                    }),
+                ),
+                ("root", product("ops", "operations")),
+            ]
+            .into_iter()
+            .map(|(name, shape)| TypeNode {
+                reference: wrapper_failure_reference(name),
+                shape,
+                description: None,
+                attributes: vec![],
+                extensions: vec![],
+            })
+            .collect(),
+            source_refs: vec![],
+        }
+    }
+
+    #[test]
+    fn wrapper_decode_failure_keeps_value_location() {
+        for bytes_payload in [false, true] {
+            let graph = wrapper_failure_graph(bytes_payload);
+            let field = if bytes_payload { "blob" } else { "cid" };
+            let key = if bytes_payload { "$bytes" } else { "$link" };
+            for invalid in [
+                JsonValue::Str("invalid".into()),
+                JsonValue::Obj(vec![]),
+                JsonValue::Obj(vec![("wrong".into(), JsonValue::Str("x".into()))]),
+                JsonValue::Obj(vec![(key.into(), JsonValue::Bool(false))]),
+                JsonValue::Obj(vec![
+                    (key.into(), JsonValue::Str("YQ==".into())),
+                    ("extra".into(), JsonValue::Bool(true)),
+                ]),
+                JsonValue::Arr(vec![]),
+            ] {
+                let valid = JsonValue::Obj(vec![(key.into(), JsonValue::Str("YQ==".into()))]);
+                let operation = JsonValue::Obj(vec![(field.into(), invalid.clone())]);
+                let operations = JsonValue::Arr(vec![
+                    JsonValue::Obj(vec![(field.into(), valid)]),
+                    operation.clone(),
+                ]);
+                let root = JsonValue::Obj(vec![("ops".into(), operations.clone())]);
+                for (reference, value, path, trace) in [
+                    ("leaf", invalid.clone(), vec![], vec![]),
+                    (
+                        "operation",
+                        operation,
+                        vec![PathStep::Field(field.into())],
+                        vec!["operation"],
+                    ),
+                    (
+                        "operations",
+                        operations,
+                        vec![
+                            PathStep::Index(BigUint::from(1u8)),
+                            PathStep::Field(field.into()),
+                        ],
+                        vec!["operations", "operation"],
+                    ),
+                    (
+                        "root",
+                        root,
+                        vec![
+                            PathStep::Field("ops".into()),
+                            PathStep::Index(BigUint::from(1u8)),
+                            PathStep::Field(field.into()),
+                        ],
+                        vec!["root", "operations", "operation"],
+                    ),
+                ] {
+                    let decision =
+                        accepts_value(&graph, &wrapper_failure_reference(reference), &value);
+                    let ValueDecision::Rejected(failure) = decision else {
+                        panic!("expected wrapper failure: {decision:?}");
+                    };
+                    assert_eq!(failure.value_path, path);
+                    assert_eq!(
+                        failure.condition,
+                        if bytes_payload {
+                            ValueCondition::InvalidBytes
+                        } else if matches!(&invalid, JsonValue::Obj(members)
+                            if members.iter().any(|(name, _)| name == key))
+                        {
+                            ValueCondition::WrongValueKind("wrapper text".into())
+                        } else {
+                            ValueCondition::WrongValueKind("string wrapper".into())
+                        }
+                    );
+                    assert_eq!(failure.type_ref, wrapper_failure_reference("leaf"));
+                    assert_eq!(failure.observed, SlotValue::Present(invalid.clone()));
+                    assert_eq!(
+                        failure.reference_trace,
+                        trace
+                            .into_iter()
+                            .map(wrapper_failure_reference)
+                            .collect::<Vec<_>>()
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn wrapper_decode_accepts_valid_nested_values() {
+        for bytes_payload in [false, true] {
+            let graph = wrapper_failure_graph(bytes_payload);
+            let field = if bytes_payload { "blob" } else { "cid" };
+            let key = if bytes_payload { "$bytes" } else { "$link" };
+            let value = JsonValue::Obj(vec![(
+                "ops".into(),
+                JsonValue::Arr(vec![JsonValue::Obj(vec![(
+                    field.into(),
+                    JsonValue::Obj(vec![(key.into(), JsonValue::Str("YQ==".into()))]),
+                )])]),
+            )]);
+            assert_eq!(
+                accepts_value(&graph, &wrapper_failure_reference("root"), &value),
+                ValueDecision::Accepted
+            );
+        }
+    }
+
+    fn sealed_wrapper_graph(leaf_wrapper: Option<String>) -> SemanticGraph {
+        let mut graph = wrapper_failure_graph(false);
+        graph.profile.wrappers = vec![Wrapper {
+            name: "text".into(),
+            key: "text".into(),
+            payload: WrapperPayload::Text { format: None },
+        }];
+        graph.profile.bytes_policy = None;
+        graph.profile.tag = Some(TagModel {
+            key: "kind".into(),
+            format: None,
+            sealed: vec![SealedForm {
+                tag: "sealed".into(),
+                fields: vec![SealedField {
+                    key: "label".into(),
+                    required: true,
+                    leaf: SealedLeaf::String(StringSpec {
+                        format: None,
+                        lengths: vec![],
+                        wrapper: leaf_wrapper,
+                        const_value: None,
+                        enum_values: None,
+                        examples: vec![],
+                        default_value: None,
+                    }),
+                }],
+                extras: SealedExtras::Reject,
+            }],
+        });
+        let reference = wrapper_failure_reference("sealed");
+        graph.nodes = vec![TypeNode {
+            reference: reference.clone(),
+            shape: TypeShape::Sealed {
+                tag: "sealed".into(),
+                refinements: vec![],
+            },
+            description: None,
+            attributes: vec![],
+            extensions: vec![],
+        }];
+        graph
+    }
+
+    #[test]
+    fn sealed_leaf_wrapper_failure_keeps_field_path_and_wrapper_condition() {
+        let graph = sealed_wrapper_graph(Some("text".into()));
+        let reference = wrapper_failure_reference("sealed");
+        for (label, condition) in [
+            (
+                JsonValue::Obj(vec![("text".into(), JsonValue::Bool(false))]),
+                ValueCondition::WrongValueKind("wrapper text".into()),
+            ),
+            (
+                JsonValue::Obj(vec![
+                    ("text".into(), JsonValue::Str("hello".into())),
+                    ("extra".into(), JsonValue::Bool(true)),
+                ]),
+                ValueCondition::WrongValueKind("wrapper text".into()),
+            ),
+            (
+                JsonValue::Obj(vec![("wrong".into(), JsonValue::Str("hello".into()))]),
+                ValueCondition::WrongValueKind("string".into()),
+            ),
+            (
+                JsonValue::Bool(false),
+                ValueCondition::WrongValueKind("string".into()),
+            ),
+        ] {
+            let value = JsonValue::Obj(vec![
+                ("kind".into(), JsonValue::Str("sealed".into())),
+                ("label".into(), label),
+            ]);
+            let decision = accepts_value(&graph, &reference, &value);
+            let ValueDecision::Rejected(failure) = decision else {
+                panic!("expected sealed leaf failure: {decision:?}");
+            };
+            assert_eq!(failure.value_path, vec![PathStep::Field("label".into())]);
+            assert_eq!(failure.condition, condition);
+            assert_eq!(failure.type_ref, reference);
+        }
+        for label in [
+            JsonValue::Str("hello".into()),
+            JsonValue::Obj(vec![("text".into(), JsonValue::Str("hello".into()))]),
+        ] {
+            let value = JsonValue::Obj(vec![
+                ("kind".into(), JsonValue::Str("sealed".into())),
+                ("label".into(), label),
+            ]);
+            assert_eq!(
+                accepts_value(&graph, &reference, &value),
+                ValueDecision::Accepted
+            );
+        }
+    }
+
+    #[test]
+    fn sealed_leaf_bytes_wrapper_validates_base64_payload() {
+        let mut graph = sealed_wrapper_graph(None);
+        graph.profile.wrappers.push(Wrapper {
+            name: "bytes".into(),
+            key: "bytes".into(),
+            payload: WrapperPayload::Bytes,
+        });
+        graph.profile.bytes_policy = Some(BytesPolicy {
+            reference: graph.profile.reference.clone(),
+            padding_optional: true,
+            alphabet: BytesAlphabet::Either,
+            strict_pad_bits: true,
+            wrapper: Some("bytes".into()),
+        });
+        let reference = wrapper_failure_reference("sealed");
+        for (text, accepted) in [
+            ("!", false),
+            ("a", false),
+            ("YQ===", false),
+            ("YR==", false),
+            ("YWJ=", false),
+            ("YW+_", true),
+            ("YQ==", true),
+            ("YQ", true),
+            ("YWJj", true),
+            ("", true),
+        ] {
+            let value = JsonValue::Obj(vec![
+                ("kind".into(), JsonValue::Str("sealed".into())),
+                (
+                    "label".into(),
+                    JsonValue::Obj(vec![("bytes".into(), JsonValue::Str(text.into()))]),
+                ),
+            ]);
+            let decision = accepts_value(&graph, &reference, &value);
+            if accepted {
+                assert_eq!(decision, ValueDecision::Accepted);
+            } else {
+                let ValueDecision::Rejected(failure) = decision else {
+                    panic!("expected bytes wrapper failure: {decision:?}");
+                };
+                assert_eq!(failure.value_path, vec![PathStep::Field("label".into())]);
+                assert_eq!(failure.condition, ValueCondition::InvalidBytes);
+            }
+        }
+    }
+
+    #[test]
+    fn sealed_leaf_text_wrapper_validates_profile_format() {
+        let mut graph = sealed_wrapper_graph(None);
+        graph.profile.wrappers = vec![Wrapper {
+            name: "text".into(),
+            key: "text".into(),
+            payload: WrapperPayload::Text {
+                format: Some("wrapper-format".into()),
+            },
+        }];
+        graph.profile.format_bindings.push(FormatBinding {
+            name: "wrapper-format".into(),
+            reference: graph.profile.reference.clone(),
+            rule: FormatRule::Literal("hello".into()),
+        });
+        let reference = wrapper_failure_reference("sealed");
+        for (text, accepted) in [("hello", true), ("wrong", false)] {
+            let value = JsonValue::Obj(vec![
+                ("kind".into(), JsonValue::Str("sealed".into())),
+                (
+                    "label".into(),
+                    JsonValue::Obj(vec![("text".into(), JsonValue::Str(text.into()))]),
+                ),
+            ]);
+            let decision = accepts_value(&graph, &reference, &value);
+            if accepted {
+                assert_eq!(decision, ValueDecision::Accepted);
+            } else {
+                let ValueDecision::Rejected(failure) = decision else {
+                    panic!("expected text wrapper failure: {decision:?}");
+                };
+                assert_eq!(failure.value_path, vec![PathStep::Field("label".into())]);
+                assert_eq!(
+                    failure.condition,
+                    ValueCondition::Format("wrapper-format".into())
+                );
+            }
+        }
+    }
+    #[test]
+    fn wrapper_base64_vectors_match_lean() -> Result<(), Box<dyn std::error::Error>> {
+        use crate::semantic_exchange::{decode_type_signatures, wire_value};
+        use crate::signature_admission::check_type_signatures;
+        use serde_json::{json, Value};
+        use std::collections::HashSet;
+
+        let vectors: Value = serde_json::from_str(include_str!(
+            "../../comparison/declaration/wrapper_base64_vectors.json"
+        ))?;
+        assert_eq!(
+            vectors.get("schema"),
+            Some(&json!("wrapper-base64-vectors@1"))
+        );
+        let profiles = vectors.get("profiles").ok_or("missing profiles")?;
+        let type_graphs = vectors.get("type_graphs").ok_or("missing type graphs")?;
+        let branches = vectors
+            .get("branches")
+            .and_then(Value::as_array)
+            .ok_or("missing branches")?;
+        assert_eq!(branches.len(), 25);
+        let mut branch_ids = HashSet::new();
+        let mut case_ids = HashSet::new();
+        for branch in branches {
+            let branch_id = branch
+                .get("id")
+                .and_then(Value::as_str)
+                .ok_or("branch id")?;
+            assert!(branch_ids.insert(branch_id), "{branch_id}");
+            let profile_id = branch
+                .get("profile")
+                .and_then(Value::as_str)
+                .ok_or("profile id")?;
+            let graph_id = branch
+                .get("type_graph")
+                .and_then(Value::as_str)
+                .ok_or("graph id")?;
+            let type_graph = type_graphs.get(graph_id).ok_or("unknown type graph")?;
+            let root_id = type_graph
+                .get("root")
+                .and_then(Value::as_str)
+                .ok_or("root id")?;
+            let library = decode_type_signatures(
+                &json!({
+                    "schema": "ncoh-type-signatures@1",
+                    "identity": "wrapper-base64",
+                    "revision": "1",
+                    "profile": profiles.get(profile_id).ok_or("unknown profile")?,
+                    "sources": [],
+                    "provenance": [],
+                    "groups": [],
+                    "annotations": [],
+                    "nodes": type_graph.get("nodes").ok_or("missing nodes")?,
+                    "definitions": []
+                })
+                .to_string(),
+            )?;
+            let graph = check_type_signatures(&library)?;
+            let root = &graph
+                .nodes
+                .iter()
+                .find(|node| node.reference.definition_name.as_ref() == root_id)
+                .ok_or("unknown root")?
+                .reference;
+            let cases = branch
+                .get("cases")
+                .and_then(Value::as_array)
+                .ok_or("missing cases")?;
+            assert!(!cases.is_empty(), "{branch_id}");
+            for case in cases {
+                let case_id = case.get("id").and_then(Value::as_str).ok_or("case id")?;
+                assert!(case_ids.insert(case_id), "{case_id}");
+                let input: JsonValue =
+                    serde_json::from_value(case.get("input").ok_or("missing input")?.clone())?;
+                let expected = case.get("expected").ok_or("missing expected outcome")?;
+                let actual = match accepts_value(&graph, root, &input) {
+                    ValueDecision::Accepted => {
+                        json!({"accepted": true, "condition": null, "path": []})
+                    }
+                    ValueDecision::Rejected(failure) => json!({
+                        "accepted": false,
+                        "condition": wire_value(&failure.condition)?,
+                        "path": wire_value(&failure.value_path)?
+                    }),
+                    decision => return Err(format!("{case_id}: {decision:?}").into()),
+                };
+                assert_eq!(&actual, expected, "{case_id}");
+                if graph_id == "bytes" || graph_id == "bounded-bytes" {
+                    let decoded =
+                        crate::semantic_codegen_runtime::bytes_decode(&graph.profile, input);
+                    let decodable = expected.get("accepted") == Some(&json!(true))
+                        || expected.get("condition") == Some(&json!({"tag": "BytesLength"}));
+                    assert_eq!(decoded.is_ok(), decodable, "{case_id}: {decoded:?}");
+                }
+            }
+        }
+        assert_eq!(case_ids.len(), 55);
+        Ok(())
+    }
+
+    #[test]
+    fn bytes_decode_preserves_payload_under_profile_policy(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        use crate::semantic_codegen_runtime::{bytes_decode, bytes_encode};
+
+        let mut profile = wrapper_failure_graph(true).profile;
+        for alphabet in [
+            BytesAlphabet::Standard,
+            BytesAlphabet::UrlSafe,
+            BytesAlphabet::Either,
+        ] {
+            for padding_optional in [false, true] {
+                let policy = profile
+                    .bytes_policy
+                    .as_mut()
+                    .ok_or("missing bytes policy")?;
+                policy.alphabet = alphabet;
+                policy.padding_optional = padding_optional;
+                for bytes in [&[][..], &[0][..], &[251, 255][..], &[255, 255, 255][..]] {
+                    let encoded = bytes_encode(&profile, bytes)?;
+                    assert_eq!(bytes_decode(&profile, encoded)?, bytes);
+                }
+            }
+        }
+        for text in ["+/8=", "-_8=", "+_8=", "-/8="] {
+            let value = JsonValue::Obj(vec![("$bytes".into(), JsonValue::Str(text.into()))]);
+            assert_eq!(bytes_decode(&profile, value)?, vec![251, 255]);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn sequence_grouping_preserves_concatenation_and_empty_parts() {
+        let literal = |text: &str| FormatRule::Literal(text.into());
+        let sequence = FormatRule::Sequence;
+        let first = FormatRule::Choice(vec![literal(""), literal("a")]);
+        let second = FormatRule::Optional(Box::new(literal("😀")));
+        let third = literal("!");
+        let rules = [
+            sequence(vec![first.clone(), second.clone(), third.clone()]),
+            sequence(vec![
+                sequence(vec![first.clone(), second.clone()]),
+                third.clone(),
+            ]),
+            sequence(vec![
+                first.clone(),
+                sequence(vec![second.clone(), third.clone()]),
+            ]),
+            sequence(vec![
+                sequence(vec![]),
+                first,
+                second,
+                sequence(vec![third]),
+                sequence(vec![]),
+            ]),
+        ];
+        for text in ["", "!", "a!", "😀!", "a😀!", "aa!", "😀a!", "a😀", "x!"] {
+            for rule in &rules {
+                assert_eq!(
+                    recognize_format(rule, text),
+                    ["!", "a!", "😀!", "a😀!"].contains(&text)
+                );
+            }
+        }
+        assert!(recognize_format(&sequence(vec![]), ""));
+        assert!(!recognize_format(&sequence(vec![]), "a"));
+        let negated = sequence(vec![
+            literal("["),
+            FormatRule::Not(Box::new(sequence(vec![literal("a"), literal("😀")]))),
+            literal("]"),
+        ]);
+        assert!(recognize_format(&negated, "[]"));
+        assert!(recognize_format(&negated, "[😀]"));
+        assert!(!recognize_format(&negated, "[a😀]"));
+    }
+
+    #[test]
+    fn sequence_labels_preserve_scalar_offsets_and_byte_bounds() {
+        let literal = |text: &str| FormatRule::Literal(text.into());
+        let child = FormatRule::Sequence(vec![
+            FormatRule::Optional(Box::new(literal("a"))),
+            literal("😀"),
+        ]);
+        let inner = FormatRule::Labels {
+            separator: "🔹".into(),
+            min_count: 2u8.into(),
+            max_count: Some(2u8.into()),
+            total_max: Some(13u8.into()),
+            rule: Box::new(child),
+        };
+        let rule = FormatRule::Sequence(vec![literal("["), inner, literal("]")]);
+        for (text, expected) in [
+            ("[😀🔹a😀]", true),
+            ("[a😀🔹😀]", true),
+            ("[😀🔹b😀]", false),
+            ("[😀🔹😀🔹😀]", false),
+            ("[a😀🔹a😀]", false),
+        ] {
+            assert_eq!(recognize_format(&rule, text), expected);
+        }
+        let bounded = |maximum: u8| FormatRule::Bounded {
+            unit: StringLengthUnit::Utf8Bytes,
+            maximum: maximum.into(),
+            rule: Box::new(rule.clone()),
+        };
+        assert!(recognize_format(&bounded(15), "[😀🔹a😀]"));
+        assert!(!recognize_format(&bounded(14), "[😀🔹a😀]"));
+    }
+
+    #[test]
+    fn flat_sequence_with_600_parts_preserves_acceptance_and_rejection() {
+        let mut parts = vec![FormatRule::Literal(String::new()); 600];
+        let rule = FormatRule::Sequence(parts.clone());
+        assert!(recognize_format(&rule, ""));
+        assert!(!recognize_format(&rule, "x"));
+        parts.push(FormatRule::Literal("x".into()));
+        let suffix = FormatRule::Sequence(parts);
+        assert!(recognize_format(&suffix, "x"));
+        assert!(!recognize_format(&suffix, ""));
+    }
 }

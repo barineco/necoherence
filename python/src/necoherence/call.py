@@ -148,7 +148,6 @@ def deferred_of[Req, Slot](
 
 
 def _missing_fields(required: tuple[str, ...], present: tuple[str, ...]) -> tuple[str, ...]:
-    """Names in ``required`` that ``present`` does not carry."""
     return tuple(name for name in required if name not in present)
 
 

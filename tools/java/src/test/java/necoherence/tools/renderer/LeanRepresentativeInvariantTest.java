@@ -88,7 +88,7 @@ public final class LeanRepresentativeInvariantTest {
                     valueInput("object-wrapper", valid, "wrapped-text", obj("text", str("x"))));
             if (!s(f(wrapper, "status")).equals("Accepted")) throw new AssertionError(encodeWire(wrapper));
             expect(adapter, valueInput("object-sealed-tag-format", valid, "sealed", obj("tag", num(BigInteger.ONE), "label", str("x"))),
-                    "Rejected", "condition", "WrongValueKind:sealed object");
+                    "Rejected", "condition", "InvalidTag");
             expect(adapter, valueInput("never", valid, "never", NIL),
                     "Rejected", "condition", "InvalidDataModel");
             expect(adapter, valueInput("decimal-reject", valid, "decimal", str("1.5")),

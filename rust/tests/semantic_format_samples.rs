@@ -140,6 +140,27 @@ fn library() -> TypeSignatureLibrary {
         }],
     }
 }
+
+#[test]
+fn atproto_uri_format_accepts_did_authority_and_rejects_missing_scheme_or_whitespace() {
+    let profile = decode_value_profile(include_str!(
+        "../../presets/atproto-data-model/profile.json"
+    ))
+    .unwrap();
+    let rule = &profile
+        .format_bindings
+        .iter()
+        .find(|binding| binding.name == "uri")
+        .unwrap()
+        .rule;
+    assert!(recognize_format(
+        rule,
+        "at://did:plc:ymdqgzoop3puhkbwrd7njbke/app.bsky.actor.profile/self"
+    ));
+    assert!(!recognize_format(rule, "https://example.com/has space"));
+    assert!(!recognize_format(rule, "example.com/path"));
+}
+
 #[test]
 fn profile_library_generation_roundtrip() {
     let l = library();

@@ -1,14 +1,6 @@
 # SPDX-FileCopyrightText: 2026 barineco
 # SPDX-License-Identifier: MIT
 
-"""Tests for file effect as a pure state transition over an external file world.
-
-``track``, ``read``, and ``replace`` are plain ``Immediate`` declarations
-called through ``io``, with no filesystem access: an ``ExternalFileState``
-value stands in for whatever a real adapter would touch, and each call
-returns the next version of whatever it touched for the caller to thread
-into the next request.
-"""
 
 from __future__ import annotations
 
@@ -72,7 +64,6 @@ def _state(*entries: tuple[NormalizedPath, bytes]) -> ExternalFileState:
 
 
 def _call_result(result: object) -> object:
-    """Unwrap a ``CallResult`` to the inner ``Outcome`` or ``ProjectionFailed`` value."""
     if isinstance(result, CallOk):
         return result.value
     assert isinstance(result, CallFailed)
@@ -103,7 +94,7 @@ def _replace(
     return _call_result(io(replace, Request(payload=req, fields=replace.required)))
 
 
-# --- Path normalization -----------------------------------------------------
+
 
 
 def test_normalize_path_drops_empty_and_dot_segments() -> None:
@@ -125,7 +116,7 @@ def test_normalize_path_is_idempotent() -> None:
     assert once == twice
 
 
-# --- Roundtrip ---------------------------------------------------------
+
 
 
 def test_roundtrip_track_read_replace_reread() -> None:
@@ -156,7 +147,7 @@ def test_roundtrip_track_read_replace_reread() -> None:
     assert reread.value.observation.payload.contents == tuple(b"after")
 
 
-# --- Two-layer staleness --------------------------------------------------
+
 
 
 def test_stale_basis_layer_alone_is_checked_without_touching_the_file() -> None:
@@ -233,7 +224,7 @@ def test_stale_basis_is_reported_before_the_digest_layer_when_both_conflict() ->
     assert outcome == Conflicted(StaleBasis(expected=Revision(0), actual=Revision(1)))
 
 
-# --- Basis retention -----------------------------------------------------
+
 
 
 def test_command_retains_the_observations_basis() -> None:
@@ -265,7 +256,7 @@ def test_track_only_replace_is_rejected_for_unobserved_contents() -> None:
     assert outcome == Rejected(UnobservedContents(tracked.value.observation.basis.resource))
 
 
-# --- Closed outcomes -------------------------------------------------------
+
 
 
 def test_track_read_replace_outcomes_are_exactly_the_closed_variants() -> None:
@@ -294,7 +285,7 @@ def test_track_read_replace_outcomes_are_exactly_the_closed_variants() -> None:
     assert isinstance(missing, Rejected)
 
 
-# --- Aliased paths resolve to the same resource ----------------------------
+
 
 
 def test_aliased_paths_resolve_to_the_same_resource() -> None:
@@ -313,7 +304,7 @@ def test_aliased_paths_resolve_to_the_same_resource() -> None:
     )
 
 
-# --- Resource identity is a pure function of the path, not a counter -----
+
 
 
 def test_same_path_always_yields_the_same_resource_identity() -> None:
@@ -371,7 +362,7 @@ def test_command_from_one_independent_series_combined_with_anothers_world_is_rej
     assert outcome == Rejected(UnobservedContents(resource_a))
 
 
-# --- Declared boundary failures ---------------------------------------------
+
 
 
 def test_read_declared_unreadable_is_boundary_failed() -> None:
@@ -452,7 +443,7 @@ def test_atomic_write_result_is_exactly_new_contents_on_success() -> None:
     assert outcome.value.state.files == ((path, FileRecord(_digest(b"new-content"), tuple(b"new-content"))),)
 
 
-# --- Caller carries values: a stale World or Digests degrades to Conflicted -
+
 
 
 def test_a_world_from_before_a_later_replace_is_rejected_as_stale_basis() -> None:
@@ -515,7 +506,7 @@ def test_stale_digests_entry_is_rejected_as_external_mutation() -> None:
     assert outcome == Conflicted(ExternalMutation(expected=_digest(b"v0"), actual=_digest(b"v1")))
 
 
-# --- Missing declared fields degrade to CallFailed, never raise ------------
+
 
 
 def test_missing_request_field_is_call_failed() -> None:
@@ -525,7 +516,7 @@ def test_missing_request_field_is_call_failed() -> None:
     assert result.failure == ProjectionFailed(declaration="necoherence.files.track", fields=("world",))
 
 
-# --- Property: normalization never leaves a special segment ---------------
+
 
 
 @given(
@@ -539,9 +530,9 @@ def test_normalize_segments_never_leaves_a_special_segment(raw: list[str]) -> No
     assert all(segment not in ("", ".", "..") for segment in normalized.segments)
 
 
-# --- Host filesystem adapter -------------------------------------------------
-# This deliberately lives in the test boundary. Production File effect remains
-# a pure (ExternalFileState, Input) -> (ExternalFileState', Result) API.
+
+
+
 
 from pathlib import Path
 from tempfile import TemporaryDirectory

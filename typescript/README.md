@@ -47,7 +47,8 @@ Besides the features listed in the [project overview](https://github.com/barinec
 
 - Declaration checking: detects errors in declarations of types and operations, such as duplicate identifiers and references to undeclared types or definitions
 - Runtime for generated code: the shared value validation and codec routines that generated TypeScript code calls at run time
-- HTTP adapter: executes the requests of the network effect with `fetch` and returns the results as observations
+
+The optional [HTTP adapter](../typescript-http-adapter/) is distributed separately as `necoherence-http-adapter`. It executes network-effect commands with `fetch` and returns observations to the core ledger.
 
 ## Tools
 

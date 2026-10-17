@@ -888,3 +888,226 @@ fn reference_cycles_preserve_failure_fields() {
         }
     }
 }
+
+#[test]
+fn defaults_preserve_order_provenance_and_idempotence() {
+    let graph = recursive_graph(vec![
+        recursive_node(
+            "Flag",
+            TypeShape::Boolean(BooleanSpec {
+                const_value: None,
+                default_value: Some(false),
+            }),
+        ),
+        recursive_node(
+            "Alias",
+            TypeShape::Alias {
+                target: recursive_ref("Flag"),
+                reference_text: "Flag".into(),
+            },
+        ),
+        recursive_node("Object", recursive_product(&[("flag", "Alias")])),
+        recursive_node("Array", recursive_array("Object")),
+    ]);
+    let before = JsonValue::Arr(vec![JsonValue::Obj(vec![])]);
+    let result = materialize_defaults(&graph, &recursive_ref("Array"), &before).unwrap();
+    assert_eq!(before, JsonValue::Arr(vec![JsonValue::Obj(vec![])]));
+    assert_eq!(
+        result.value(),
+        &JsonValue::Arr(vec![JsonValue::Obj(vec![(
+            "flag".into(),
+            JsonValue::Bool(false)
+        )])])
+    );
+    assert_eq!(result.applications().len(), 1);
+    let Some(application) = result.applications().first() else {
+        return;
+    };
+    assert_eq!(application.type_ref, recursive_ref("Flag"));
+    assert_eq!(
+        application.value_path,
+        vec![PathStep::Index(0u8.into()), PathStep::Field("flag".into())]
+    );
+    assert_eq!(application.origin.pointer.last().unwrap(), "default");
+    let second = materialize_defaults(&graph, &recursive_ref("Array"), result.value()).unwrap();
+    assert_eq!(second.value(), result.value());
+    assert!(second.applications().is_empty());
+    let mut forged = result.applications().to_vec();
+    let Some(application) = forged.first_mut() else {
+        return;
+    };
+    application.value = JsonValue::Bool(true);
+    assert!(!check_default_applications(
+        &graph,
+        &before,
+        result.value(),
+        &forged
+    ));
+}
+
+#[test]
+fn invalid_default_is_checked_at_resolved_primitive_root_before_product() {
+    let graph = recursive_graph(vec![
+        recursive_node(
+            "Number",
+            TypeShape::Integer(IntegerSpec {
+                domain: None,
+                minimum: Some(1.into()),
+                maximum: None,
+                const_value: None,
+                enum_values: None,
+                default_value: Some(0.into()),
+            }),
+        ),
+        recursive_node(
+            "Alias",
+            TypeShape::Alias {
+                target: recursive_ref("Number"),
+                reference_text: "Number".into(),
+            },
+        ),
+        recursive_node(
+            "Object",
+            recursive_product(&[("missing", "Alias"), ("required", "Alias")]),
+        ),
+    ]);
+    let failure = materialize_defaults(&graph, &recursive_ref("Object"), &JsonValue::Obj(vec![]))
+        .unwrap_err();
+    assert!(matches!(&failure, DefaultFailure::Rejected(_)));
+    let DefaultFailure::Rejected(failure) = failure else {
+        return;
+    };
+    assert_eq!(failure.type_ref, recursive_ref("Number"));
+    assert_eq!(failure.value_path, vec![]);
+    assert_eq!(failure.condition, ValueCondition::BelowMinimum);
+}
+
+#[test]
+fn materialization_admits_reachable_meaning_before_checked_values() {
+    let mut shape = recursive_product(&[("optional", "gone")]);
+    let TypeShape::Product(spec) = &mut shape else {
+        return;
+    };
+    assert_eq!(spec.fields.len(), 1);
+    let Some(field) = spec.fields.first_mut() else {
+        return;
+    };
+    field.slot.required = false;
+    let graph = recursive_graph(vec![recursive_node("Root", shape)]);
+    let failure =
+        materialize_defaults(&graph, &recursive_ref("Root"), &JsonValue::Obj(vec![])).unwrap_err();
+    assert!(matches!(&failure, DefaultFailure::Unresolved(_)));
+    let DefaultFailure::Unresolved(obligations) = failure else {
+        return;
+    };
+    assert_eq!(obligations.len(), 1);
+    let Some(obligation) = obligations.first() else {
+        return;
+    };
+    assert_eq!(obligation.type_ref, recursive_ref("gone"));
+    assert_eq!(obligation.value_path, vec![]);
+    assert_eq!(obligation.profile, graph.profile.reference);
+    assert_eq!(obligation.reason, SemanticReason::UnresolvedType);
+
+    let text = TypeShape::String(StringSpec {
+        format: Some(FormatUse::Named("missing-format".into())),
+        lengths: vec![],
+        wrapper: None,
+        const_value: None,
+        enum_values: None,
+        examples: vec![],
+        default_value: Some("".into()),
+    });
+    let graph = recursive_graph(vec![
+        recursive_node("Text", text),
+        recursive_node("Root", recursive_product(&[("label", "Text")])),
+    ]);
+    for (reference, before) in [
+        (recursive_ref("Root"), JsonValue::Obj(vec![])),
+        (recursive_ref("Text"), JsonValue::Str("".into())),
+    ] {
+        let failure = materialize_defaults(&graph, &reference, &before).unwrap_err();
+        assert!(matches!(&failure, DefaultFailure::Unresolved(_)));
+        let DefaultFailure::Unresolved(obligations) = failure else {
+            return;
+        };
+        assert_eq!(obligations.len(), 1);
+        let Some(obligation) = obligations.first() else {
+            return;
+        };
+        assert_eq!(obligation.type_ref, recursive_ref("Text"));
+        assert_eq!(
+            obligation.origin,
+            OccurrenceRef::from(&recursive_ref("Text"))
+        );
+        assert_eq!(obligation.value_path, vec![]);
+        assert_eq!(obligation.profile, graph.profile.reference);
+        assert_eq!(
+            obligation.reason,
+            SemanticReason::UnknownFormat("missing-format".into())
+        );
+    }
+}
+
+#[test]
+fn sealed_leaf_samples_match_lean() -> std::result::Result<(), Box<dyn std::error::Error>> {
+    use serde_json::{json, Value};
+    let vectors: Value = serde_json::from_str(include_str!(
+        "../../comparison/declaration/sealed_leaf_sample_vectors.json"
+    ))?;
+    assert_eq!(
+        vectors.get("schema"),
+        Some(&json!("sealed-leaf-sample-vectors@1"))
+    );
+    let profile = vectors.get("profile").ok_or("missing profile")?;
+    let cases = vectors
+        .get("cases")
+        .and_then(Value::as_array)
+        .ok_or("missing cases")?;
+    assert_eq!(cases.len(), 7);
+    for case in cases {
+        let case_id = case.get("id").and_then(Value::as_str).ok_or("case id")?;
+        let library = decode_type_signatures(
+            &json!({
+                "schema": "ncoh-type-signatures@1",
+                "identity": "sealed-leaf-samples",
+                "revision": "1",
+                "profile": profile,
+                "sources": [],
+                "provenance": [],
+                "groups": [],
+                "annotations": [],
+                "nodes": [{"id": "value", "shape": case.get("sealed").ok_or("missing sealed")?}],
+                "definitions": []
+            })
+            .to_string(),
+        )?;
+        let graph = check_type_signatures(&library)?;
+        let slot = SlotContract {
+            type_ref: signature_type_ref(&library, &canonical_digest(&library), "value"),
+            required: true,
+            nullable: false,
+        };
+        let samples = slot_samples(&graph, &SearchBounds::default(), &slot);
+        let mut actual = Vec::new();
+        for sample in samples.values {
+            let SlotValue::Present(value) = sample else {
+                return Err(format!("{case_id}: {sample:?}").into());
+            };
+            assert!(
+                matches!(
+                    accepts_value(&graph, &slot.type_ref, &value),
+                    ValueDecision::Accepted
+                ),
+                "{case_id}"
+            );
+            actual.push(serde_json::to_value(&value)?);
+        }
+        assert_eq!(
+            Value::Array(actual),
+            case.get("expected").cloned().ok_or("missing expected")?,
+            "{case_id}"
+        );
+    }
+    Ok(())
+}

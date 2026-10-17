@@ -2,9 +2,6 @@
 // SPDX-License-Identifier: MIT
 
 #![allow(clippy::panic)]
-//! Integration checks for `necoherence::typed_mapping`: only the
-//! public module through the crate root, no copied solver logic.
-//! Fixtures mirror the Lean typed mapping solver test.
 
 use necoherence::typed_mapping::{
     apply_consumption, derive_enabled, tokens_at, BindingMode, ColoredToken, DeclarationGraph,
@@ -110,7 +107,6 @@ fn input_ready() -> SolverInput {
     }
 }
 
-/// `derive_enabled` reports `T-RUN` enabled at the ready marking.
 #[test]
 fn derive_enabled_reports_run_enabled() {
     let expected = EnabledResult::EnabledSet(EnabledSet {
@@ -145,8 +141,6 @@ fn bind(tid: &str, name: &str, place: &str, ident: &str, mode: BindingMode) -> I
     }
 }
 
-/// A `Consume` binding with multiplicity one removes exactly one
-/// occurrence of a duplicated token, retaining the second.
 #[test]
 fn consume_removes_only_selected_occurrences() {
     let marking = Marking {

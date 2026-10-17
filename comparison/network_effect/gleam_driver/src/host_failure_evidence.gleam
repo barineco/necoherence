@@ -8,12 +8,9 @@ import gleam/io
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/string
-import necoherence/http_adapter as adapter
 import necoherence/network_effect as effect
 import necoherence/request_progression as progression
-
-// Real necoherence/http_adapter evidence against a peer supplied over a
-// line-delimited JSON protocol.
+import necoherence_http_adapter as adapter
 
 @external(erlang, "host_failure_evidence_ffi", "read_line")
 fn read_line() -> Result(String, Nil)

@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT
 
 import gleam/result
-import necoherence/http_adapter as adapter
 import necoherence/network_effect as network
+import necoherence/network_host as adapter
 import necoherence/semantic_generation_http as http
 import necoherence/semantic_generation_runtime as runtime
 

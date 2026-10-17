@@ -26,12 +26,12 @@ public final class InclusionAndSamplesTest {
     }
     private static WireValue stringSpec(WireValue format,WireValue lengths,WireValue constant,WireValue values){return obj("format",format,"lengths",lengths,"wrapper",NIL,"const_value",constant,"enum_values",values,"examples",arr(List.of()),"default_value",NIL);}
     private static WireValue integerSpec(WireValue domain,WireValue min,WireValue max,WireValue constant,WireValue values){return obj("domain",domain,"minimum",min,"maximum",max,"const_value",constant,"enum_values",values,"default_value",NIL);}
-    private static WireValue node(String id,WireValue shape){return obj("reference",str(id),"shape",shape);}
-    private static WireValue slot(String id){return obj("type_ref",str(id),"required",TRUE,"nullable",FALSE);}
-    private static WireValue field(String name,String target,boolean required){return obj("wire_name",str(name),"slot",obj("type_ref",str(target),"required",new BooleanValue(required),"nullable",FALSE));}
-    private static WireValue branch(String target,String tag,WireValue selector){return obj("target",str(target),"wire_tag",str(tag),"selector",selector,"origin",obj("source",str("test"),"pointer",arr(List.of())));}
+    private static WireValue node(String id,WireValue shape){return obj("reference",TypeSignatures.typeReference(id),"shape",shape);}
+    private static WireValue slot(String id){return obj("type_ref",TypeSignatures.typeReference(id),"required",TRUE,"nullable",FALSE);}
+    private static WireValue field(String name,String target,boolean required){return obj("wire_name",str(name),"slot",obj("type_ref",TypeSignatures.typeReference(target),"required",new BooleanValue(required),"nullable",FALSE));}
+    private static WireValue branch(String target,String tag,WireValue selector){return obj("target",TypeSignatures.typeReference(target),"wire_tag",str(tag),"selector",selector,"origin",obj("source",str("test"),"pointer",arr(List.of())));}
     private static WireValue product(List<WireValue> fields,WireValue extras){return variant("Product",obj("fields",arr(fields),"extras",extras));}
-    private static WireValue allow(WireValue key,String target){return fields("Allow",obj("key_format",key,"value",obj("type_ref",str(target),"nullable",FALSE)));}
+    private static WireValue allow(WireValue key,String target){return fields("Allow",obj("key_format",key,"value",obj("type_ref",TypeSignatures.typeReference(target),"nullable",FALSE)));}
     private static Context graph(WireValue... nodes){return new Context(obj("profile",profile(),"nodes",arr(List.of(nodes))));}
     private static WireValue basis(){
         WireValue digest=str("0".repeat(64));
@@ -60,7 +60,7 @@ public final class InclusionAndSamplesTest {
                     ||!unknown.tag().equals("SameDefinedType"))throw failure;
         }
     }
-    private static boolean accepts(Context context,String type,WireValue value){try{context.validate(context.index(str(type)),value);return true;}catch(Exception failure){return false;}}
+    private static boolean accepts(Context context,String type,WireValue value){try{context.validate(TypeSignatures.typeReference(type),value);return true;}catch(Exception failure){return false;}}
     private static void compatible(String name,Context context,String source,String destination){
         if(!(checkAssignable(context,slot(source),slot(destination),10000) instanceof Compatible))
             throw new AssertionError(name+" was not compatible");
@@ -124,10 +124,10 @@ public final class InclusionAndSamplesTest {
                 node("grapheme",text(NIL,arr(List.of(obj("unit",variant("Graphemes"),"minimum",str("2"),"maximum",str("2")))))),
                 node("any",variant("Unknown",variant("Any"))),
                 node("extras",product(List.of(),allow(variant("Named",str("key-x")),"any"))));
-        for(String type:List.of("bytes","sealed","union","forms","utf8","scalar","grapheme","extras")){SampleResult result=sampleValueFuel(context,str(type),context.nodes.size()+1,32);if(result.values().isEmpty())throw new AssertionError(type+" samples empty");for(WireValue value:result.values())if(!accepts(context,type,value))throw new AssertionError(type+" sample rejected: "+value);}
-        List<WireValue> integerSamples=sampleValueFuel(context,str("forms"),20,32).values();if(!integerSamples.contains(num(BigInteger.ZERO))||!integerSamples.contains(new DecimalValue("0"))||!integerSamples.contains(str("0")))throw new AssertionError("integer forms");
-        Context bound=graph(node("long",variant("String",stringSpec(NIL,arr(List.of()),str("aaaa"),NIL))));SampleResult omitted=sampleValueFuel(bound,str("long"),2,3);if(!omitted.values().isEmpty()||!omitted.sampleBound()||!omitted.possible())throw new AssertionError("sample bound");
-        List<WireValue> fields=new ArrayList<>();for(String name:List.of("a","b","c","d"))fields.add(field(name,"flag",true));Context combinations=graph(node("flag",variant("Boolean",obj("const_value",NIL,"default_value",NIL))),node("four",product(fields,variant("Reject"))));if(!sampleValueFuel(combinations,str("four"),3,3).sampleBound()||sampleValueFuel(combinations,str("four"),4,4).values().isEmpty())throw new AssertionError("field combination bound");
+        for(String type:List.of("bytes","sealed","union","forms","utf8","scalar","grapheme","extras")){SampleResult result=sampleValueFuel(context,TypeSignatures.typeReference(type),context.nodes.size()+1,32);if(result.values().isEmpty())throw new AssertionError(type+" samples empty");for(WireValue value:result.values())if(!accepts(context,type,value))throw new AssertionError(type+" sample rejected: "+value);}
+        List<WireValue> integerSamples=sampleValueFuel(context,TypeSignatures.typeReference("forms"),20,32).values();if(!integerSamples.contains(num(BigInteger.ZERO))||!integerSamples.contains(new DecimalValue("0"))||!integerSamples.contains(str("0")))throw new AssertionError("integer forms");
+        Context bound=graph(node("long",variant("String",stringSpec(NIL,arr(List.of()),str("aaaa"),NIL))));SampleResult omitted=sampleValueFuel(bound,TypeSignatures.typeReference("long"),2,3);if(!omitted.values().isEmpty()||!omitted.sampleBound()||!omitted.possible())throw new AssertionError("sample bound");
+        List<WireValue> fields=new ArrayList<>();for(String name:List.of("a","b","c","d"))fields.add(field(name,"flag",true));Context combinations=graph(node("flag",variant("Boolean",obj("const_value",NIL,"default_value",NIL))),node("four",product(fields,variant("Reject"))));if(!sampleValueFuel(combinations,TypeSignatures.typeReference("four"),3,3).sampleBound()||sampleValueFuel(combinations,TypeSignatures.typeReference("four"),4,4).values().isEmpty())throw new AssertionError("field combination bound");
     }
     public static void main(String[] args)throws Exception{unitInclusionRule();inclusion();samples();System.out.println("Java: inclusion wire rules, C1-C5, I1-I7, P rules and samples passed");}
 }

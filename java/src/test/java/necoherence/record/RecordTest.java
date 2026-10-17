@@ -19,7 +19,7 @@ import necoherence.core.Revision;
 import necoherence.core.World;
 import org.junit.jupiter.api.Test;
 
-/** Tests translating rust/tests/record_tests.rs and lean/Necoherence/Record.lean. */
+
 final class RecordTest {
 
     private static ResourceId rid(int name) {
@@ -97,7 +97,7 @@ final class RecordTest {
         assertEquals(settled, held.product());
     }
 
-    /** {@code hasEdge} is symmetric: matches lean/Necoherence/Record.lean's {@code has_edge_symm}. */
+
     @Test
     void hasEdgeIsSymmetricProperty() {
         Random random = new Random(20260819);
@@ -116,10 +116,7 @@ final class RecordTest {
         }
     }
 
-    /**
-     * When every record in a chain of three shares its basis's resource identity, {@code hasEdge}
-     * holds transitively along the chain: matches lean/Necoherence/Record.lean's {@code has_edge_trans}.
-     */
+
     @Test
     void hasEdgeIsTransitiveOnASharedResourceProperty() {
         Random random = new Random(20260820);
@@ -134,7 +131,7 @@ final class RecordTest {
         }
     }
 
-    /** Absence of an edge witnesses disjoint resources when both records carry a basis. */
+
     @Test
     void noEdgeWitnessesDisjointResourcesProperty() {
         Random random = new Random(20260821);

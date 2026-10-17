@@ -10,7 +10,7 @@ import java.util.List;
 import necoherence.core.Nat;
 import org.junit.jupiter.api.Test;
 
-/** Tests the split request-progression lifecycle. */
+
 final class ProgressionTest {
     private static Nat n(long value) { return Nat.fromLong(value); }
     private static ResourceBudget budget(long pending, long inFlight, long concurrent) {

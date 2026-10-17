@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: 2026 barineco
 // SPDX-License-Identifier: AGPL-3.0-only
 
-use necoherence::semantic_composition::{PlanNode, PlanTree, ReturnPlan};
 use necoherence::semantic_types::{BranchSelector, EffectPoint, MemberTest};
 use necoherence::type_signatures::{
     CheckedLibrary, OutcomeCause, Shape, SignatureDefinitionShape, SignatureExtraMembers,
@@ -33,6 +32,66 @@ fn name(value: &str) -> String {
         result.insert(0, '_');
     }
     result
+}
+fn field_name(value: &str) -> String {
+    let candidate = name(value);
+    if matches!(
+        candidate.as_str(),
+        "as" | "break"
+            | "const"
+            | "continue"
+            | "crate"
+            | "else"
+            | "enum"
+            | "extern"
+            | "false"
+            | "fn"
+            | "for"
+            | "if"
+            | "impl"
+            | "in"
+            | "let"
+            | "loop"
+            | "match"
+            | "mod"
+            | "move"
+            | "mut"
+            | "pub"
+            | "ref"
+            | "return"
+            | "self"
+            | "Self"
+            | "static"
+            | "struct"
+            | "super"
+            | "trait"
+            | "true"
+            | "type"
+            | "unsafe"
+            | "use"
+            | "where"
+            | "while"
+            | "async"
+            | "await"
+            | "dyn"
+            | "abstract"
+            | "become"
+            | "box"
+            | "do"
+            | "final"
+            | "macro"
+            | "override"
+            | "priv"
+            | "typeof"
+            | "unsized"
+            | "virtual"
+            | "yield"
+            | "try"
+    ) {
+        format!("field_{candidate}")
+    } else {
+        candidate
+    }
 }
 fn pascal(value: &str) -> String {
     value
@@ -80,6 +139,22 @@ fn selector_code(selector: &BranchSelector) -> String {
     }
 }
 
+mod composition;
+
+pub fn render_signature_composition(
+    expected: &SignatureGenerationBasis,
+    text: &str,
+) -> Result<String, RenderFailure> {
+    let input = necoherence::semantic_exchange::decode_signature_generation(text)
+        .map_err(RenderFailure::Generation)?;
+    let admitted = necoherence::signature_admission::admit_signature_generation(expected, input)
+        .map_err(RenderFailure::Admission)?;
+    let context = necoherence::semantic_exchange::signature_render_context(admitted)
+        .map_err(RenderFailure::Generation)?;
+    let mut output = String::new();
+    composition::render(&mut output, &context)?;
+    Ok(output)
+}
 pub fn render_library(library: &TypeSignatureLibrary) -> Result<String, RenderFailure> {
     let checked = necoherence::type_signatures::check_library(library)
         .map_err(RenderFailure::InvalidLibrary)?;
@@ -109,7 +184,7 @@ pub fn render_generation(input: &SignatureGenerationInput) -> Result<String, Ren
         .map_err(RenderFailure::Admission)?;
         let context = necoherence::semantic_exchange::signature_render_context(admitted)
             .map_err(RenderFailure::Generation)?;
-        render_composition(&mut output, &context)?;
+        composition::render(&mut output, &context)?;
     }
     Ok(output)
 }
@@ -130,98 +205,16 @@ fn render_generation_metadata(
     ));
     Ok(())
 }
-fn render_plan_node(output: &mut String, tree: &PlanTree, next: &mut usize) -> usize {
-    let index = *next;
-    *next += 1;
-    let children = match &tree.node {
-        PlanNode::Invoke { arms, .. } => arms
-            .iter()
-            .map(|(outcome, child)| (outcome.0.clone(), render_plan_node(output, child, next)))
-            .collect::<Vec<_>>(),
-        PlanNode::Guard { arms, .. } => arms
-            .iter()
-            .map(|(arm, child)| (format!("{arm:?}"), render_plan_node(output, child, next)))
-            .collect::<Vec<_>>(),
-        PlanNode::Return(_) => vec![],
-    };
-    output.push_str(&format!(
-        "fn drive_{index}(values:Vec<rt::JsonValue>,providers:&mut impl Providers)->Result<CompositionOutcome,rt::RuntimeFailure>{{"
-    ));
-    match &tree.node {
-        PlanNode::Return(ReturnPlan::Success(_)) => {
-            output.push_str("Ok(CompositionOutcome::Success(CompositionOutput(values)))");
-        }
-        PlanNode::Return(ReturnPlan::Failure { .. }) => {
-            output.push_str("Ok(CompositionOutcome::Failure(CompositionOutput(values)))");
-        }
-        PlanNode::Invoke { invocation, .. } => {
-            output.push_str(&format!(
-                "let provided=providers.call_provider({:?},values)?;match provided.outcome_id.as_str(){{",
-                invocation.function.identity
-            ));
-            for (outcome, child) in children {
-                output.push_str(&format!(
-                    "{outcome:?}=>drive_{child}(provided.values,providers),"
-                ));
-            }
-            output.push_str("_=>Err(rt::representation(\"declared provider outcome\")),}");
-        }
-        PlanNode::Guard { .. } => {
-            output.push_str(
-                "let _=(values,providers);Err(rt::representation(\"generated guard execution\"))",
-            );
-        }
-    }
-    output.push_str("}\n");
-    index
-}
-
-fn render_composition(
-    output: &mut String,
-    context: &necoherence::semantic_exchange::GenerationContext,
-) -> Result<(), RenderFailure> {
-    let problem = context
-        .problem()
-        .ok_or_else(|| RenderFailure::InvalidCheckedPlan("composition is absent".into()))?;
-    let plan = context
-        .plan()
-        .ok_or_else(|| RenderFailure::InvalidCheckedPlan("composition plan is absent".into()))?;
-    output.push_str(
-        "pub mod composed {\n\
-         use super::*;\n\
-         #[derive(Debug,Clone,PartialEq)] pub struct CompositionInput(pub Vec<rt::JsonValue>);\n\
-         #[derive(Debug,Clone,PartialEq)] pub struct CompositionOutput(pub Vec<rt::JsonValue>);\n\
-         #[derive(Debug,Clone,PartialEq)] pub enum CompositionOutcome { Success(CompositionOutput), Failure(CompositionOutput) }\n\
-         #[derive(Debug,Clone,PartialEq)] pub struct ProviderOutcome { pub outcome_id:String, pub values:Vec<rt::JsonValue> }\n\
-         #[derive(Debug,Clone,PartialEq)] pub struct CompositionContinuation { pub input:CompositionInput }\n\
-         pub trait Providers { fn call_provider(&mut self,function:&str,input:Vec<rt::JsonValue>)->Result<ProviderOutcome,rt::RuntimeFailure>; }\n",
-    );
-    output.push_str("pub const PROVIDERS:&[(&str,&str,&str)]=&[");
-    for signature in &problem.signatures {
-        output.push_str(&format!(
-            "({:?},{:?},{:?}),",
-            signature.reference.identity,
-            signature.reference.revision,
-            signature.reference.content_digest
-        ));
-    }
-    output.push_str("];\n");
-    let root = render_plan_node(output, &plan.root, &mut 0);
-    output.push_str(&format!(
-        "pub fn execute(_cx:&Context<'_>,input:CompositionInput,providers:&mut impl Providers)->Result<CompositionOutcome,rt::RuntimeFailure>{{drive_{root}(input.0,providers)}}\n\
-         pub fn resume(cx:&Context<'_>,continuation:CompositionContinuation,providers:&mut impl Providers)->Result<CompositionOutcome,rt::RuntimeFailure>{{execute(cx,continuation.input,providers)}}\n\
-         }}\n\
-         pub use composed::*;\n"
-    ));
-    Ok(())
-}
 
 fn render_port_record(output: &mut String, record_name: &str, ports: &[SignaturePort]) {
     output.push_str(&format!(
         "#[derive(Debug,Clone,PartialEq)] pub struct {record_name} {{"
     ));
     for port in ports {
-        output.push_str(&format!("pub {}:Option<rt::JsonValue>,", name(&port.id)));
+        output.push_str(&format!(
+            "pub {}:Option<rt::JsonValue>,",
+            field_name(&port.id)
+        ));
     }
     output.push_str("}\n");
 }
@@ -299,18 +292,35 @@ pub fn render_checked(checked: &CheckedLibrary) -> Result<String, RenderFailure>
         "// SPDX-License-Identifier: MIT\n\
          use necoherence::semantic_codegen_runtime as rt;\n\
          use necoherence::semantic_types::{SemanticGraph,VersionedSemanticProfile,ValueDecision};\n\
-         pub struct Context<'a>{pub profile:&'a VersionedSemanticProfile,pub graph:Option<&'a SemanticGraph>}\n\
+         pub struct Context<'a>{profile:&'a VersionedSemanticProfile,graph:&'a SemanticGraph}\n\
          impl<'a> Context<'a>{\
-           pub fn new(generation:&'a necoherence::semantic_exchange::GenerationContext)->Self{Self{profile:generation.graph().profile(),graph:Some(generation.graph())}}\
+           pub fn new(generation:&'a necoherence::semantic_exchange::GenerationContext)->Self{Self{profile:generation.graph().profile(),graph:generation.graph()}}\
            fn validate(&self,id:&str,value:&rt::JsonValue)->Result<(),rt::RuntimeFailure>{\
-             let Some(graph)=self.graph else{return Ok(())};\
+             let graph=self.graph;\
              let reference=graph.nodes.iter().find(|node|node.reference.definition_name.as_ref()==id).map(|node|&node.reference).ok_or_else(||rt::representation(\"generated type reference\"))?;\
-             match necoherence::semantic_validation::accepts_value(graph,reference,value){ValueDecision::Accepted=>Ok(()),failure=>Err(rt::representation(format!(\"{failure:?}\")))}\
+             match necoherence::semantic_validation::accepts_value(graph,reference,value){ValueDecision::Accepted=>Ok(()),failure=>Err(rt::RuntimeFailure::Validation(failure))}\
            }\
          }\n\
          pub trait WireValue: Sized {\
          fn write_wire(&self,cx:&Context<'_>)->Result<rt::JsonValue,rt::RuntimeFailure>;\
          fn read_wire(cx:&Context<'_>,value:rt::JsonValue)->Result<Self,rt::RuntimeFailure>;\
+         }\n\
+         pub struct DefaultDecoded<T>{typed_value:T,defaulted:necoherence::semantic_validation::DefaultedValue}\n\
+         impl<T> DefaultDecoded<T>{\
+           pub fn value(&self)->&T{&self.typed_value}\
+           pub fn into_value(self)->T{self.typed_value}\
+           pub fn applications(&self)->&[necoherence::semantic_validation::DefaultApplication]{self.defaulted.applications()}\
+           pub fn write_wire(&self)->&rt::JsonValue{self.defaulted.value()}\
+           pub fn encode(&self)->Result<String,rt::RuntimeFailure>{rt::encode_json(self.defaulted.value())}\
+         }\n\
+         pub fn decode<T:WireValue>(cx:&Context<'_>,reference:&necoherence::semantic_types::TypeRef,wire_text:&str)->Result<T,rt::RuntimeFailure>{\
+           let value=rt::decode_json(wire_text)?;\
+           match necoherence::semantic_validation::accepts_value(cx.graph,reference,&value){ValueDecision::Accepted=>T::read_wire(cx,value),failure=>Err(rt::RuntimeFailure::Validation(failure))}\
+         }\n\
+         pub fn decode_with_defaults<T:WireValue>(cx:&Context<'_>,reference:&necoherence::semantic_types::TypeRef,wire_text:&str)->Result<DefaultDecoded<T>,rt::RuntimeFailure>{\
+           let defaulted=necoherence::semantic_validation::decode_with_defaults(cx.graph,reference,wire_text).map_err(rt::RuntimeFailure::Defaults)?;\
+           let typed_value=T::read_wire(cx,defaulted.value().clone())?;\
+           Ok(DefaultDecoded{typed_value,defaulted})\
          }\n",
     );
     for node in &checked.library.nodes {
@@ -319,7 +329,10 @@ pub fn render_checked(checked: &CheckedLibrary) -> Result<String, RenderFailure>
             Shape::Unknown(_) => output.push_str(&format!("#[derive(Debug,Clone,PartialEq)] pub struct {type_name}(pub rt::JsonValue); impl WireValue for {type_name} {{ fn write_wire(&self,_:&Context<'_>)->Result<rt::JsonValue,rt::RuntimeFailure>{{Ok(self.0.clone())}} fn read_wire(_:&Context<'_>,value:rt::JsonValue)->Result<Self,rt::RuntimeFailure>{{Ok(Self(value))}} }}\n")),
             Shape::Unit => output.push_str(&format!("#[derive(Debug,Clone,PartialEq)] pub struct {type_name}; impl WireValue for {type_name} {{ fn write_wire(&self,_:&Context<'_>)->Result<rt::JsonValue,rt::RuntimeFailure>{{Ok(rt::JsonValue::Null)}} fn read_wire(_:&Context<'_>,value:rt::JsonValue)->Result<Self,rt::RuntimeFailure>{{match value{{rt::JsonValue::Null=>Ok(Self),_=>Err(rt::representation(\"unit\"))}}}} }}\n")),
             Shape::Boolean(_) => output.push_str(&format!("#[derive(Debug,Clone,PartialEq)] pub struct {type_name}(pub bool); impl WireValue for {type_name} {{ fn write_wire(&self,_:&Context<'_>)->Result<rt::JsonValue,rt::RuntimeFailure>{{Ok(rt::JsonValue::Bool(self.0))}} fn read_wire(_:&Context<'_>,value:rt::JsonValue)->Result<Self,rt::RuntimeFailure>{{match value{{rt::JsonValue::Bool(value)=>Ok(Self(value)),_=>Err(rt::representation(\"boolean\"))}}}} }}\n")),
-            Shape::Integer(_) => output.push_str(&format!("#[derive(Debug,Clone,PartialEq)] pub struct {type_name}(pub rt::BigInt); impl WireValue for {type_name} {{ fn write_wire(&self,_:&Context<'_>)->Result<rt::JsonValue,rt::RuntimeFailure>{{Ok(rt::JsonValue::Num(self.0.clone()))}} fn read_wire(_:&Context<'_>,value:rt::JsonValue)->Result<Self,rt::RuntimeFailure>{{match value{{rt::JsonValue::Num(value)=>Ok(Self(value)),rt::JsonValue::Str(value)=>Ok(Self(rt::parse_integer(&value)?)),_=>Err(rt::representation(\"integer\"))}}}} }}\n")),
+            Shape::Integer(spec) => {
+                let domain = format!("{:?}", spec.domain.as_deref());
+                output.push_str(&format!("#[derive(Debug,Clone,PartialEq)] pub struct {type_name}(pub rt::BigInt); impl WireValue for {type_name} {{ fn write_wire(&self,cx:&Context<'_>)->Result<rt::JsonValue,rt::RuntimeFailure>{{let value=rt::integer_encode(cx.profile,{domain},&self.0)?;cx.validate({:?},&value)?;Ok(value)}} fn read_wire(cx:&Context<'_>,value:rt::JsonValue)->Result<Self,rt::RuntimeFailure>{{cx.validate({:?},&value)?;Ok(Self(rt::integer_decode(cx.profile,{domain},value)?))}} }}\n",node.id,node.id));
+            }
             Shape::Decimal(_) => output.push_str(&format!("#[derive(Debug,Clone,PartialEq)] pub struct {type_name}(pub String); impl WireValue for {type_name} {{ fn write_wire(&self,_:&Context<'_>)->Result<rt::JsonValue,rt::RuntimeFailure>{{Ok(rt::JsonValue::Dec(self.0.clone()))}} fn read_wire(_:&Context<'_>,value:rt::JsonValue)->Result<Self,rt::RuntimeFailure>{{match value{{rt::JsonValue::Dec(value)=>Ok(Self(value)),_=>Err(rt::representation(\"decimal\"))}}}} }}\n")),
             Shape::String(spec) => {
                 let write = spec.wrapper.as_ref().map_or(
@@ -344,7 +357,7 @@ pub fn render_checked(checked: &CheckedLibrary) -> Result<String, RenderFailure>
                 for field in &product.fields {
                     output.push_str(&format!(
                         "pub {}:Option<rt::JsonValue>,",
-                        name(&field.wire_name)
+                        field_name(&field.wire_name)
                     ));
                 }
                 if matches!(product.extras, SignatureExtraMembers::Allow { .. }) {
@@ -356,7 +369,7 @@ pub fn render_checked(checked: &CheckedLibrary) -> Result<String, RenderFailure>
                     output.push_str("members.extend(self.extras.clone());");
                 }
                 for field in &product.fields {
-                    let native = name(&field.wire_name);
+                    let native = field_name(&field.wire_name);
                     output.push_str(&format!(
                         "if let Some(value)=&self.{native}{{members.push(({:?}.into(),value.clone()));}}",
                         field.wire_name
@@ -366,7 +379,7 @@ pub fn render_checked(checked: &CheckedLibrary) -> Result<String, RenderFailure>
                 for field in &product.fields {
                     output.push_str(&format!(
                         "let {}=match members.iter().position(|member|member.0=={:?}){{Some(index)=>Some(members.remove(index).1),None=>None}};",
-                        name(&field.wire_name),
+                        field_name(&field.wire_name),
                         field.wire_name
                     ));
                 }
@@ -375,7 +388,7 @@ pub fn render_checked(checked: &CheckedLibrary) -> Result<String, RenderFailure>
                 }
                 output.push_str("Ok(Self{");
                 for field in &product.fields {
-                    let native = name(&field.wire_name);
+                    let native = field_name(&field.wire_name);
                     output.push_str(&format!("{native},"));
                 }
                 if matches!(product.extras, SignatureExtraMembers::Allow { .. }) {

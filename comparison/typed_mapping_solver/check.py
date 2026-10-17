@@ -2,19 +2,6 @@
 # SPDX-FileCopyrightText: 2026 barineco
 # SPDX-License-Identifier: MIT
 
-"""Comparison coordinator for the typed mapping solver.
-
-This script is the integration point of the typed mapping solver comparison. It
-
-  * prepares the shared `fixtures.json` document (`--prepare-fixtures`),
-  * compares the independently produced Lean/Rust/Gleam outputs and the
-    independent oracle (`--compare-public-producers`), and
-  * verifies the generated mutation classification against the oracle, the
-    independent Lean checker and the public Rust/Gleam producers
-    (`--mutation-classification`).
-
-Every mode exits 0 on success and 1 with a diagnostic on failure.
-"""
 
 import argparse
 import hashlib
@@ -35,8 +22,8 @@ LEAN_DIR = os.path.join(TOOLS_DIR, "lean")
 RUST_DIR = os.path.join(TOOLS_DIR, "rust")
 GLEAM_DIR = os.path.join(TOOLS_DIR, "gleam")
 
-# The search modules live in the tools packages; the model, the one-step
-# derivation and the result types live in the MIT packages.
+
+
 PUBLIC_MODULES = {
     "lean": "NecoherenceTools.TypedMappingSolver",
     "rust": "necoherence_tools::typed_mapping_solver",
@@ -117,8 +104,6 @@ def run(argv, cwd=None, env=None, stdin_path=None, timeout=None):
 
 
 def extract_json(text, what):
-    """Decode the first JSON object in `text` (toolchain banner lines may
-    precede the payload on stdout)."""
     start = text.find("{")
     if start < 0:
         fail("%s produced no JSON object on stdout" % what)
@@ -148,9 +133,9 @@ def parse_kv_pairs(values, what):
     return out
 
 
-# ---------------------------------------------------------------------------
-# fixtures
-# ---------------------------------------------------------------------------
+
+
+
 
 
 def _place(identity, token_type="tok", revision=1):
@@ -189,8 +174,6 @@ def _bound(max_bindings=8, max_search_steps=8):
 
 
 def _baseline_input():
-    """Transition t1 consumes res-a at p1 and produces at p2; t-dead is
-    declared but never enabled because no res-dead token is marked."""
     return {
         "places": [_place("p1"), _place("p2"), _place("p-dead")],
         "transitions": [_transition("t1", ["p1"], ["p2"]),
@@ -342,14 +325,12 @@ def cmd_prepare_fixtures(_args):
                                    len(build_fixtures()["cases"])))
 
 
-# ---------------------------------------------------------------------------
-# shared verification helpers
-# ---------------------------------------------------------------------------
+
+
+
 
 
 def check_module_alignment():
-    """Every runner and its language test must reference the same declared
-    public solver module at the same implementation revision."""
     rc, head, _ = git(WORKTREE, "rev-parse", "HEAD")
     if rc != 0:
         fail("cannot resolve implementation worktree revision")
@@ -454,8 +435,6 @@ def check_witness_shapes(fixtures, oracle_document):
 
 
 def compare_results(named_docs):
-    """Assert the per-case operation results of every named producer are
-    identical."""
     names = list(named_docs)
     base = results_map(named_docs[names[0]], names[0])
     for other in names[1:]:
@@ -469,9 +448,9 @@ def compare_results(named_docs):
                         json.dumps(theirs[case])[:200]))
 
 
-# ---------------------------------------------------------------------------
-# --compare-public-producers
-# ---------------------------------------------------------------------------
+
+
+
 
 
 def cmd_compare_public_producers(args):
@@ -499,8 +478,8 @@ def cmd_compare_public_producers(args):
                  % (language, module, PUBLIC_MODULES.get(language)))
         named_docs[language] = document
 
-    # The independently defined oracle must agree; agreement among the
-    # candidate producers alone is not evidence.
+
+
     fixture_document = load_json(FIXTURES, "fixtures")
     oracle_doc = run_oracle_full(FIXTURES)
     check_expected_fixture_results(fixture_document, oracle_doc)
@@ -519,15 +498,12 @@ def cmd_compare_public_producers(args):
           % revision)
 
 
-# ---------------------------------------------------------------------------
-# --mutation-classification
-# ---------------------------------------------------------------------------
+
+
+
 
 
 def invoke_language_engines(fixtures_path):
-    """Invoke the oracle, the independent Lean runner and the public Rust and
-    Gleam producers over `fixtures_path`, plus each language's declared
-    runtime/test entry. Returns a name -> output document map."""
     engines = {"oracle": run_oracle_full(fixtures_path)}
 
     env = {"TMS_FIXTURES": os.path.abspath(fixtures_path)}
@@ -635,7 +611,7 @@ def cmd_mutation_classification(args):
 
     check_oracle_independence(args.oracle)
 
-    # Re-derive every mutant's outcome with every independent entry.
+
     mutant_cases = [{"name": m["id"], "input": m["mutated_input"]}
                     for m in mutants]
     mutant_doc = {"schema": "ncoh-typed-mapping-solver/fixtures@1",
@@ -739,9 +715,9 @@ def cmd_mutation_classification(args):
           % (len(mutants), invalidating, preserving, bound_exhausted))
 
 
-# ---------------------------------------------------------------------------
-# argument parsing
-# ---------------------------------------------------------------------------
+
+
+
 
 
 def build_parser():

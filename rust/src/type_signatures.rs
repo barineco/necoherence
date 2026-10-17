@@ -443,7 +443,7 @@ fn predicate(l: &TypeSignatureLibrary) -> Option<LibraryPredicate> {
         return Some(LibraryPredicate::Lb16);
     }
     if l.nodes.iter().any(|n|matches!((&n.shape,&l.profile.tag),(Shape::TaggedUnion(u),Some(t)) if u.branches.iter().any(|b|b.selector==BranchSelector::InternalTag&&l.nodes.iter().any(|x|x.id==b.target&&matches!(&x.shape,Shape::Product(p) if p.fields.iter().find(|f|f.wire_name==t.key).is_none_or(|f|l.nodes.iter().find(|x|x.id==f.slot.type_id).is_none_or(|x|!matches!(&x.shape,Shape::String(s) if crate::semantic_validation::string_condition(&l.profile.semantic_profile(),s,&b.wire_tag).is_none())))))))){return Some(LibraryPredicate::Lb17)}
-    if l.nodes.iter().any(|n|matches!(&n.shape,Shape::TaggedUnion(u) if {let mut s:Vec<&BranchSelector>=Vec::new();u.branches.iter().any(|b|if s.contains(&&b.selector){true}else{s.push(&b.selector);false})})){return Some(LibraryPredicate::Lb18)}
+    if l.nodes.iter().any(|n|matches!(&n.shape,Shape::TaggedUnion(u) if u.branches.iter().enumerate().any(|(i,left)|u.branches.iter().take(i).any(|right|match (&left.selector,&right.selector) { (BranchSelector::InternalTag,BranchSelector::InternalTag)=>left.wire_tag==right.wire_tag, _=>left.selector==right.selector })))){return Some(LibraryPredicate::Lb18)}
     if l.nodes.iter().any(|n| match &n.shape {
         Shape::String(s) => s
             .const_value

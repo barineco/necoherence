@@ -138,6 +138,31 @@ fn representative_library() -> json.JsonValue {
       node("tagged_product_b", signatures.ProductShape(tagged_product_b)),
       node("internal_union", signatures.TaggedUnionShape(internal_union)),
       node("never", signatures.NeverShape),
+      node(
+        "flag",
+        signatures.BooleanShape(types.BooleanSpec(None, Some(False))),
+      ),
+      node(
+        "defaults",
+        signatures.ProductShape(signatures.LibraryProductSpec(
+          [
+            signatures.SignatureField(
+              "flag",
+              signatures.SignatureSlot("flag", True, False),
+            ),
+            signatures.SignatureField(
+              "seen",
+              signatures.SignatureSlot("tag", False, True),
+            ),
+          ],
+          signatures.LibraryAllowExtras(
+            None,
+            signatures.LibraryElementContract("any", False),
+          ),
+        )),
+      ),
+      node("any", signatures.UnknownShape(types.AnyValue)),
+      node("ordinary_object", signatures.UnknownShape(types.OrdinaryObject)),
     ]),
   )
 }
@@ -204,7 +229,7 @@ fn gleam_literal(value: String) -> String {
   <> "\""
 }
 
-pub fn generated_representative_carriers_and_codecs_compile_test() {
+pub fn generated_representative_carriers_and_codecs_compile() {
   let checked = checked()
   let assert Ok(source) = renderer.render_signatures(checked)
   let assert Ok(basis) = signatures.encode_basis(checked)
@@ -225,7 +250,7 @@ pub fn generated_representative_carriers_and_codecs_compile_test() {
     <> "\" }\ngleam_stdlib = \">= 1.0.0 and < 2.0.0\"\n[dev-dependencies]\ngleeunit = \">= 1.0.0 and < 2.0.0\"\n"
   let generated_test =
     "// SPDX-License-"
-    <> "Identifier: MIT\nimport gleeunit\nimport generated\nimport necoherence/exact_json as json\nimport necoherence/semantic_signatures as signatures\nimport necoherence/semantic_types as types\npub fn main() { gleeunit.main() }\npub fn representative_values_roundtrip_test() {\n  let assert Ok(checked) = signatures.admit_generation("
+    <> "Identifier: MIT\nimport gleeunit\nimport gleam/list\nimport generated\nimport necoherence/exact_json as json\nimport necoherence/semantic_generation_runtime as runtime\nimport necoherence/semantic_signatures as signatures\nimport necoherence/semantic_types as types\nimport necoherence/semantic_validation as validation\npub fn main() { gleeunit.main() }\npub fn representative_values_roundtrip_test() {\n  let assert Ok(checked) = signatures.admit_generation("
     <> gleam_literal(basis)
     <> ", "
     <> gleam_literal(exchange)
@@ -269,6 +294,55 @@ pub fn generated_representative_carriers_and_codecs_compile_test() {
     <> "  assert generated.value_taggedproductb(decoded_product_b) == generated.value_taggedproductb(product_b)\n"
     <> "  let assert Ok(reencoded_b) = generated.encode_internalunion(context, decoded_b)\n"
     <> "  assert reencoded_b == wire_b\n"
+    <> "}\n"
+  let generated_test =
+    generated_test
+    <> "pub fn generated_default_decode_uses_runtime_test() {\n"
+    <> "  let assert Ok(checked) = signatures.admit_generation("
+    <> gleam_literal(basis)
+    <> ", "
+    <> gleam_literal(exchange)
+    <> ")\n"
+    <> "  let assert Ok(context) = generated.initialize(checked)\n"
+    <> "  let assert Error(_) = generated.decode_defaults(context, \"{}\")\n"
+    <> "  let assert Ok(defaulted) = generated.with_defaults_defaults(context, \"{}\")\n"
+    <> "  let assert generated.DefaultsPayload(types.Present(flag), types.Absent, []) = generated.value_defaults(defaulted)\n"
+    <> "  assert generated.value_flag(flag) == False\n"
+    <> "  let assert Ok(wire) = generated.encode_defaults(context, defaulted)\n"
+    <> "  assert wire == \"{\\\"flag\\\":false}\"\n"
+    <> "  let assert Ok(ordered) = generated.with_defaults_defaults(context, \"{\\\"2\\\":false,\\\"seen\\\":null,\\\"1\\\":0}\")\n"
+    <> "  let assert generated.DefaultsPayload(types.Present(ordered_flag), types.Null, extras) = generated.value_defaults(ordered)\n"
+    <> "  assert generated.value_flag(ordered_flag) == False\n"
+    <> "  assert extras == [#(\"2\", json.JsonValueBool(False)), #(\"1\", json.JsonValueNum(0))]\n"
+    <> "  let assert Ok(ordered_wire) = generated.encode_defaults(context, ordered)\n"
+    <> "  assert ordered_wire == \"{\\\"2\\\":false,\\\"seen\\\":null,\\\"1\\\":0,\\\"flag\\\":false}\"\n"
+    <> "}\n"
+  let generated_test =
+    generated_test
+    <> "pub fn ordinary_object_codec_preserves_values_and_validation_test() {\n"
+    <> "  let assert Ok(checked) = signatures.admit_generation("
+    <> gleam_literal(basis)
+    <> ", "
+    <> gleam_literal(exchange)
+    <> ")\n"
+    <> "  let assert Ok(context) = generated.initialize(checked)\n"
+    <> "  list.each([json.JsonValueObj([]), json.JsonValueObj([#(\"$type\", json.JsonValueStr(\"record\")), #(\"nested\", json.JsonValueObj([#(\"items\", json.JsonValueArr([json.JsonValueNum(1), json.JsonValueNull, json.JsonValueBool(True)]))])), #(\"text\", json.JsonValueStr(\"value\"))])], fn(input) {\n"
+    <> "    let assert Ok(value) = generated.new_ordinaryobject(context, input)\n"
+    <> "    assert generated.value_ordinaryobject(value) == input\n"
+    <> "    let assert Ok(raw) = generated.to_value_ordinaryobject(context, value)\n"
+    <> "    assert raw == input\n"
+    <> "    let assert Ok(from_raw) = generated.from_value_ordinaryobject(context, raw)\n"
+    <> "    assert generated.value_ordinaryobject(from_raw) == input\n"
+    <> "    let assert Ok(wire) = generated.encode_ordinaryobject(context, value)\n"
+    <> "    let assert Ok(decoded) = generated.decode_ordinaryobject(context, wire)\n"
+    <> "    assert generated.value_ordinaryobject(decoded) == input\n"
+    <> "    let assert Ok(reencoded) = generated.encode_ordinaryobject(context, decoded)\n"
+    <> "    assert reencoded == wire\n"
+    <> "  })\n"
+    <> "  list.each([json.JsonValueNull, json.JsonValueBool(False), json.JsonValueNum(1), json.JsonValueStr(\"value\"), json.JsonValueArr([]), json.JsonValueObj([#(\"$wrapped\", json.JsonValueStr(\"value\"))]), json.JsonValueObj([#(\"$type\", json.JsonValueStr(\"sealed\"))])], fn(input) {\n"
+    <> "    let assert Error(runtime.Constraint(validation.Rejected(types.ValueFailure(condition: types.WrongValueKindCondition(\"ordinary object\"), ..)))) = generated.new_ordinaryobject(context, input)\n"
+    <> "    let assert Error(runtime.Constraint(validation.Rejected(types.ValueFailure(condition: types.WrongValueKindCondition(\"ordinary object\"), ..)))) = generated.from_value_ordinaryobject(context, input)\n"
+    <> "  })\n"
     <> "}\n"
   let assert Ok(Nil) = simplifile.write(root <> "/gleam.toml", manifest)
   let assert Ok(Nil) = simplifile.write(root <> "/src/generated.gleam", source)

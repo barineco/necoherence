@@ -55,7 +55,7 @@ Besides the features listed in the [project overview](https://github.com/barinec
 
 - Declaration checking: detects errors in declarations of types and operations, such as duplicate identifiers and references to undeclared types or definitions
 - Runtime for generated code: the shared value validation and codec routines that generated Rust code calls at run time
-- HTTP adapter: executes the requests of the network effect with `ureq` and returns the results as observations
+- HTTP adapter: the optional `http-adapter` feature executes the requests of the network effect with `ureq` and returns the results as observations
 
 ## Typed transition model
 
@@ -80,6 +80,20 @@ Their license is AGPL-3.0-only.
 cargo add necoherence
 ```
 
+The default features contain the core model, validation, and codecs.
+The pure `network_effect` model is available with the default features.
+The native HTTP adapter and its transport dependencies are enabled explicitly:
+
+```bash
+cargo add necoherence --features http-adapter
+```
+
+For a WebAssembly core, use the default features and check the target with:
+
+```bash
+cargo check --lib --target wasm32-unknown-unknown --no-default-features
+```
+
 ## Development checks
 
 The following commands run the format check, the lints, and the tests:
@@ -88,6 +102,9 @@ The following commands run the format check, the lints, and the tests:
 cargo fmt --all -- --check
 cargo clippy --all-targets -- -D warnings
 cargo test --all-targets
+cargo clippy --all-targets --features http-adapter -- -D warnings
+cargo test --all-targets --features http-adapter
+cargo check --lib --target wasm32-unknown-unknown --no-default-features
 ```
 
 ## License

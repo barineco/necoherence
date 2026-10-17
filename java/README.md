@@ -3,7 +3,7 @@
 [Project overview](https://github.com/barineco/necoherence/blob/publish/README.md) | [日本語](README-ja.md)
 
 This package is the Java implementation of Necoherence, for Java 21.
-You build `build/necoherence-0.1.0.jar` from source and add the jar to the classpath.
+You build `build/necoherence-0.2.0.jar` from source and add the jar to the classpath.
 It depends only on the JDK.
 
 ## Accepting a semantic profile
@@ -32,7 +32,7 @@ static WireValue decide(WireValue expected, List<WireValue> sources,
     WireValue exchange = obj("schema", str("ncoh-checked-generation@4"),
         "basis", basis, "signatures", library, "composition", NIL, "entrypoints", entries);
     CheckedGeneration checked = TypeSignatures.admitGeneration(expectedBasis, encodeWire(exchange));
-    checked.valueContext().validate(0, value);
+    checked.valueContext().validate(TypeSignatures.typeReference("root"), value);
     return value;
 }
 ```
@@ -48,7 +48,10 @@ Besides the features listed in the [project overview](https://github.com/barinec
 
 - Declaration checking: detects errors in declarations of types and operations, such as duplicate identifiers and references to undeclared types or definitions
 - Runtime for generated code: the shared value validation and codec routines that generated Java code calls at run time
-- HTTP adapter: executes the requests of the network effect with `java.net.http.HttpClient` and returns the results as observations
+
+The optional [HTTP adapter](../java-http-adapter/) executes network-effect commands in a separate jar.
+
+- Adapter's HTTP client: `java.net.http.HttpClient`
 
 ## Tools
 
@@ -58,7 +61,7 @@ Its license is AGPL-3.0-only.
 ## Building and testing
 
 The tests use JUnit Platform Console Standalone 1.10.2.
-The following commands download this jar from Maven Central into `lib/`, check its SHA-256 digest, and then build, test, and package `build/necoherence-0.1.0.jar`:
+The following commands download this jar from Maven Central into `lib/`, check its SHA-256 digest, and then build, test, and package `build/necoherence-0.2.0.jar`:
 
 ```bash
 mkdir -p lib build/classes build/test-classes
@@ -76,7 +79,7 @@ find src/test/java -name '*.java' -print0 \
       -d build/test-classes
 java -Duser.language=en -jar lib/junit-platform-console-standalone-1.10.2.jar execute \
   --class-path build/classes:build/test-classes --scan-class-path
-jar --create --file build/necoherence-0.1.0.jar -C build/classes .
+jar --create --file build/necoherence-0.2.0.jar -C build/classes .
 ```
 
 ## License

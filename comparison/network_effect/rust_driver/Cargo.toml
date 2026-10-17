@@ -3,7 +3,7 @@
 
 [package]
 name = "host_failure_driver"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 publish = false
 
@@ -12,6 +12,6 @@ name = "host_failure_driver"
 path = "src/main.rs"
 
 [dependencies]
-necoherence = { path = "../../../rust" }
+necoherence = { path = "../../../rust", features = ["http-adapter"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["arbitrary_precision"] }

@@ -43,7 +43,13 @@ public final class GeneratedJavaSemanticTest {
         WireValue nodes=arr(List.of(
                 obj("id",str("wrapped"),"shape",wrapped),obj("id",str("decimal"),"shape",decimal),
                 obj("id",str("sealed"),"shape",sealed),obj("id",str("never"),"shape",never),
-                obj("id",str("product"),"shape",product),obj("id",str("union"),"shape",union)));
+                obj("id",str("product"),"shape",product),obj("id",str("union"),"shape",union),
+                obj("id",str("flag"),"shape",variant("Boolean",obj("const_value",NIL,"default_value",new BooleanValue(false)))),
+                obj("id",str("defaults"),"shape",variant("Product",obj("fields",arr(List.of(
+                        obj("wire_name",str("flag"),"slot",obj("type_id",str("flag"),"required",new BooleanValue(true),"nullable",new BooleanValue(false))),
+                        obj("wire_name",str("seen"),"slot",obj("type_id",str("wrapped"),"required",new BooleanValue(false),"nullable",new BooleanValue(true))))),
+                        "extras",fields("Allow",obj("key_format",NIL,"value",obj("type_id",str("any"),"nullable",new BooleanValue(false))))))),
+                obj("id",str("any"),"shape",variant("Unknown",variant("Any")))));
         WireValue definitions=arr(List.of(
                 obj("id",str("product"),"wire_identity",str("Product"),"shape",variant("Value",str("product"))),
                 obj("id",str("union"),"wire_identity",str("Union"),"shape",variant("Value",str("union")))));
@@ -98,15 +104,15 @@ public final class GeneratedJavaSemanticTest {
         if(!(invalidRender instanceof Renderer.InvalidGeneration invalid)||!invalid.reason().equals("PR01"))
             throw new AssertionError("renderer accepted PR01");
         var context=checked.valueContext();
-        context.validate(context.index(str("wrapped")),obj("$wrapped",str("text")));
-        context.validate(context.index(str("decimal")),new DecimalValue("1.25"));
-        context.validate(context.index(str("sealed")),obj("$type",str("sealed"),"name",str("x")));
-        try { context.validate(context.index(str("never")),NIL); throw new AssertionError("never accepted"); }
+        context.validate(TypeSignatures.typeReference("wrapped"),obj("$wrapped",str("text")));
+        context.validate(TypeSignatures.typeReference("decimal"),new DecimalValue("1.25"));
+        context.validate(TypeSignatures.typeReference("sealed"),obj("$type",str("sealed"),"name",str("x")));
+        try { context.validate(TypeSignatures.typeReference("never"),NIL); throw new AssertionError("never accepted"); }
         catch (ValueFailure failure) { if(!failure.condition().equals("InvalidDataModel"))throw failure; }
-        SampleResult samples=sampleValueFuel(context,str("product"),8);
+        SampleResult samples=sampleValueFuel(context,TypeSignatures.typeReference("product"),8);
         if(samples.values().isEmpty()||!samples.possible())throw new AssertionError("product samples");
-        WireValue neverContract=obj("type_ref",str("never"),"required",new BooleanValue(true),"nullable",new BooleanValue(false));
-        WireValue wrappedContract=obj("type_ref",str("wrapped"),"required",new BooleanValue(true),"nullable",new BooleanValue(false));
+        WireValue neverContract=obj("type_ref",TypeSignatures.typeReference("never"),"required",new BooleanValue(true),"nullable",new BooleanValue(false));
+        WireValue wrappedContract=obj("type_ref",TypeSignatures.typeReference("wrapped"),"required",new BooleanValue(true),"nullable",new BooleanValue(false));
         if(!(checkAssignable(context,neverContract,wrappedContract,64) instanceof Compatible))throw new AssertionError("never inclusion");
         Renderer.RenderResult result=Renderer.renderChecked(checked,new Renderer.JavaTarget("","RepresentativeGenerated"));
         if(!(result instanceof Renderer.Rendered rendered))throw new AssertionError(result);
@@ -122,9 +128,26 @@ public final class GeneratedJavaSemanticTest {
             generatedRoundtrip(directory,"union",sealed);
             generatedRoundtrip(directory,"product",obj("value",wrapped));
             try{generatedRoundtrip(directory,"never",NIL);throw new AssertionError("never generated codec accepted a value");}
-            catch(ValueFailure expected){if(!expected.condition().equals("Uninhabited"))throw expected;}
+            catch(ValueFailure expected){if(!expected.condition().equals("InvalidDataModel"))throw expected;}
             try(URLClassLoader loader=new URLClassLoader(new java.net.URL[]{directory.toUri().toURL()},GeneratedJavaSemanticTest.class.getClassLoader())){
                 Class<?> generated=loader.loadClass("RepresentativeGenerated");
+                Object codecDefaults=((Map<?,?>)generated.getField("CODECS").get(null)).get("defaults");
+                try{invoke(invoke(codecDefaults,"decoder"),"decode","{}");throw new AssertionError("strict defaults decode");}
+                catch(ValueFailure expected){if(!expected.condition().equals("MissingRequired"))throw expected;}
+                Object defaulted=invoke(codecDefaults,"decodeWithDefaults","{}");
+                if(!Boolean.FALSE.equals(invoke(defaulted,"flag")))throw new AssertionError("defaulted declared slot");
+                if(!"{\"flag\":false}".equals(invoke(invoke(codecDefaults,"encoder"),"encode",defaulted)))throw new AssertionError("defaulted wire");
+                Class<?> defaultsType=loader.loadClass("RepresentativeGenerated$TypeDefaults");
+                Object classDefaulted=defaultsType.getMethod("decodeWithDefaults",String.class).invoke(null,"{}");
+                if(!Boolean.FALSE.equals(invoke(classDefaulted,"flag")))throw new AssertionError("default class slot");
+                String retained="{\"2\":false,\"seen\":null,\"1\":0}", orderedWire=retained.substring(0,retained.length()-1)+",\"flag\":false}";
+                Object ordered=invoke(codecDefaults,"decodeWithDefaults",retained);
+                if(!Boolean.FALSE.equals(invoke(ordered,"flag")) || !(invoke(ordered,"seen") instanceof NullSlot<?>))throw new AssertionError("ordered declared slots");
+                Map<?,?> extra=(Map<?,?>)invoke(ordered,"extra");
+                if(!new BooleanValue(false).equals(extra.get("2")) || !num(java.math.BigInteger.ZERO).equals(extra.get("1")))throw new AssertionError("ordered extra slots");
+                if(!orderedWire.equals(invoke(invoke(codecDefaults,"encoder"),"encode",ordered)))throw new AssertionError("ordered generated codec wire");
+                Object orderedClass=defaultsType.getMethod("decodeWithDefaults",String.class).invoke(null,retained);
+                if(!orderedWire.equals(invoke(orderedClass,"encode")))throw new AssertionError("ordered generated class wire");
                 String neverName=(String)((Map<?,?>)generated.getField("TYPE_NAMES").get(null)).get("never");
                 Class<?> neverType=loader.loadClass("RepresentativeGenerated$"+neverName);
                 if(java.util.Arrays.stream(neverType.getDeclaredConstructors()).anyMatch(constructor->java.lang.reflect.Modifier.isPublic(constructor.getModifiers())))

@@ -11,6 +11,17 @@ typescript/dist/
 typescript/.package-consumer/
 typescript/*.tgz
 python/dist/
+python-http-adapter/dist/
+python-http-adapter/.clean-install*/
+python-http-adapter/.pytest_cache/
+python-http-adapter/.mypy_cache/
+typescript-http-adapter/node_modules/
+typescript-http-adapter/dist/
+typescript-http-adapter/*.tgz
+typescript-http-adapter/.package-consumer/
+java-http-adapter/build/
+gleam-http-adapter/build
+gleam-http-adapter/*.tar
 python/.clean-install*/
 python/.verify-*/
 java/build/

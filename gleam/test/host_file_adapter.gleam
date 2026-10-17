@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: 2026 barineco
 // SPDX-License-Identifier: MIT
 
-// Test-only real filesystem boundary for the pure File effect API.
 import gleam/list
 import gleam/string
 import necoherence/core
@@ -30,8 +29,6 @@ fn host_path(path: files.NormalizedPath) -> String {
   "/" <> string.join(path.segments, "/")
 }
 
-// The adapter's content projection is intentionally opaque; host bytes are
-// observed at the FFI boundary and the pure effect receives a closed value.
 fn bytes(_text: String) -> List(Int) {
   [1]
 }

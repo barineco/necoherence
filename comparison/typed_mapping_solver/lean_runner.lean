@@ -4,17 +4,7 @@
 import NecoherenceTools.TypedMappingSolver
 import Lean.Data.Json
 
-/-!
-Lean runner for the typed-mapping-solver comparison harness.
 
-Reads the shared fixtures document (path from `TMS_FIXTURES`, defaulting to
-the declared harness location `../../comparison/typed_mapping_solver/
-fixtures.json` (the same document the declared verification argv pipes on
-stdin; `lake env lean` does not surface redirected stdin to `#eval`), decodes
-each `SolverInput`, executes the four public operations of
-`Necoherence.TypedMapping` and `NecoherenceTools.TypedMappingSolver`, and writes the canonical result document
-to stdout as JSON.
--/
 
 open Necoherence
 open NecoherenceTools
@@ -143,7 +133,7 @@ private def decInput (j : Json) : Except String SolverInput := do
            marking := ← decMarking (← jfield j "marking"),
            bound := ← decBound (← jfield j "bound") }
 
-/-! Canonical result encoding -/
+
 
 private def encTokenKind : TokenKind → String
   | .input => "input"

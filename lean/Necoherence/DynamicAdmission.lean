@@ -1,20 +1,7 @@
 -- SPDX-FileCopyrightText: 2026 barineco
 -- SPDX-License-Identifier: MIT
 
-/-
-Dynamic admission over `RequestProgression`.
 
-`AdmissionProvenance` is an explicit input: future uses and outstanding
-adapter signals are never inferred from a snapshot. `admitDynamicRequest`
-computes an effective safety budget from a configured limit and an observed
-capacity, coalesces an identical restored pending request idempotently, and
-otherwise connects straight through to `RequestProgression.submit` and
-`RequestProgression.decideStart`. Adapter observations are applied separately
-through `RequestProgression.applyStartObservation` and
-`RequestProgression.applyCompletionObservation`. `elideAdmissionProvenance` is
-the only operation that mutates state, and only when the target terminal entry
-carries no live future use or outstanding signal.
--/
 
 import Necoherence.Core
 import Necoherence.RequestProgression
@@ -131,13 +118,13 @@ structure DynamicAdmissionResult where
   coalescingWitness : CoalescingWitness
   deriving DecidableEq, Repr
 
-/-! ### Private helpers -/
 
-/-- `RequestProgression.findEntry`'s own copy, kept private to this file. -/
+
+
 private def findByIdentity (entries : List RequestEntry) (identity : RequestIdentity) : Option RequestEntry :=
   entries.find? (fun entry => entry.identity == identity)
 
-/-- `RequestProgression.replaceEntry`'s own copy, kept private to this file. -/
+
 private def replaceByIdentity (entries : List RequestEntry) (identity : RequestIdentity) (replacement : RequestEntry) :
     List RequestEntry :=
   entries.map (fun entry => if entry.identity == identity then replacement else entry)
@@ -145,13 +132,13 @@ private def replaceByIdentity (entries : List RequestEntry) (identity : RequestI
 private def minLimit (a b : ConfiguredSafetyLimit) : ConfiguredSafetyLimit :=
   { resource := a.resource, maximum := min a.maximum b.maximum }
 
-/-- Effective budget: componentwise min of `configured` and `observed`, keeping `configured`'s resource labels. -/
+
 private def effectiveBudgetOf (configured observed : ResourceBudget) : EffectiveBudget :=
   { pendingMaximum := minLimit configured.pendingMaximum observed.pendingMaximum,
     inFlightMaximum := minLimit configured.inFlightMaximum observed.inFlightMaximum,
     concurrentMaximum := minLimit configured.concurrentMaximum observed.concurrentMaximum }
 
-/-- First axis, if any, whose `configured` and `observed` resource labels disagree. -/
+
 private def resourceCoordinateMismatch (configured observed : ResourceBudget) : Option (String × String) :=
   if configured.pendingMaximum.resource != observed.pendingMaximum.resource then
     some (configured.pendingMaximum.resource, observed.pendingMaximum.resource)
@@ -161,18 +148,14 @@ private def resourceCoordinateMismatch (configured observed : ResourceBudget) : 
     some (configured.concurrentMaximum.resource, observed.concurrentMaximum.resource)
   else none
 
-/--
-Age of the capacity observation relative to `input.observedAt`. An observation taken after
-`input.observedAt` (a future-dated observation) is folded to strictly exceed `maxObservationAge`, so the
-single `age > maxObservationAge` test used by `admitDynamicRequest` also rejects time reversal.
--/
+
 private def observationAge (input : DynamicAdmissionInput) : Nat :=
   if input.observedAt < input.capacityObservation.observedAt then
     (input.capacityObservation.observedAt - input.observedAt) + input.environmentSpecification.maxObservationAge + 1
   else
     input.observedAt - input.capacityObservation.observedAt
 
-/-- Closed check of `RequestInput.permission` against `RequestInput.identity`; `none` means permitted. -/
+
 private def permissionCheck (request : RequestInput) : Option DynamicAdmissionFailure :=
   match request.permission with
   | .denied identity reason =>
@@ -186,7 +169,7 @@ private def permissionCheck (request : RequestInput) : Option DynamicAdmissionFa
     if permIdentity == request.identity then none
     else some (.permissionIdentityMismatch request.identity permIdentity)
 
-/-- A `Pending` entry that matches `request`'s identity, footprint, demand, and permission exactly. -/
+
 private def samePendingEntry (entry : RequestEntry) (request : RequestInput) : Bool :=
   entry.phase == .pending &&
   entry.identity == request.identity &&
@@ -194,7 +177,7 @@ private def samePendingEntry (entry : RequestEntry) (request : RequestInput) : B
   entry.demand == request.demand &&
   entry.meaningPermission == request.permission
 
-/-- The existing pending entry that `request` would idempotently coalesce into, if any. -/
+
 private def matchingPendingDuplicate (snapshot : RequestProgressionSnapshot) (request : RequestInput) :
     Option RequestEntry :=
   match findByIdentity snapshot.entries request.identity with
@@ -219,13 +202,13 @@ private def eraseMeaningPermissionEvidence : MeaningPermission → MeaningPermis
   | .ordered identity _ => .ordered identity []
   | .denied identity reason => .denied identity reason
 
-/-- Clear one entry's footprint reads/writes and permission evidence, keeping identity, demand, and phase. -/
+
 private def eraseEntryProvenance (entry : RequestEntry) : RequestEntry :=
   { entry with
     footprint := { entry.footprint with reads := [], writes := [] },
     meaningPermission := eraseMeaningPermissionEvidence entry.meaningPermission }
 
-/-! ### Public operations -/
+
 
 /--
 Elide one terminal entry's provenance. Unknown or non-terminal identities are closed failures. A live
@@ -358,7 +341,7 @@ def admitDynamicRequest (input : DynamicAdmissionInput) :
                         provenanceErasureWitness := none,
                         coalescingWitness := .notCoalesced "no duplicate pending request" }
 
-/-! ### Theorems -/
+
 
 /-- A future-dated capacity observation always exceeds the age threshold, so admission is rejected. -/
 theorem future_observation_is_rejected (input : DynamicAdmissionInput)

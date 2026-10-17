@@ -406,10 +406,10 @@ instance : Wire ResourceBounds where
     pure { maxBindings := ← get json "max_bindings", maxSearchSteps := ← get json "max_search_steps", maxTokens := ← get json "max_tokens" }
 
 instance : Wire SearchBounds where
-  encode value := Json.mkObj [("max_expanded_states", encode value.maxExpandedStates), ("max_binding_candidates", encode value.maxBindingCandidates), ("max_type_obligations", encode value.maxTypeObligations), ("max_branch_nodes", encode value.maxBranchNodes), ("resource_bounds", encode value.resourceBounds)]
+  encode value := Json.mkObj [("max_expanded_states", encode value.maxExpandedStates), ("max_binding_candidates", encode value.maxBindingCandidates), ("max_type_obligations", encode value.maxTypeObligations), ("max_branch_nodes", encode value.maxBranchNodes), ("resource_bounds", encode value.resourceBounds), ("max_sample_length", encode value.maxSampleLength)]
   decode json := do
-    keys json ["max_expanded_states", "max_binding_candidates", "max_type_obligations", "max_branch_nodes", "resource_bounds"]
-    pure { maxExpandedStates := ← get json "max_expanded_states", maxBindingCandidates := ← get json "max_binding_candidates", maxTypeObligations := ← get json "max_type_obligations", maxBranchNodes := ← get json "max_branch_nodes", resourceBounds := ← get json "resource_bounds" }
+    keys json ["max_expanded_states", "max_binding_candidates", "max_type_obligations", "max_branch_nodes", "resource_bounds", "max_sample_length"]
+    pure { maxExpandedStates := ← get json "max_expanded_states", maxBindingCandidates := ← get json "max_binding_candidates", maxTypeObligations := ← get json "max_type_obligations", maxBranchNodes := ← get json "max_branch_nodes", resourceBounds := ← get json "resource_bounds", maxSampleLength := ← get json "max_sample_length" }
 
 structure CauseBinding where
   function : FunctionRef

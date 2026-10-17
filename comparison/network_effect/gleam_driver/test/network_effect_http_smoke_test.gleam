@@ -7,9 +7,10 @@ import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/string
-import necoherence/http_adapter
 import necoherence/network_effect as effect
+import necoherence/network_host as host
 import necoherence/request_progression as progression
+import necoherence_http_adapter as http_adapter
 
 type Peer
 
@@ -173,6 +174,18 @@ fn failure_from_observation(
   let assert effect.Delivered(_, effect.FailureObservation(_, _, _, failure, _)) =
     observation
   failure
+}
+
+pub fn host_port_preserves_failed_start_test() {
+  let input = input_for("ftp://example.test/", [], 0, None, None, None)
+  let #(_, _, _, command) = command_for(input)
+  let port = http_adapter.host_port(http_adapter.default_ports())
+  let assert host.StartFailed(failure, status) =
+    host.start_with_ports(command, port)
+  let assert http_adapter.StartFailed(expected_failure, expected_status) =
+    http_adapter.start(command)
+  assert failure == expected_failure
+  assert status == expected_status
 }
 
 pub fn loopback_preserves_response_and_three_counts_test() {

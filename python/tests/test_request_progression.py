@@ -1,7 +1,6 @@
 # SPDX-FileCopyrightText: 2026 barineco
 # SPDX-License-Identifier: MIT
 
-"""Property and unit tests for request progression's split lifecycle."""
 
 from __future__ import annotations
 

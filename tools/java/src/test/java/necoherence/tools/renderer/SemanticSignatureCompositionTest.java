@@ -65,8 +65,8 @@ public final class SemanticSignatureCompositionTest {
           public static void main(String[] args)throws Exception {
             AtomicInteger handled=new AtomicInteger();
             HostAdapter adapter=new HostAdapter(){
-              public JavaHttpAdapter.StartResult start(NetworkEffect.SendCommand command){throw new AssertionError("external completion issued HTTP");}
-              public JavaHttpAdapter.PollResult observe(NetworkEffect.StartedAttempt started){throw new AssertionError("external completion observed HTTP");}
+              public NetworkEffect.StartObservation start(NetworkEffect.SendCommand command){throw new AssertionError("external completion issued HTTP");}
+              public NetworkEffect.HostObservation observe(NetworkEffect.StartedAttempt started){throw new AssertionError("external completion observed HTTP");}
             };
             var providers=new CoveredSignatures.Providers(
               new CoveredSignatures.ExampleOperationHttpBinding(

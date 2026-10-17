@@ -10,7 +10,7 @@ import re
 import json
 from necoherence.signature_values import payload, sum_tag, variant
 
-_RESERVED = {"extras", "decode", "encode", "examples", "__post_init__", "__dict__", "__class__", "__weakref__"}
+_RESERVED = {"extras", "decode", "encode", "examples", "__post_init__", "__dict__", "__class__", "__weakref__", "_member_order", "_dataclass_field"}
 
 
 def _identifier(text, prefix="value"):
@@ -41,10 +41,10 @@ class _Emitter:
     def emit(self, *lines): self.lines.extend(lines)
 
     def header(self):
-        self.emit("# SPDX-FileCopyrightText: 2026 barineco", "# SPDX-License-Identifier: MIT", "import base64", "from dataclasses import dataclass", "from decimal import Decimal", "from typing import TypeAlias", "from necoherence.signature_values import DecimalLiteral, HttpBinding, Uninhabited, ValueContext, selectBranch, withMember, wrapDecode, wrapEncode", "", "_ctx = ValueContext(" + repr(self.graph) + ")", "")
+        self.emit("# SPDX-FileCopyrightText: 2026 barineco", "# SPDX-License-Identifier: MIT", "import base64", "from dataclasses import dataclass, field as _dataclass_field", "from decimal import Decimal", "from typing import TypeAlias", "from necoherence.signature_values import DecimalLiteral, HttpBinding, Uninhabited, ValueContext, ordered_object, selectBranch, withMember, wrapDecode, wrapEncode", "", "_ctx = ValueContext(" + repr(self.graph) + ")", "")
 
     def types(self):
-        for node in self.graph["nodes"]:
+        for node in self.input["signatures"]["nodes"]:
             reference, shape = node["id"], node["shape"]
             name, kind, spec = self.names[reference], sum_tag(shape), payload(shape)
             if kind == "Never":
@@ -56,6 +56,7 @@ class _Emitter:
                     default = " = None" if not contract["required"] or contract["nullable"] else ""
                     self.emit(f"    {attribute}: object{default}")
                 if sum_tag(spec["extras"]) == "Allow": self.emit("    extras: tuple[tuple[str, object], ...] = ()")
+                self.emit("    _member_order: tuple[str, ...] = _dataclass_field(default=(), init=False, repr=False, compare=False)")
                 self.emit("")
             elif kind == "Sealed":
                 model = self.graph["profile"]["tag"]
@@ -87,10 +88,14 @@ class _Emitter:
 
     def _codec(self, reference, shape):
         name, kind, spec = self.names[reference], sum_tag(shape), payload(shape)
-        self.emit(f"def decode_{name}(value):", f"    _ctx.validate({reference!r}, value)")
+        self.emit(f"def decode_with_defaults_{name}(text):", f"    defaulted = _ctx.decode_with_defaults({reference!r}, text)", f"    return decode_{name}(_ctx.validate({reference!r}, defaulted.value))", "")
+        self.emit(f"def decode_{name}(value):", f"    value = _ctx.validate({reference!r}, value)")
         if kind == "Product":
             args = ", ".join(f"{attribute}=value.get({wire!r})" for wire, attribute, _ in _fields(spec))
-            self.emit(f"    return {name}({args})")
+            if sum_tag(spec["extras"]) == "Allow":
+                known = tuple(wire for wire, _, _ in _fields(spec))
+                args += (", " if args else "") + f"extras=tuple((key, item) for key, item in value.items() if key not in {known!r})"
+            self.emit(f"    result = {name}({args})", "    object.__setattr__(result, '_member_order', tuple(value))", "    return result")
         elif kind == "Sealed":
             _, _, fields = self.sealed_fields[reference]
             args=", ".join(f"{attribute}=value.get({wire!r})" for wire,attribute,_ in fields)
@@ -112,8 +117,8 @@ class _Emitter:
                 if contract["required"]:
                     self.emit(f"    result[{wire!r}] = value.{attribute}")
                 else:
-                    self.emit(f"    if value.{attribute} is not None: result[{wire!r}] = value.{attribute}")
-            self.emit("    if hasattr(value, 'extras'): result.update(value.extras)", f"    _ctx.validate({reference!r}, result)", "    return result")
+                    self.emit(f"    if value.{attribute} is not None or {wire!r} in value._member_order: result[{wire!r}] = value.{attribute}")
+            self.emit("    if hasattr(value, 'extras'): result.update(value.extras)", f"    _ctx.validate({reference!r}, result)", "    return ordered_object(result, value._member_order)")
         elif kind == "Sealed":
             key,tag_value,fields=self.sealed_fields[reference]
             self.emit("    result = {}")

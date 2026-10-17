@@ -4,8 +4,7 @@
 """Consume only the canonical ``normalized-analysis`` major-1 schema.
 
 The consumer validates canonical JSON bytes, closed normalized-analysis relations,
-findings, the reduced AnalysisInput, and the residual coherence report. It does
-not accept legacy schema names or provide conversion fallbacks.
+findings, the reduced AnalysisInput, and the residual coherence report.
 """
 
 from __future__ import annotations

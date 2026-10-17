@@ -43,7 +43,18 @@ Necoherence は、次の 6 つの言語に向けて実装を提供していま�
 - [Java](java/): Java 21 に対応
 - [Gleam](gleam/): Erlang ターゲットに対応
 
-Lean の実装は、仕様を実行できる定義の形で書いたものです。他の 5 言語の実装については、結果を Lean の定義の結果と照合して検証しています。各実装の版はいずれも `0.1.0` で、ビルドとテストの手順は各ディレクトリの `README-ja.md` に書いてあります。
+Lean の実装は、仕様を実行できる定義の形で書いたものです。他の 5 言語の実装については、結果を Lean の定義の結果と照合して検証しています。各実装の版は、いずれも `0.2.0` です。ビルドとテストの手順は、各ディレクトリの日本語の README に書いてあります。
+
+HTTP の実行は任意です。
+Rust では、feature の `http-adapter` で有効にします。
+ほかの実行時の実装で HTTP を実行するのは、次の独立したアダプターのパッケージです。
+
+- [Python の HTTP アダプター](python-http-adapter/)
+- [TypeScript の HTTP アダプター](typescript-http-adapter/)
+- [Java の HTTP アダプター](java-http-adapter/)
+- [Gleam の HTTP アダプター](gleam-http-adapter/)
+
+核のパッケージが持つのは、ネットワーク副作用の台帳と、呼び出し側が渡すポートを通して観測を受け取る仕組みです。
 
 ## 検証
 

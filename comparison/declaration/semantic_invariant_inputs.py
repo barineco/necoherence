@@ -220,6 +220,29 @@ def generate():
         _case("bytes-either-reject", "value", "BytesAlphabet.Either", library=subject,
               type_id="bytes", value={"bytes": "?"}),
     ]
+    internal = copy.deepcopy(subject)
+    internal["profile"]["tag"] = {"key": "$type", "format": "text", "sealed": []}
+    internal["nodes"] = [
+        {"id": "text", "shape": tagged("String", string_spec())},
+        *[{"id": name, "shape": tagged("Product", {"fields": [
+            {"wire_name": "$type", "slot": {"type_id": "text", "required": True, "nullable": False}}
+        ], "extras": tagged("Reject")})} for name in ("a", "b")],
+        {"id": "union", "shape": tagged("TaggedUnion", {"branches": [
+            {"target": name, "wire_tag": "com.example." + name, "selector": tagged("InternalTag")}
+            for name in ("a", "b")
+        ]})},
+    ]
+    internal["definitions"][0]["shape"] = tagged("Value", "union")
+    cases.append(_case("internal-tags-distinct", "library", "library-roundtrip", library=internal))
+    for name, selector in (("kind", tagged("Kind", tagged("Null"))),
+                           ("member-shape", tagged("MemberShape", [{"key": "key", "test": tagged("Absent")}]))):
+        duplicate = copy.deepcopy(internal)
+        for branch in duplicate["nodes"][-1]["shape"]["value"]["branches"]:
+            branch["selector"] = copy.deepcopy(selector)
+        cases.append(_case("duplicate-selection-" + name, "library", "LB18", library=duplicate))
+    for name in ("a", "b", "unknown"):
+        cases.append(_case("internal-tag-selection-" + name, "value", "internalTag",
+                           library=internal, type_id="union", value={"$type": "com.example." + name}))
     for identity, source, destination, rule in [
         ("c1", "not-a", "not-a", "C1"),
         ("c2", "c2-source", "c2-destination", "C2"),
@@ -239,6 +262,18 @@ def generate():
     for type_id in ("text", "not-a", "sequence", "wrapped-text", "narrow", "sealed", "union", "ordinary", "extras", "never"):
         cases.append(_case("samples-" + type_id, "samples", "samples", library=subject,
                            type_id=type_id, max_type_obligations="64", max_sample_length="32"))
+    for name, maximum in (("null", None), ("three", "3")):
+        identifier = copy.deepcopy(subject)
+        identifier["profile"]["format_bindings"].append({
+            "name": "identifier-optional-maximum",
+            "reference": identifier["profile"]["reference"],
+            "rule": tagged("Identifier", fields={
+                "first_alphabet": "ab", "rest_alphabet": "ab", "exact_length": None,
+                "min_length": "1", "max_length": maximum, "forbidden": [],
+            }),
+        })
+        cases.append(_case("profile-identifier-maximum-" + name, "profile",
+                           "profile-roundtrip", library=identifier))
     return cases
 
 

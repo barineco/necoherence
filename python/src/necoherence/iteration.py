@@ -72,7 +72,6 @@ def _call_io[S, P](step: Immediate[S, P], state: S, step_fields: tuple[str, ...]
     return io(step, Request(payload=state, fields=step_fields))
 
 
-# -- fold: the bound is an input field ---------------------------------------
 
 
 @dataclass(frozen=True, slots=True)
@@ -117,11 +116,6 @@ type FoldOutcome[S] = FoldTrace[S] | FoldStopped[S]
 
 
 def _fold_output[S](req: FoldReq[S]) -> FoldOutcome[S]:
-    """Call ``req.step`` through ``io``, ``req.count`` times from ``req.seed``.
-
-    Stops at the first round whose ``io`` call returns ``ProjectionFailed``
-    and reports that round's position; otherwise runs every round.
-    """
     states: list[S] = [req.seed]
     state = req.seed
     for position in range(req.count):
@@ -142,7 +136,6 @@ fold: Immediate[FoldReq[Any], FoldOutcome[Any]] = immediate_of(
 )
 
 
-# -- recurse: the bound is the first round's own measure ---------------------
 
 
 @dataclass(frozen=True, slots=True)
@@ -214,13 +207,6 @@ type RecurseOutcome[S] = (
 
 
 def _recurse_output[S](req: RecurseReq[S]) -> RecurseOutcome[S]:
-    """Call ``req.step`` through ``io`` from ``req.seed`` until it settles.
-
-    Each round's measure must be strictly less than the prior round's; the
-    first round's measure sets the bound and is not itself checked against
-    one. A round that does not decrease, or whose ``io`` call fails to
-    project, returns as a declared branch instead of continuing.
-    """
     state = req.seed
     previous_measure: Measure | None = None
     position = 0
@@ -251,7 +237,6 @@ recurse: Immediate[RecurseReq[Any], RecurseOutcome[Any]] = immediate_of(
 )
 
 
-# -- closure: the bound is the carrier's size ---------------------------------
 
 
 @dataclass(frozen=True, slots=True)
@@ -314,14 +299,6 @@ type ClosureOutcome[T] = (
 
 
 def _closure_output[T](req: ClosureReq[T]) -> ClosureOutcome[T]:
-    """Call ``req.step`` through ``io`` from ``req.seed`` until the set stops growing.
-
-    Each round's output must be a superset of that round's own input and a
-    subset of ``req.carrier``; either failing returns as a declared branch.
-    The residual (``len(carrier) - len(current)``) strictly decreases on
-    every round that grows the set, so a well-behaved step terminates
-    within ``len(carrier)`` rounds.
-    """
     current = req.seed
     position = 0
     while True:

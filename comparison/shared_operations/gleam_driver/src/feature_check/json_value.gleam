@@ -6,9 +6,6 @@ import gleam/int
 import gleam/list
 import gleam/string
 
-/// A minimal JSON value tree, used internally by the inspection adapter to
-/// read and write arbitrary opaque payload fields the way the Lean adapter
-/// does.
 pub type JsonValue {
   JNull
   JBool(Bool)
@@ -68,7 +65,6 @@ pub fn set_field(
   }
 }
 
-// ### Printer
 
 pub fn to_json_string(value: JsonValue) -> String {
   case value {
@@ -117,7 +113,6 @@ fn escape_grapheme(g: String) -> String {
   }
 }
 
-// ### Parser
 
 pub fn parse(input: String) -> Result(JsonValue, String) {
   case parse_value(string.trim(input) |> string.to_graphemes) {

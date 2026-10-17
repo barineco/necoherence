@@ -27,7 +27,7 @@ import necoherence.progression.ResourceDemand;
 import necoherence.progression.StartDecisionResult;
 import org.junit.jupiter.api.Test;
 
-/** Tests dynamic admission's submit-to-decide-start boundary. */
+
 final class AdmissionTest {
     private static Nat n(long value) { return Nat.fromLong(value); }
     private static ResourceBudget budget(long pending, long inFlight, long concurrent) {

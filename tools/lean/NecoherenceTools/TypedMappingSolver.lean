@@ -3,15 +3,12 @@
 
 import Necoherence.TypedMapping
 
-/-
-Bounded search over typed mappings: reachability, deadlock and
-well-foundedness checks and their soundness theorems.
--/
+
 
 namespace NecoherenceTools
 open Necoherence
 
-/-! Bounded reachability exploration -/
+
 
 private def neighborsFrom (input : SolverInput)
     (transitions : List TypedTransition) (path : List String) (m : Marking) :
@@ -568,7 +565,7 @@ theorem bindingBoundExhaustionIsUnknown (input : SolverInput)
     checkReachability input = .unknown (.bindingBoundExhausted input.bound.maxBindings) := by
   simp [checkReachability, hvalid, hbound]
 
-/-! Deadlock -/
+
 
 def checkDeadlock (input : SolverInput) : DeadlockResult :=
   match validate input with
@@ -613,7 +610,7 @@ theorem deadlockGoalSeparation (input : SolverInput) (w : DeadlockWitness)
           refine ⟨hg', ?_⟩
           simp [checkDeadlockGoalSeparation, hg']
 
-/-! Well-foundedness -/
+
 
 def totalTokens (m : Marking) : Nat :=
   m.places.foldl (fun acc p => acc + p.2.length) 0
