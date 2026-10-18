@@ -161,7 +161,7 @@ dependencies = [
 
 [[package]]
 name = "host_failure_driver"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "necoherence",
  "serde",
@@ -269,7 +269,7 @@ dependencies = [
 
 [[package]]
 name = "necoherence"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "num-bigint",
  "num-traits",

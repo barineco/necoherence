@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
 name = "necoherence_tools"
-version = "0.2.0"
+version = "0.2.1"
 gleam = ">= 1.17.0 and < 2.0.0"
 description = "Search, derivation, and code generation tools for necoherence"
 licences = ["AGPL-3.0-only"]

@@ -3,7 +3,8 @@
 [プロジェクトの概要](https://github.com/barineco/necoherence/blob/publish/README-ja.md) | [English](README.md)
 
 このパッケージは、Necoherence の Java による実装で、Java 21 で使えます。
-ソースから `build/necoherence-0.2.0.jar` をビルドし、その jar をクラスパスに加えて使います。
+Maven の座標は `io.github.barineco:necoherence:0.2.1` です。
+ソースから jar をビルドし、クラスパスに加えて使うこともできます。
 依存するのは JDK だけです。
 
 ## 意味プロファイルの受け入れ
@@ -61,26 +62,76 @@ static WireValue decide(WireValue expected, List<WireValue> sources,
 ## ビルドとテスト
 
 テストには、JUnit Platform Console Standalone 1.10.2 を使います。
-次のコマンドで、この jar を Maven Central から `lib/` へ取得し、SHA-256 のダイジェストを確かめてから、ビルド、テスト、`build/necoherence-0.2.0.jar` の作成までを行います。
+`java/` で次のコマンドを実行すると、テストの実行器を Maven Central から `lib/` へ取得し、SHA-256 のダイジェストを確かめます。
+続けて、公開物を 2 つともビルドし、核のテストを実行します。
 
 ```bash
-mkdir -p lib build/classes build/test-classes
+../scripts/build-maven.sh build
+mkdir -p lib build/test-classes
 curl --fail --location --silent --show-error \
   --output lib/junit-platform-console-standalone-1.10.2.jar \
   https://repo1.maven.org/maven2/org/junit/platform/junit-platform-console-standalone/1.10.2/junit-platform-console-standalone-1.10.2.jar
 printf '%s  %s\n' \
   a1de557821293ce903c213c694165fff532cf92081bac4238b9e05b35f04f43f \
   lib/junit-platform-console-standalone-1.10.2.jar | shasum -a 256 -c -
-find src/main/java -name '*.java' -print0 \
-  | xargs -0 javac -J-Duser.language=en --release 21 -d build/classes
 find src/test/java -name '*.java' -print0 \
   | xargs -0 javac -J-Duser.language=en --release 21 \
-      -cp "build/classes:lib/junit-platform-console-standalone-1.10.2.jar" \
+      -cp "build/maven/io/github/barineco/necoherence/0.2.1/necoherence-0.2.1.jar:lib/junit-platform-console-standalone-1.10.2.jar" \
       -d build/test-classes
 java -Duser.language=en -jar lib/junit-platform-console-standalone-1.10.2.jar execute \
-  --class-path build/classes:build/test-classes --scan-class-path
-jar --create --file build/necoherence-0.2.0.jar -C build/classes .
+  --class-path build/maven/io/github/barineco/necoherence/0.2.1/necoherence-0.2.1.jar:build/test-classes --scan-class-path
 ```
+
+## Maven Central の公開物
+
+JDK 21 を `PATH` に置き、リポジトリの root で次を実行します。
+
+```sh
+scripts/build-maven.sh build
+# 出力先に新しいディレクトリを指定する場合:
+# scripts/build-maven.sh build /path/to/new-output
+```
+
+既定の出力先は `java/build/maven/` で、Git の追跡の対象外です。
+出力先には、新しく作るディレクトリを指定します。
+核とアダプターのそれぞれについて、次の 4 つのファイルが版のディレクトリに書き出されます。
+
+- バイナリの jar
+- ソースの jar
+- Javadoc の jar
+- POM
+
+版のディレクトリの位置は次のとおりです。
+
+```text
+io/github/barineco/<artifactId>/0.2.1/
+```
+
+ビルドに必要なのは、JDK 21 と標準のシェルのユーティリティです。
+ソースと jar のエントリーを整列し、jar の時刻を一定の値にし、Javadoc の出力からは時刻を除くため、同じ JDK 21 のビルドからは同じファイルが得られます。
+コメントの欠落は、ビルドの中の Javadoc の検証が警告として報告する形です。
+
+署名は、ビルドやテストとは別の、明示的な公開の操作です。
+GPG に署名の鍵を設定し、その鍵の ID を環境変数 `NECOHERENCE_GPG_KEY` に入れてから実行します。
+
+```sh
+scripts/build-maven.sh bundle
+# ビルドで出力先を指定した場合は、同じディレクトリを渡す:
+# scripts/build-maven.sh bundle /path/to/new-output
+```
+
+この段は、jar と POM のそれぞれに署名し、署名とチェックサムを隣に書き出したうえで、出力先に upload 用の zip を作ります。
+必要なツールは次の 3 つです。
+
+- GPG
+- OpenSSL
+- zip
+
+鍵は手元の GPG の鍵束に置いたままで、Maven Central へのアップロードは別の手作業の段になります。
+zip の構成は、Central Portal の次の 2 つの文書に従います。
+
+- [bundle の配置](https://central.sonatype.org/publish/publish-portal-upload/)
+- [公開物の要件](https://central.sonatype.org/publish/requirements/)
 
 ## ライセンス
 

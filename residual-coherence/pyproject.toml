@@ -7,13 +7,18 @@ build-backend = "hatchling.build"
 
 [project]
 name = "residual-coherence"
-version = "0.2.0"
+version = "0.2.1"
 description = "Residual coherence validation and analysis exchange tools"
 readme = "README.md"
 license = {text = "AGPL-3.0-only"}
 license-files = ["LICENSE", "schema/LICENSE"]
 requires-python = ">=3.12"
 dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/barineco/necoherence"
+Repository = "https://github.com/barineco/necoherence"
+Issues = "https://github.com/barineco/necoherence/issues"
 
 [project.optional-dependencies]
 dev = ["pytest", "mypy", "build"]

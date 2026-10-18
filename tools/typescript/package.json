@@ -1,6 +1,6 @@
 {
   "name": "necoherence-tools",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Code generators for necoherence",
   "license": "AGPL-3.0-only",
   "private": true,

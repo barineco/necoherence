@@ -2,10 +2,13 @@
 # SPDX-License-Identifier: MIT
 
 name = "necoherence"
-version = "0.2.0"
+version = "0.2.1"
 gleam = ">= 1.17.0 and < 2.0.0"
 description = "Revision-aware state transition utilities for Gleam"
 licences = ["MIT"]
+
+repository = { type = "github", user = "barineco", repo = "necoherence", path = "gleam" }
+links = [{ title = "Homepage", href = "https://github.com/barineco/necoherence" }]
 
 [dependencies]
 gleam_stdlib = ">= 1.0.0 and < 2.0.0"

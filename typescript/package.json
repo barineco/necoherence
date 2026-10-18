@@ -1,6 +1,6 @@
 {
   "name": "necoherence",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Revision-aware state transition utilities for TypeScript",
   "license": "MIT",
   "type": "module",
@@ -47,5 +47,14 @@
     "tsx": "^4.19.2",
     "typescript": "^5.7.3",
     "vitest": "^2.1.8"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/barineco/necoherence.git",
+    "directory": "typescript"
+  },
+  "homepage": "https://github.com/barineco/necoherence",
+  "bugs": {
+    "url": "https://github.com/barineco/necoherence/issues"
   }
 }

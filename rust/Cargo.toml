@@ -3,11 +3,16 @@
 
 [package]
 name = "necoherence"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 license = "MIT"
 description = "Revision-aware state transition utilities"
 rust-version = "1.88"
+
+repository = "https://github.com/barineco/necoherence"
+homepage = "https://github.com/barineco/necoherence"
+documentation = "https://docs.rs/necoherence"
+readme = "README.md"
 
 [lib]
 path = "src/lib.rs"

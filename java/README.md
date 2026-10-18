@@ -3,7 +3,8 @@
 [Project overview](https://github.com/barineco/necoherence/blob/publish/README.md) | [日本語](README-ja.md)
 
 This package is the Java implementation of Necoherence, for Java 21.
-You build `build/necoherence-0.2.0.jar` from source and add the jar to the classpath.
+The Maven coordinates are `io.github.barineco:necoherence:0.2.1`.
+You can also build the jar from source and add it to the classpath.
 It depends only on the JDK.
 
 ## Accepting a semantic profile
@@ -61,26 +62,63 @@ Its license is AGPL-3.0-only.
 ## Building and testing
 
 The tests use JUnit Platform Console Standalone 1.10.2.
-The following commands download this jar from Maven Central into `lib/`, check its SHA-256 digest, and then build, test, and package `build/necoherence-0.2.0.jar`:
+From `java/`, the following commands download the test runner from Maven Central into `lib/`, check its SHA-256 digest, build both release artifacts, and run the core tests:
 
 ```bash
-mkdir -p lib build/classes build/test-classes
+../scripts/build-maven.sh build
+mkdir -p lib build/test-classes
 curl --fail --location --silent --show-error \
   --output lib/junit-platform-console-standalone-1.10.2.jar \
   https://repo1.maven.org/maven2/org/junit/platform/junit-platform-console-standalone/1.10.2/junit-platform-console-standalone-1.10.2.jar
 printf '%s  %s\n' \
   a1de557821293ce903c213c694165fff532cf92081bac4238b9e05b35f04f43f \
   lib/junit-platform-console-standalone-1.10.2.jar | shasum -a 256 -c -
-find src/main/java -name '*.java' -print0 \
-  | xargs -0 javac -J-Duser.language=en --release 21 -d build/classes
 find src/test/java -name '*.java' -print0 \
   | xargs -0 javac -J-Duser.language=en --release 21 \
-      -cp "build/classes:lib/junit-platform-console-standalone-1.10.2.jar" \
+      -cp "build/maven/io/github/barineco/necoherence/0.2.1/necoherence-0.2.1.jar:lib/junit-platform-console-standalone-1.10.2.jar" \
       -d build/test-classes
 java -Duser.language=en -jar lib/junit-platform-console-standalone-1.10.2.jar execute \
-  --class-path build/classes:build/test-classes --scan-class-path
-jar --create --file build/necoherence-0.2.0.jar -C build/classes .
+  --class-path build/maven/io/github/barineco/necoherence/0.2.1/necoherence-0.2.1.jar:build/test-classes --scan-class-path
 ```
+
+## Maven Central release artifacts
+
+From the repository root with JDK 21 on `PATH`:
+
+```sh
+scripts/build-maven.sh build
+# Or select a new, caller-owned output directory:
+# scripts/build-maven.sh build /path/to/new-output
+```
+
+The default output directory is `java/build/maven/`, which Git ignores.
+The script requires a new output directory.
+For each of the core and the adapter, it writes four files under `io/github/barineco/<artifactId>/0.2.1/`:
+
+- the binary jar
+- the sources jar
+- the Javadoc jar
+- the POM
+
+The build needs JDK 21 and standard POSIX shell utilities.
+Sources and jar entries are sorted, jar timestamps are fixed, and Javadoc output carries no timestamps, so the same JDK 21 build reproduces the same files.
+Javadoc validation runs during the build and reports missing comments as warnings.
+
+Signing is a separate, explicit release operation, never part of building or tests.
+With a signing key already configured in GPG, set `NECOHERENCE_GPG_KEY` to its key id:
+
+```sh
+scripts/build-maven.sh bundle
+# With a custom build directory, pass that same directory:
+# scripts/build-maven.sh bundle /path/to/new-output
+```
+
+For each jar and POM, this step signs the file with GPG and writes the signature and the MD5 and SHA-1 checksums next to it.
+It then creates `central-bundle-0.2.1.zip` in the output directory.
+The step requires GPG, OpenSSL, and `zip`.
+The key stays in the local GPG keyring, and the upload to Maven Central is a separate manual step.
+The zip follows the [Central Portal bundle layout](https://central.sonatype.org/publish/publish-portal-upload/)
+and [artifact requirements](https://central.sonatype.org/publish/requirements/).
 
 ## License
 

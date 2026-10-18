@@ -7,12 +7,18 @@ build-backend = "hatchling.build"
 
 [project]
 name = "necoherence"
-version = "0.2.0"
+version = "0.2.1"
 description = "Revision-aware state transition utilities for Python"
+readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.12"
 dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/barineco/necoherence"
+Repository = "https://github.com/barineco/necoherence"
+Issues = "https://github.com/barineco/necoherence/issues"
 
 [project.optional-dependencies]
 dev = ["pytest", "hypothesis", "mypy"]

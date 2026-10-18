@@ -36,6 +36,7 @@ path = [
   "typescript/tests/synthetic-profile.json",
   "residual-coherence/schema/*",
   "presets/**/*.json",
+  "scripts/build-maven.sh",
 ]
 SPDX-FileCopyrightText = "2026 barineco"
 SPDX-License-Identifier = "MIT"
@@ -43,6 +44,8 @@ SPDX-License-Identifier = "MIT"
 [[annotations]]
 path = [
   "tools/LICENSE",
+  "tools/rust/README.md",
+  "tools/rust/LICENSE",
   "tools/gleam/manifest.toml",
   "tools/lean/lake-manifest.json",
   "tools/lean/lean-toolchain",

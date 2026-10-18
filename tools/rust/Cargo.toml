@@ -3,19 +3,24 @@
 
 [package]
 name = "necoherence-tools"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 license = "AGPL-3.0-only"
 description = "Search, derivation and code generation tools for necoherence"
 rust-version = "1.88"
-publish = false
+
+repository = "https://github.com/barineco/necoherence"
+homepage = "https://github.com/barineco/necoherence"
+documentation = "https://docs.rs/necoherence-tools"
+readme = "README.md"
+include = ["src/**", "README.md", "LICENSE", "Cargo.toml", "Cargo.lock"]
 
 [lib]
 name = "necoherence_tools"
 path = "src/lib.rs"
 
 [dependencies]
-necoherence = { path = "../../rust" }
+necoherence = { version = "0.2.1", path = "../../rust" }
 
 [dev-dependencies]
 num-bigint = "0.4"
