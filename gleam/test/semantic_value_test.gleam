@@ -528,6 +528,106 @@ pub fn nonnullable_any_elements_accept_null_in_array_and_map_test() {
     )
 }
 
+pub fn general_decimal_data_prioritizes_integral_decimal_test() {
+  let base = profile([], types.TagModel("kind", None, []))
+  let number_only =
+    types.SemanticProfile(..base, integer_domains: [
+      types.IntegerDomainBinding(
+        "integer",
+        reference(),
+        types.IntegerInterval(-10, 10),
+        [
+          types.Number,
+        ],
+      ),
+    ])
+  let any = named_node("any", types.UnknownShape(types.AnyValue))
+  let array =
+    declared_node(
+      types.ArrayShape(types.ArraySpec(
+        types.ElementContract(type_reference("any"), False),
+        None,
+        None,
+      )),
+    )
+  let product =
+    declared_node(
+      types.ProductShape(types.ProductSpec(
+        [],
+        types.AllowExtras(
+          None,
+          types.ElementContract(type_reference("any"), False),
+        ),
+      )),
+    )
+  let assert types.AcceptedValue =
+    decision(number_only, [any], "any", json.JsonValueDec("-1.25"))
+  let assert types.AcceptedValue =
+    decision(
+      number_only,
+      [array, any],
+      "subject",
+      json.JsonValueArr([
+        json.JsonValueDec("6.02e23"),
+      ]),
+    )
+  let assert types.AcceptedValue =
+    decision(
+      number_only,
+      [product, any],
+      "subject",
+      json.JsonValueObj([
+        #("nested", json.JsonValueArr([json.JsonValueDec("-1.25")])),
+      ]),
+    )
+  let assert types.AcceptedValue =
+    decision(number_only, [any], "any", json.JsonValueDec("11.0"))
+  let priority =
+    types.SemanticProfile(..base, integer_domains: [
+      types.IntegerDomainBinding(
+        "integer",
+        reference(),
+        types.IntegerInterval(-10, 10),
+        [
+          types.Number,
+          types.IntegralDecimal,
+        ],
+      ),
+    ])
+  let assert types.AcceptedValue =
+    decision(priority, [any], "any", json.JsonValueDec("1.0"))
+  let assert types.AcceptedValue =
+    decision(priority, [any], "any", json.JsonValueDec("1.25"))
+  let assert types.RejectedValue(failure) =
+    decision(priority, [any], "any", json.JsonValueDec("11.0"))
+  let assert types.IntegerDomainCondition = failure.condition
+  let assert types.RejectedValue(failure) =
+    decision(priority, [any], "any", json.JsonValueDec("1e999999"))
+  let assert types.IntegerDomainCondition = failure.condition
+  let disabled =
+    types.SemanticProfile(..priority, numbers: types.NumberModel(False))
+  let assert types.AcceptedValue =
+    decision(disabled, [any], "any", json.JsonValueDec("1.0"))
+  let assert types.RejectedValue(failure) =
+    decision(disabled, [any], "any", json.JsonValueDec("11.0"))
+  let assert types.IntegerDomainCondition = failure.condition
+  let assert types.RejectedValue(failure) =
+    decision(disabled, [any], "any", json.JsonValueDec("1.25"))
+  let assert types.InvalidDataModelCondition = failure.condition
+  let unbounded =
+    types.SemanticProfile(..priority, integer_domains: [
+      types.IntegerDomainBinding("integer", reference(), types.Unbounded, [
+        types.Number,
+        types.IntegralDecimal,
+      ]),
+    ])
+  let assert types.AcceptedValue =
+    decision(unbounded, [any], "any", json.JsonValueDec("1e999999"))
+  let assert types.RejectedValue(failure) =
+    decision(number_only, [any], "any", json.JsonValueDec("1."))
+  let assert types.InvalidDataModelCondition = failure.condition
+}
+
 pub fn nonnullable_integer_map_rejects_null_value_test() {
   let semantic_profile = profile([], types.TagModel("kind", None, []))
   let integer =

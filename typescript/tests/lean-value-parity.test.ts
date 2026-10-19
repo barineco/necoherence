@@ -135,3 +135,35 @@ it("accepts a wrapped string and applies its length to the payload", () => {
 it("accepts the representative integral decimal form", () => {
   expect(context().validate(ref("forms-integer"), { tag: "Decimal", text: "10.0" })).toEqual({ tag: "Decimal", text: "10.0" });
 });
+it("prioritizes bounded IntegralDecimal values over general decimal admission", () => {
+  const boundedProfile = {
+    ...profile,
+    integer_domains: [{
+      ...profile.integer_domains[0]!,
+      range: { tag: "Inclusive" as const, fields: { minimum: "-10", maximum: "10" } },
+    }],
+  };
+  const enabled = context(boundedProfile);
+  const disabled = context({ ...boundedProfile, numbers: { decimals: false } });
+  expect(enabled.validate(ref("unknown-any"), { tag: "Decimal", text: "10.0" })).toEqual({ tag: "Decimal", text: "10.0" });
+  expect(rejected(enabled, "unknown-any", { tag: "Decimal", text: "11.0" })).toMatchObject({ condition: "IntegerDomain" });
+  expect(rejected(disabled, "unknown-any", { tag: "Decimal", text: "11.0" })).toMatchObject({ condition: "IntegerDomain" });
+  expect(enabled.validate(ref("unknown-any"), { tag: "Decimal", text: "1.5" })).toEqual({ tag: "Decimal", text: "1.5" });
+  expect(rejected(disabled, "unknown-any", { tag: "Decimal", text: "1.5" })).toMatchObject({ condition: "InvalidDataModel" });
+  expect(rejected(enabled, "unknown-any", { tag: "Decimal", text: "1e999999999" })).toMatchObject({ condition: "IntegerDomain" });
+  const numberOnly = {
+    ...boundedProfile,
+    integer_domains: [{ ...boundedProfile.integer_domains[0]!, forms: [{ tag: "Number" as const }] }],
+  };
+  expect(context(numberOnly).validate(ref("unknown-any"), { tag: "Decimal", text: "11.0" })).toEqual({ tag: "Decimal", text: "11.0" });
+  const decimal = { tag: "Decimal", text: "6.02e23" } as const;
+  expect(context(numberOnly).validate(ref("unknown-array-required"), { tag: "Array", items: [decimal] })).toEqual({ tag: "Array", items: [decimal] });
+  expect(context(numberOnly).validate(ref("unknown-map-required"), {
+    tag: "Object",
+    members: [{ key: "nested", value: { tag: "Array", items: [decimal] } }],
+  })).toEqual({
+    tag: "Object",
+    members: [{ key: "nested", value: { tag: "Array", items: [decimal] } }],
+  });
+  expect(rejected(enabled, "unknown-any", { tag: "Decimal", text: "1." })).toMatchObject({ condition: "InvalidDataModel" });
+});

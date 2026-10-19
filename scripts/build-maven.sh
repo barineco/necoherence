@@ -4,7 +4,7 @@ LC_ALL=C
 TZ=UTC
 export LC_ALL TZ
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-VERSION=0.2.1
+VERSION=0.2.2
 OUT=${2:-"$ROOT/java/build/maven"}
 case "$OUT" in /*) ;; *) OUT="$PWD/$OUT";; esac
 case "${1:-build}" in

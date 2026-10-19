@@ -7,7 +7,7 @@
 2 つのパッケージは、同じ版で導入します。
 
 ```bash
-npm install necoherence@0.2.1 necoherence-http-adapter@0.2.1
+npm install necoherence@0.2.2 necoherence-http-adapter@0.2.2
 ```
 
 ```typescript

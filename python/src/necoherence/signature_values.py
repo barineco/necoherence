@@ -21,6 +21,11 @@ class DecimalLiteral:
     spelling: str
 
     def __post_init__(self):
+        if not isinstance(self.spelling, str) or re.fullmatch(
+            r"-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?",
+            self.spelling,
+        ) is None:
+            raise ValueError("invalid decimal literal")
         try:
             value = Decimal(self.spelling)
         except InvalidOperation as error:
@@ -978,10 +983,31 @@ class ValueContext:
     def _validate_data(self, reference, value, path, trace):
         def reject(condition, observed=value, at=path):
             raise ValueFailure(reference, at, condition, observed, trace)
-        if type(value) is int or isinstance(value, (float, DecimalLiteral, Decimal)):
+        if type(value) is int:
             _, failure = _integer_value(self.profile, {}, value)
             if failure:
-                reject("IntegerDomain" if type(value) is int else "InvalidDataModel")
+                reject("IntegerDomain")
+        elif isinstance(value, (float, DecimalLiteral, Decimal)):
+            text = value.spelling if isinstance(value, DecimalLiteral) else str(value)
+            if re.fullmatch(r"-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?", text) is None:
+                reject("InvalidDataModel")
+            decimal_value = Decimal(text)
+            if not decimal_value.is_finite():
+                reject("InvalidDataModel")
+            default_name = self.profile.get("default_integer_domain")
+            binding = _named(self.profile.get("integer_domains", ()), default_name)
+            integral_form = binding is not None and "IntegralDecimal" in {
+                _unit(form) for form in binding.get("forms", ())
+            }
+            if integral_form and decimal_value == decimal_value.to_integral_value():
+                domain = binding.get("range", {"tag": "Unbounded"})
+                if sum_tag(domain) == "Inclusive":
+                    bounds = payload(domain)
+                    if decimal_value < Decimal(integer(bounds["minimum"])) or decimal_value > Decimal(integer(bounds["maximum"])):
+                        reject("IntegerDomain")
+                return
+            if not self.profile.get("numbers", {}).get("decimals", False):
+                reject("InvalidDataModel")
         elif type(value) is str:
             if not _unicode_scalar_text(value):
                 reject("InvalidDataModel")

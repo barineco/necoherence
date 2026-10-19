@@ -104,7 +104,7 @@ checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 
 [[package]]
 name = "necoherence"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "num-bigint",
  "num-traits",
@@ -115,7 +115,7 @@ dependencies = [
 
 [[package]]
 name = "necoherence-tools"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "necoherence",
 ]
@@ -223,7 +223,7 @@ dependencies = [
 
 [[package]]
 name = "signature_generator"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "necoherence",
  "necoherence-tools",

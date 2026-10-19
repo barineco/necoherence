@@ -4,13 +4,13 @@ build-backend = "hatchling.build"
 
 [project]
 name = "necoherence-http-adapter"
-version = "0.2.1"
+version = "0.2.2"
 description = "HTTP host adapter for Necoherence"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.12"
-dependencies = ["necoherence==0.2.1"]
+dependencies = ["necoherence==0.2.2"]
 
 [project.urls]
 Homepage = "https://github.com/barineco/necoherence"

@@ -10,6 +10,7 @@ import gleam/result
 import gleam/string
 import necoherence/exact_json as kdl
 import necoherence/semantic_base64 as base64
+import necoherence/semantic_generation_values as generation_values
 import necoherence/semantic_types as types
 
 pub type ValidationFailure {
@@ -2060,6 +2061,90 @@ fn declared_integral_decimal(text: String) -> Option(Int) {
   }
 }
 
+fn declared_drop_leading_zeroes(digits: List(String)) -> List(String) {
+  case digits {
+    ["0", ..rest] -> declared_drop_leading_zeroes(rest)
+    _ -> digits
+  }
+}
+
+fn declared_count_trailing_zeroes(reversed: List(String), count: Int) -> Int {
+  case reversed {
+    ["0", ..rest] -> declared_count_trailing_zeroes(rest, count + 1)
+    _ -> count
+  }
+}
+
+fn declared_decimal_is_integral(text: String) -> Bool {
+  case declared_decimal_mantissa_and_exponent(text) {
+    None -> False
+    Some(#(mantissa, exponent)) -> {
+      let #(whole, fraction) = case string.split(mantissa, ".") {
+        [whole] -> #(whole, "")
+        [whole, fraction] -> #(whole, fraction)
+        _ -> #("", "")
+      }
+      let coefficient = whole <> fraction
+      let unsigned = string.remove_prefix(coefficient, "-")
+      let digits = string.to_graphemes(unsigned)
+      case list.all(digits, fn(digit) { digit == "0" }) {
+        True -> True
+        False -> {
+          let decimal_shift = exponent - string.length(fraction)
+          case decimal_shift >= 0 {
+            True -> True
+            False ->
+              declared_count_trailing_zeroes(list.reverse(digits), 0)
+              >= 0 - decimal_shift
+          }
+        }
+      }
+    }
+  }
+}
+
+fn declared_decimal_exceeds_range(
+  text: String,
+  range: types.IntegerDomain,
+) -> Bool {
+  case range {
+    types.Unbounded -> False
+    types.IntegerInterval(minimum, maximum) ->
+      case declared_decimal_mantissa_and_exponent(text) {
+        None -> False
+        Some(#(mantissa, exponent)) -> {
+          let #(whole, fraction) = case string.split(mantissa, ".") {
+            [whole] -> #(whole, "")
+            [whole, fraction] -> #(whole, fraction)
+            _ -> #("", "")
+          }
+          let coefficient = whole <> fraction
+          let unsigned = string.remove_prefix(coefficient, "-")
+          let digits =
+            declared_drop_leading_zeroes(string.to_graphemes(unsigned))
+          case list.is_empty(digits) {
+            True -> False
+            False -> {
+              let decimal_shift = exponent - string.length(fraction)
+              let magnitude = fn(value: Int) {
+                case value < 0 {
+                  True -> 0 - value
+                  False -> value
+                }
+              }
+              let maximum_digits =
+                int.max(
+                  string.length(int.to_string(magnitude(minimum))),
+                  string.length(int.to_string(magnitude(maximum))),
+                )
+              list.length(digits) + decimal_shift > maximum_digits
+            }
+          }
+        }
+      }
+  }
+}
+
 fn declared_integer_value(
   binding: types.IntegerDomainBinding,
   value: kdl.JsonValue,
@@ -2308,7 +2393,7 @@ fn declared_eval_data(
   trace: List(types.TypeRef),
 ) -> Result(Nil, types.ValueFailure) {
   case value {
-    kdl.JsonValueNum(_) | kdl.JsonValueDec(_) -> {
+    kdl.JsonValueNum(_) -> {
       let spec = types.IntegerSpec(None, None, None, None, None, None)
       case declared_integer_condition(graph.profile, spec, value) {
         None -> Ok(Nil)
@@ -2316,13 +2401,101 @@ fn declared_eval_data(
           Error(declared_failure(
             reference,
             path,
-            case value {
-              kdl.JsonValueNum(_) -> types.IntegerDomainCondition
-              _ -> types.InvalidDataModelCondition
-            },
+            types.IntegerDomainCondition,
             value,
             trace,
           ))
+      }
+    }
+    kdl.JsonValueDec(text) -> {
+      case generation_values.is_json_number(text) {
+        False ->
+          Error(declared_failure(
+            reference,
+            path,
+            types.InvalidDataModelCondition,
+            value,
+            trace,
+          ))
+        True ->
+          case
+            list.find(graph.profile.integer_domains, fn(binding) {
+              binding.name == graph.profile.default_integer_domain
+            })
+          {
+            Error(_) ->
+              Error(declared_failure(
+                reference,
+                path,
+                types.InvalidDataModelCondition,
+                value,
+                trace,
+              ))
+            Ok(binding) -> {
+              let integral_decimal =
+                list.contains(binding.forms, types.IntegralDecimal)
+                && declared_decimal_is_integral(text)
+              case integral_decimal {
+                False if graph.profile.numbers.decimals -> Ok(Nil)
+                False ->
+                  Error(declared_failure(
+                    reference,
+                    path,
+                    types.InvalidDataModelCondition,
+                    value,
+                    trace,
+                  ))
+                True ->
+                  case binding.range {
+                    types.Unbounded -> Ok(Nil)
+                    _ ->
+                      case declared_decimal_exceeds_range(text, binding.range) {
+                        True ->
+                          Error(declared_failure(
+                            reference,
+                            path,
+                            types.IntegerDomainCondition,
+                            value,
+                            trace,
+                          ))
+                        False ->
+                          case
+                            declared_integer_condition(
+                              graph.profile,
+                              types.IntegerSpec(
+                                None,
+                                None,
+                                None,
+                                None,
+                                None,
+                                None,
+                              ),
+                              value,
+                            )
+                          {
+                            None -> Ok(Nil)
+                            Some(types.IntegerDomainCondition) ->
+                              Error(declared_failure(
+                                reference,
+                                path,
+                                types.IntegerDomainCondition,
+                                value,
+                                trace,
+                              ))
+                            Some(_) ->
+                              Error(declared_failure(
+                                reference,
+                                path,
+                                types.InvalidDataModelCondition,
+                                value,
+                                trace,
+                              ))
+                          }
+                      }
+                  }
+              }
+            }
+          }
       }
     }
     kdl.JsonValueArr(items) -> {

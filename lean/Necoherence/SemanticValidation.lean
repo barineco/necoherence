@@ -1307,12 +1307,15 @@ private def decimalIntegerParts (text : String) : Option (Int × Nat × Int) :=
     match Lean.Json.parse text with
     | .ok (.num number) =>
       let (sign, digits, power) := number.normalize
-      if power < 0 then none else some (sign, digits, power)
+      if digits == 0 || power >= Int.ofNat (toString digits).length then
+        some (sign, digits, power)
+      else none
     | _ => none
 
 private def decimalInteger (text : String) : Option Int := do
   let (sign, digits, power) ← decimalIntegerParts text
-  let magnitude := digits * 10 ^ power.toNat
+  let shift := power - Int.ofNat (toString digits).length
+  let magnitude := if digits == 0 then 0 else digits * 10 ^ shift.toNat
   some (sign * Int.ofNat magnitude)
 
 def integerValueForForm (form : IntegerForm) (value : JsonValue) : Option Int :=
@@ -1631,8 +1634,25 @@ mutual
       JsonValue → Option DataFailure
     | value@(.num _) =>
       if integerInDomain profile none value then none else some (path, .integerDomain, value)
-    | value@(.dec _) =>
-      if integerInDomain profile none value then none else some (path, .invalidDataModel, value)
+    | value@(.dec text) =>
+      match Lean.Json.parse text with
+      | .ok (.num _) =>
+        let integralUnbounded :=
+          match integerBinding profile none with
+          | some binding =>
+            binding.range == .unbounded && binding.forms.contains .integralDecimal &&
+              (decimalIntegerParts text).isSome
+          | none => false
+        match integralUnbounded with
+        | true => none
+        | false =>
+          match integerCondition profile { domain := none } value with
+          | none => none
+          | some .integerDomain => some (path, .integerDomain, value)
+          | some _ =>
+            if profile.numbers.decimals then none
+            else some (path, .invalidDataModel, value)
+      | _ => some (path, .invalidDataModel, value)
     | value@(.str text) =>
       if unicodeValid text then none else some (path, .invalidDataModel, value)
     | .arr items => dataItemsFailure profile path 0 items

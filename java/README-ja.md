@@ -3,7 +3,7 @@
 [プロジェクトの概要](https://github.com/barineco/necoherence/blob/publish/README-ja.md) | [English](README.md)
 
 このパッケージは、Necoherence の Java による実装で、Java 21 で使えます。
-Maven の座標は `io.github.barineco:necoherence:0.2.1` です。
+Maven の座標は `io.github.barineco:necoherence:0.2.2` です。
 ソースから jar をビルドし、クラスパスに加えて使うこともできます。
 依存するのは JDK だけです。
 
@@ -76,10 +76,10 @@ printf '%s  %s\n' \
   lib/junit-platform-console-standalone-1.10.2.jar | shasum -a 256 -c -
 find src/test/java -name '*.java' -print0 \
   | xargs -0 javac -J-Duser.language=en --release 21 \
-      -cp "build/maven/io/github/barineco/necoherence/0.2.1/necoherence-0.2.1.jar:lib/junit-platform-console-standalone-1.10.2.jar" \
+      -cp "build/maven/io/github/barineco/necoherence/0.2.2/necoherence-0.2.2.jar:lib/junit-platform-console-standalone-1.10.2.jar" \
       -d build/test-classes
 java -Duser.language=en -jar lib/junit-platform-console-standalone-1.10.2.jar execute \
-  --class-path build/maven/io/github/barineco/necoherence/0.2.1/necoherence-0.2.1.jar:build/test-classes --scan-class-path
+  --class-path build/maven/io/github/barineco/necoherence/0.2.2/necoherence-0.2.2.jar:build/test-classes --scan-class-path
 ```
 
 ## Maven Central の公開物
@@ -104,7 +104,7 @@ scripts/build-maven.sh build
 版のディレクトリの位置は次のとおりです。
 
 ```text
-io/github/barineco/<artifactId>/0.2.1/
+io/github/barineco/<artifactId>/0.2.2/
 ```
 
 ビルドに必要なのは、JDK 21 と標準のシェルのユーティリティです。

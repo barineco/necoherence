@@ -3,12 +3,12 @@
 [プロジェクトの概要](https://github.com/barineco/necoherence/blob/publish/README-ja.md) | [English](README.md)
 
 この任意の jar は、Necoherence のネットワーク副作用のコマンドを `java.net.http.HttpClient` で実行します。ライセンスは MIT です。
-Java 21 と、クラスパス上の核の `necoherence-0.2.1.jar` が必要です。
+Java 21 と、クラスパス上の核の `necoherence-0.2.2.jar` が必要です。
 核の jar は、台帳と `SemanticValues.HostAdapter` のポートを持ちます。
 
 ## Maven の座標と公開のビルド
 
-座標は `io.github.barineco:necoherence-http-adapter:0.2.1` です。
+座標は `io.github.barineco:necoherence-http-adapter:0.2.2` です。
 POM は、同じ版の核に依存します。
 
 2 つの公開物のビルドは、JDK 21 を `PATH` に置いてリポジトリの root で行う手順です。
@@ -20,7 +20,7 @@ scripts/build-maven.sh build
 公開物ごとの 4 つのファイルは、次のディレクトリに書き出されます。
 
 ```text
-java/build/maven/io/github/barineco/<artifactId>/0.2.1/
+java/build/maven/io/github/barineco/<artifactId>/0.2.2/
 ```
 
 署名と bundle の段は、GPG を設定し、鍵の ID を環境変数 `NECOHERENCE_GPG_KEY` に入れてから実行する手順です。
@@ -38,8 +38,8 @@ Maven Central へのアップロードは別の手作業の段で、前提の条
 
 ```sh
 mkdir -p build/test-classes
-core=../java/build/maven/io/github/barineco/necoherence/0.2.1/necoherence-0.2.1.jar
-adapter=../java/build/maven/io/github/barineco/necoherence-http-adapter/0.2.1/necoherence-http-adapter-0.2.1.jar
+core=../java/build/maven/io/github/barineco/necoherence/0.2.2/necoherence-0.2.2.jar
+adapter=../java/build/maven/io/github/barineco/necoherence-http-adapter/0.2.2/necoherence-http-adapter-0.2.2.jar
 find src/test/java -name '*.java' -print0 \
   | xargs -0 javac --release 21 -cp "$core:$adapter" -d build/test-classes
 for test in NetworkEffectHttpSmoke NetworkEffectProgressionSmoke; do

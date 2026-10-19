@@ -45,7 +45,7 @@ Necoherence provides an implementation for each of the following six languages.
 
 The Lean implementation is the specification, written as executable definitions.
 The implementations in the other five languages are verified by checking their results against those of the Lean definitions.
-Every implementation is at version `0.2.1`, and each directory's README describes how to build and test it.
+Every implementation is at version `0.2.2`, and each directory's README describes how to build and test it.
 
 HTTP execution is optional. Rust enables it with the `http-adapter` feature. The other runtime implementations provide separate adapter packages:
 

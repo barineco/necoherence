@@ -124,3 +124,68 @@ def test_element_contract_null_is_decided_by_nullable_or_child_type():
     assert context.validate("unknown-map-required", {"x": None}) == {"x": None}
     with pytest.raises(ValueFailure):
         context.validate("integer-map-required", {"x": None})
+@pytest.mark.parametrize("value", [1.25, -1.25, 6.02e23])
+def test_unknown_any_accepts_profile_admitted_decimals(value):
+    graph = representative_graph()
+    graph["profile"]["integer_domains"][0]["forms"] = [variant("Number")]
+    context = ValueContext(graph)
+    assert context.validate("unknown-any", value) == value
+    assert context.validate("unknown-array-required", [value]) == [value]
+    assert context.validate("unknown-map-required", {"nested": [value]}) == {"nested": [value]}
+
+
+def test_unknown_any_integral_decimal_precedes_decimal_admission():
+    from necoherence.signature_values import DecimalLiteral
+
+    graph = representative_graph()
+    graph["profile"]["integer_domains"][0]["range"] = variant("Inclusive", fields={"minimum": "-10", "maximum": "10"})
+    context = ValueContext(graph)
+    assert context.validate("unknown-any", DecimalLiteral("1.0")) == DecimalLiteral("1.0")
+    assert context.validate("unknown-any", DecimalLiteral("1.25")) == DecimalLiteral("1.25")
+    with pytest.raises(ValueFailure) as caught:
+        context.validate("unknown-any", DecimalLiteral("11.0"))
+    assert caught.value.condition == "IntegerDomain"
+    with pytest.raises(ValueFailure) as caught:
+        context.validate("unknown-any", DecimalLiteral("1e999999"))
+    assert caught.value.condition == "IntegerDomain"
+
+
+def test_unknown_any_rejects_decimals_when_profile_disables_them():
+    graph = representative_graph()
+    graph["profile"]["numbers"]["decimals"] = False
+    graph["profile"]["integer_domains"][0]["range"] = variant("Inclusive", fields={"minimum": "-10", "maximum": "10"})
+    context = ValueContext(graph)
+    from necoherence.signature_values import DecimalLiteral
+
+    assert context.validate("unknown-any", DecimalLiteral("10.0")) == DecimalLiteral("10.0")
+    with pytest.raises(ValueFailure) as caught:
+        context.validate("unknown-any", DecimalLiteral("11.0"))
+    assert caught.value.condition == "IntegerDomain"
+    for value in (1.25, -1.25):
+        with pytest.raises(ValueFailure) as caught:
+            context.validate("unknown-any", value)
+        assert caught.value.condition == "InvalidDataModel"
+    with pytest.raises(ValueFailure) as caught:
+        context.validate("unknown-any", 6.02e23)
+    assert caught.value.condition == "IntegerDomain"
+
+
+@pytest.mark.parametrize("text", ["01.2", "1.", "1e", "+1.0"])
+def test_unknown_any_rejects_malformed_decimal_json(text):
+    from necoherence.signature_values import decode_wire_json
+
+    with pytest.raises(ValueError):
+        decode_wire_json(text)
+
+    from necoherence.signature_values import DecimalLiteral
+
+    for text in ("01.2", "1.", "1e", "+1.0", "NaN", "Infinity"):
+        with pytest.raises(ValueError):
+            DecimalLiteral(text)
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf")])
+def test_unknown_any_rejects_non_json_native_floats(value):
+    with pytest.raises(ValueFailure) as caught:
+        ValueContext(representative_graph()).validate("unknown-any", value)
+    assert caught.value.condition == "InvalidDataModel"

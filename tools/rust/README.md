@@ -7,7 +7,7 @@ This crate is licensed under AGPL-3.0-only; the `necoherence` runtime is MIT.
 
 ```toml
 [dependencies]
-necoherence-tools = "0.2.1"
+necoherence-tools = "0.2.2"
 ```
 
 ## Public modules
@@ -33,4 +33,4 @@ cargo test --locked
 The published crate contains the library sources, the README, and the license.
 The test harnesses that read fixtures from other directories stay in the repository.
 Repository builds resolve the runtime through a path dependency.
-The packaged crate depends on the runtime release 0.2.1 from crates.io, so the runtime is published first.
+The packaged crate depends on the runtime release 0.2.2 from crates.io, so the runtime is published first.

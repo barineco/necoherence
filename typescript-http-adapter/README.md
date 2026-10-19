@@ -7,7 +7,7 @@ The core `necoherence` package contains the ledger and accepts caller-supplied o
 Install both packages at matching versions:
 
 ```bash
-npm install necoherence@0.2.1 necoherence-http-adapter@0.2.1
+npm install necoherence@0.2.2 necoherence-http-adapter@0.2.2
 ```
 
 ```typescript

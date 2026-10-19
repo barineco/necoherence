@@ -372,7 +372,7 @@ fn tag_members_and_unwrapped_bytes_follow_the_profile() {
 }
 
 #[test]
-fn unknown_any_uses_decimal_admission_after_integral_decimal() {
+fn unknown_any_prioritizes_bounded_integral_decimal() {
     let mut library = library();
     fixture_item_mut(&mut library.profile.integer_domains, 0)
         .forms
@@ -388,18 +388,73 @@ fn unknown_any_uses_decimal_admission_after_integral_decimal() {
         ValueDecision::Accepted
     ));
     assert!(matches!(
+        accepts_value(&graph, &any, &JsonValue::Dec("1.0".into())),
+        ValueDecision::Accepted
+    ));
+    assert!(matches!(
         accepts_value(&graph, &any, &JsonValue::Dec("11.0".into())),
         ValueDecision::Rejected(ValueFailure {
             condition: ValueCondition::IntegerDomain,
             ..
         })
     ));
-
+    assert!(matches!(
+        accepts_value(&graph, &any, &JsonValue::Dec("1e999999999".into())),
+        ValueDecision::Rejected(ValueFailure {
+            condition: ValueCondition::IntegerDomain,
+            ..
+        })
+    ));
+    let mut number_only = library.clone();
+    fixture_item_mut(&mut number_only.profile.integer_domains, 0)
+        .forms
+        .retain(|form| *form != IntegerForm::IntegralDecimal);
+    let graph = check_type_signatures(&number_only).unwrap();
+    let any = signature_type_ref(&number_only, &canonical_digest(&number_only), "any");
+    assert!(matches!(
+        accepts_value(&graph, &any, &JsonValue::Dec("11.0".into())),
+        ValueDecision::Accepted
+    ));
+    assert!(matches!(
+        accepts_value(&graph, &any, &JsonValue::Dec("6.02e23".into())),
+        ValueDecision::Accepted
+    ));
+    let decimal = JsonValue::Dec("6.02e23".into());
+    assert!(matches!(
+        accepts_value(&graph, &any, &JsonValue::Arr(vec![decimal.clone()])),
+        ValueDecision::Accepted
+    ));
+    assert!(matches!(
+        accepts_value(
+            &graph,
+            &any,
+            &JsonValue::Obj(vec![("nested".into(), JsonValue::Arr(vec![decimal]))])
+        ),
+        ValueDecision::Accepted
+    ));
     library.profile.numbers.decimals = false;
     let graph = check_type_signatures(&library).unwrap();
     let any = signature_type_ref(&library, &canonical_digest(&library), "any");
     assert!(matches!(
+        accepts_value(&graph, &any, &JsonValue::Dec("1.0".into())),
+        ValueDecision::Accepted
+    ));
+    assert!(matches!(
+        accepts_value(&graph, &any, &JsonValue::Dec("11.0".into())),
+        ValueDecision::Rejected(ValueFailure {
+            condition: ValueCondition::IntegerDomain,
+            ..
+        })
+    ));
+    assert!(matches!(
         accepts_value(&graph, &any, &JsonValue::Dec("1.5".into())),
+        ValueDecision::Rejected(ValueFailure {
+            condition: ValueCondition::InvalidDataModel,
+            ..
+        })
+    ));
+    assert!(matches!(
+        accepts_value(&graph, &any, &JsonValue::Dec("1.".into())),
         ValueDecision::Rejected(ValueFailure {
             condition: ValueCondition::InvalidDataModel,
             ..

@@ -866,9 +866,52 @@ public final class SemanticValues {
                 if (!integerInDomain(spec, number)) fail(type, path, "IntegerDomain");
             }
         }
+        private boolean decimalCoefficientIsZero(String text) {
+            String coefficient = text.split("[eE]", 2)[0];
+            for (int index = 0; index < coefficient.length(); index++) {
+                char character = coefficient.charAt(index);
+                if (character >= '1' && character <= '9') return false;
+            }
+            return true;
+        }
+        private boolean decimalExponentIsPositive(String text) {
+            int separator = Math.max(text.indexOf('e'), text.indexOf('E'));
+            return separator >= 0 && !text.substring(separator + 1).startsWith("-");
+        }
         private void data(int type, WireValue value, List<WireValue> path, List<Active> active) throws ValueFailure {
-            if (value instanceof DecimalValue && !b(f(f(profile, "numbers"), "decimals")))
-                fail(type, path, "InvalidDataModel");
+            if (value instanceof DecimalValue decimal) {
+                WireValue spec = obj("domain", NIL, "minimum", NIL, "maximum", NIL,
+                        "const_value", NIL, "enum_values", NIL, "default_value", NIL);
+                WireValue binding = integerBinding(spec);
+                boolean integralForm = binding != null && a(f(binding, "forms")).stream()
+                        .anyMatch(form -> tag(form).equals("IntegralDecimal"));
+                if (integralForm) {
+                    try {
+                        java.math.BigDecimal number = new java.math.BigDecimal(decimal.text());
+                        if (number.stripTrailingZeros().scale() <= 0) {
+                            WireValue range = f(binding, "range");
+                            if (tag(range).equals("Inclusive")) {
+                                WireValue bounds = payload(range);
+                                java.math.BigDecimal minimum = new java.math.BigDecimal(n(f(bounds, "minimum")));
+                                java.math.BigDecimal maximum = new java.math.BigDecimal(n(f(bounds, "maximum")));
+                                if (number.compareTo(minimum) < 0 || number.compareTo(maximum) > 0)
+                                    fail(type, path, "IntegerDomain");
+                            }
+                            return;
+                        }
+                    } catch (NumberFormatException error) {
+                        if (decimalCoefficientIsZero(decimal.text())) {
+                            if (!integerInDomain(spec, BigInteger.ZERO)) fail(type, path, "IntegerDomain");
+                            return;
+                        }
+                        if (decimalExponentIsPositive(decimal.text())) {
+                            if (tag(f(binding, "range")).equals("Unbounded")) return;
+                            fail(type, path, "IntegerDomain");
+                        }
+                    }
+                }
+                if (!b(f(f(profile, "numbers"), "decimals"))) fail(type, path, "InvalidDataModel");
+            }
             if (value instanceof StringValue text && !unicodeValid(text.value()))
                 fail(type, path, "InvalidDataModel");
             if (value instanceof ObjectValue object) {

@@ -3,7 +3,7 @@
 
 [package]
 name = "necoherence-tools"
-version = "0.2.1"
+version = "0.2.2"
 edition = "2021"
 license = "AGPL-3.0-only"
 description = "Search, derivation and code generation tools for necoherence"
@@ -20,7 +20,7 @@ name = "necoherence_tools"
 path = "src/lib.rs"
 
 [dependencies]
-necoherence = { version = "0.2.1", path = "../../rust" }
+necoherence = { version = "0.2.2", path = "../../rust" }
 
 [dev-dependencies]
 num-bigint = "0.4"

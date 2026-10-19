@@ -7,7 +7,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "residual-coherence"
-version = "0.2.1"
+version = "0.2.2"
 description = "Residual coherence validation and analysis exchange tools"
 readme = "README.md"
 license = {text = "AGPL-3.0-only"}

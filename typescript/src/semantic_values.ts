@@ -531,6 +531,41 @@ function integralDecimal(text: string): bigint | null {
   if (digits % divisor !== 0n) return null;
   return digits / divisor;
 }
+type IntegralDecimalAdmission = "notIntegral" | "inRange" | "outOfRange";
+function integralDecimalAdmission(text: string, range: IntegerDomain): IntegralDecimalAdmission {
+  const matched = /^(-?)(0|[1-9][0-9]*)(?:\.([0-9]+))?(?:[eE]([+-]?[0-9]+))?$/.exec(text);
+  if (!matched) return "notIntegral";
+  const digits = `${matched[2]}${matched[3] ?? ""}`.replace(/^0+/, "");
+  const minimum = range.tag === "Inclusive" ? BigInt(range.fields.minimum) : null;
+  const maximum = range.tag === "Inclusive" ? BigInt(range.fields.maximum) : null;
+  if (digits.length === 0) return range.tag !== "Inclusive" || bounded(0n, range.fields.minimum, range.fields.maximum) ? "inRange" : "outOfRange";
+  const boundDigits = range.tag === "Inclusive"
+    ? (minimum! < 0n ? -minimum! : minimum!) > (maximum! < 0n ? -maximum! : maximum!)
+      ? ((minimum! < 0n ? -minimum! : minimum!).toString().length)
+      : ((maximum! < 0n ? -maximum! : maximum!).toString().length)
+    : 0;
+  const cap = Math.max(digits.length + (matched[3] ?? "").length + 2, boundDigits + 2);
+  const exponentText = matched[4] ?? "0";
+  const exponentNegative = exponentText.startsWith("-");
+  const exponentDigits = exponentText.replace(/^[+-]?0*/, "") || "0";
+  const exponent = exponentDigits.length > String(cap).length
+    ? (cap + 1) * (exponentNegative ? -1 : 1)
+    : Math.min(Number(exponentDigits), cap + 1) * (exponentNegative ? -1 : 1);
+  const shift = exponent - (matched[3] ?? "").length;
+  let integerDigits: string;
+  if (shift < 0) {
+    const removed = -shift;
+    if (removed > digits.length || !digits.endsWith("0".repeat(removed))) return "notIntegral";
+    integerDigits = digits.slice(0, digits.length - removed).replace(/^0+/, "") || "0";
+  } else {
+    if (range.tag === "Unbounded") return "inRange";
+    if (digits.length + shift > boundDigits) return "outOfRange";
+    integerDigits = digits + "0".repeat(shift);
+  }
+  if (range.tag === "Unbounded") return "inRange";
+  const integer = BigInt(`${matched[1]}${integerDigits}`);
+  return bounded(integer, range.fields.minimum, range.fields.maximum) ? "inRange" : "outOfRange";
+}
 function base64Digit(alphabet: BytesAlphabet, character: string): number | null {
   const common = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
   const commonValue = common.indexOf(character);
@@ -1002,7 +1037,16 @@ export class ValueContext {
     }
   }
   private data(ref: TypeRef, value: ExactJson, path: readonly (string | bigint)[]): void {
-    if (value.tag === "Decimal" && !this.profile.numbers.decimals) this.reject(ref, path, "InvalidDataModel", value.text);
+    if (value.tag === "Decimal") {
+      if (!/^-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?$/.test(value.text)) this.reject(ref, path, "InvalidDataModel", value.text);
+      const domain = this.domain(null);
+      if (domain.forms.some(form => form.tag === "IntegralDecimal")) {
+        const admission = integralDecimalAdmission(value.text, domain.range);
+        if (admission === "inRange") return;
+        if (admission === "outOfRange") this.reject(ref, path, "IntegerDomain", value.text);
+      }
+      if (!this.profile.numbers.decimals) this.reject(ref, path, "InvalidDataModel", value.text);
+    }
     if (value.tag === "Integer") { const range = this.domain(null).range; if (range.tag === "Inclusive" && !bounded(BigInt(value.value), range.fields.minimum, range.fields.maximum)) this.reject(ref, path, "IntegerDomain", value.value); }
     if (value.tag === "Array") value.items.forEach((item, i) => this.data(ref, item, [...path, BigInt(i)]));
     if (value.tag === "Object") {

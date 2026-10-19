@@ -7,7 +7,7 @@ pub use crate::default_materialization::{
 };
 use crate::semantic_types::*;
 use num_bigint::{BigInt, BigUint};
-use num_traits::Zero;
+use num_traits::{Signed, Zero};
 use std::collections::{HashMap, HashSet};
 use std::net::Ipv6Addr;
 
@@ -1036,8 +1036,128 @@ fn decimal_parts(text: &str) -> Option<(BigInt, i64)> {
     if negative {
         mantissa = -mantissa;
     }
-    Some((mantissa, exponent - i64::try_from(fraction.len()).ok()?))
+    Some((
+        mantissa,
+        exponent.checked_sub(i64::try_from(fraction.len()).ok()?)?,
+    ))
 }
+fn json_number_token(text: &str) -> bool {
+    let bytes = text.as_bytes();
+    let mut index = 0;
+    if bytes.get(index) == Some(&b'-') {
+        index += 1;
+    }
+    match bytes.get(index) {
+        Some(b'0') => index += 1,
+        Some(b'1'..=b'9') => {
+            index += 1;
+            while bytes.get(index).is_some_and(u8::is_ascii_digit) {
+                index += 1;
+            }
+        }
+        _ => return false,
+    }
+    if bytes.get(index) == Some(&b'.') {
+        index += 1;
+        let start = index;
+        while bytes.get(index).is_some_and(u8::is_ascii_digit) {
+            index += 1;
+        }
+        if index == start {
+            return false;
+        }
+    }
+    if bytes
+        .get(index)
+        .is_some_and(|byte| matches!(byte, b'e' | b'E'))
+    {
+        index += 1;
+        if bytes
+            .get(index)
+            .is_some_and(|byte| matches!(byte, b'+' | b'-'))
+        {
+            index += 1;
+        }
+        let start = index;
+        while bytes.get(index).is_some_and(u8::is_ascii_digit) {
+            index += 1;
+        }
+        if index == start {
+            return false;
+        }
+    }
+    index == bytes.len()
+}
+
+fn integral_decimal_data_status(profile: &VersionedSemanticProfile, text: &str) -> Option<bool> {
+    let binding = profile.integer_domain(None)?;
+    if !binding.forms.contains(&IntegerForm::IntegralDecimal) {
+        return None;
+    }
+    let (integer, exponent) = match decimal_parts(text) {
+        Some(parts) => parts,
+        None => {
+            let (_, exponent) = text.split_once(['e', 'E'])?;
+            let coefficient = text.split_once(['e', 'E']).map_or(text, |parts| parts.0);
+            let digits = coefficient.trim_start_matches(['-', '+']).replace('.', "");
+            let is_zero = digits.bytes().all(|byte| byte == b'0');
+            if exponent.starts_with('-') && !is_zero {
+                return None;
+            }
+            let range = &binding.range;
+            if is_zero {
+                return Some(match range {
+                    IntegerDomain::Unbounded => true,
+                    IntegerDomain::Inclusive { minimum, maximum } => {
+                        minimum <= &BigInt::from(0) && &BigInt::from(0) <= maximum
+                    }
+                });
+            }
+            return Some(matches!(range, IntegerDomain::Unbounded));
+        }
+    };
+    let range = &binding.range;
+    if integer.is_zero() {
+        return Some(match range {
+            IntegerDomain::Unbounded => true,
+            IntegerDomain::Inclusive { minimum, maximum } => {
+                minimum <= &BigInt::from(0) && &BigInt::from(0) <= maximum
+            }
+        });
+    }
+    if exponent < 0 {
+        let trailing = exponent.unsigned_abs();
+        let digits = integer.abs().to_string().len() as u64;
+        if trailing > digits {
+            return None;
+        }
+        let divisor = BigInt::from(10u8).pow(u32::try_from(trailing).ok()?);
+        if (&integer % &divisor) != BigInt::from(0) {
+            return None;
+        }
+        let value = integer / divisor;
+        return Some(match range {
+            IntegerDomain::Unbounded => true,
+            IntegerDomain::Inclusive { minimum, maximum } => value >= *minimum && value <= *maximum,
+        });
+    }
+    if matches!(range, IntegerDomain::Unbounded) {
+        return Some(true);
+    }
+    let IntegerDomain::Inclusive { minimum, maximum } = range else {
+        unreachable!()
+    };
+    let bound = minimum.abs().max(maximum.abs());
+    let bound_digits = bound.to_string().len() as u64;
+    let integer_digits = integer.abs().to_string().len() as u64;
+    let exponent = u64::try_from(exponent).ok()?;
+    if integer_digits + exponent > bound_digits {
+        return Some(false);
+    }
+    let value = integer * BigInt::from(10u8).pow(u32::try_from(exponent).ok()?);
+    Some(value >= *minimum && value <= *maximum)
+}
+
 fn compare_decimal(text: &str, bound: &DecimalBound) -> Option<std::cmp::Ordering> {
     let (value, exponent) = decimal_parts(text)?;
     let scale = i64::try_from(bound.scale.clone()).ok()?;
@@ -1356,27 +1476,16 @@ fn data_failure(
             value,
         )
         .map(|condition| (path, condition, value.clone())),
-        value @ JsonValue::Dec(_) => {
-            let integral = profile
-                .integer_domain(None)
-                .is_some_and(|binding| parse_integer(binding, value).is_some());
-            let condition = if integral {
-                integer_condition(
-                    profile,
-                    &IntegerSpec {
-                        domain: None,
-                        minimum: None,
-                        maximum: None,
-                        const_value: None,
-                        enum_values: None,
-                        default_value: None,
-                    },
-                    value,
-                )
-            } else if profile.numbers.decimals {
-                None
-            } else {
+        value @ JsonValue::Dec(text) => {
+            let condition = if !json_number_token(text) {
                 Some(ValueCondition::InvalidDataModel)
+            } else {
+                match integral_decimal_data_status(profile, text) {
+                    Some(true) => None,
+                    Some(false) => Some(ValueCondition::IntegerDomain),
+                    None if profile.numbers.decimals => None,
+                    None => Some(ValueCondition::InvalidDataModel),
+                }
             };
             condition.map(|condition| (path, condition, value.clone()))
         }

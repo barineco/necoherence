@@ -22,7 +22,8 @@ public final class PresetSemanticValuesTest {
                 "examples", arr(List.of()), "default_value", NIL_VALUE);
     }
 
-    private static WireValue profile() {
+    private static WireValue profile(boolean decimals) { return profile(decimals, true); }
+    private static WireValue profile(boolean decimals, boolean integralDecimal) {
         WireValue format = obj("name", str("cid-raw"), "reference", REFERENCE,
                 "rule", variant("Literal", str("cid-value")));
         WireValue tagFormat = obj("name", str("tag-format"), "reference", REFERENCE,
@@ -33,10 +34,13 @@ public final class PresetSemanticValuesTest {
                 "leaf", variant("String", stringSpec()));
         WireValue form = obj("tag", str("blob"), "fields", arr(List.of(field)), "extras", variant("Reject"));
         WireValue integerDomain = obj("name", str("integer"), "reference", REFERENCE,
-                "range", variant("Unbounded"), "forms", arr(List.of(variant("Number"))));
+                "range", variant("Inclusive", obj("minimum", str("-10"), "maximum", str("10"))),
+                "forms", arr(integralDecimal
+                        ? List.of(variant("Number"), variant("IntegralDecimal"))
+                        : List.of(variant("Number"))));
         return obj("reference", REFERENCE, "source_refs", arr(List.of()),
                 "integer_domains", arr(List.of(integerDomain)),
-                "default_integer_domain", str("integer"), "numbers", obj("decimals", TRUE),
+                "default_integer_domain", str("integer"), "numbers", obj("decimals", decimals ? TRUE : FALSE),
                 "grapheme_rules", NIL_VALUE, "format_bindings", arr(List.of(format, tagFormat)),
                 "bytes_policy", obj("reference", REFERENCE, "padding_optional", TRUE,
                         "alphabet", variant("Either"), "strict_pad_bits", TRUE, "wrapper", NIL_VALUE),
@@ -44,7 +48,9 @@ public final class PresetSemanticValuesTest {
                 "tag", obj("key", str("$type"), "format", str("tag-format"), "sealed", arr(List.of(form))));
     }
 
-    private static Context context() {
+    private static Context context() { return context(true, true); }
+    private static Context context(boolean decimals) { return context(decimals, true); }
+    private static Context context(boolean decimals, boolean integralDecimal) {
         WireValue bytes = obj("reference", TypeSignatures.typeReference("bytes"), "shape", variant("Bytes", obj("minimum", NIL_VALUE, "maximum", NIL_VALUE)));
         WireValue sealed = obj("reference", TypeSignatures.typeReference("blob"), "shape",
                 fields("Sealed", obj("tag", str("blob"), "refinements", arr(List.of()))));
@@ -79,7 +85,7 @@ public final class PresetSemanticValuesTest {
                 variant("Product", obj("fields", arr(List.of()), "extras",
                         fields("Allow", obj("key_format", NIL_VALUE,
                                 "value", obj("type_ref", TypeSignatures.typeReference("integer"), "nullable", FALSE))))));
-        return new Context(obj("profile", profile(), "nodes", arr(List.of(
+        return new Context(obj("profile", profile(decimals, integralDecimal), "nodes", arr(List.of(
                 bytes, sealed, product, tagged, any, ordinary, string, nullableStringArray,
                 stringArray, anyArray, anyMap, integer, integerMap))));
     }
@@ -148,6 +154,23 @@ public final class PresetSemanticValuesTest {
         ValueFailure failure = rejected(context(), 4, obj("nested", obj("$type", str(""))));
         assertEquals("InvalidTag", failure.condition());
         assertEquals(List.of(variant("Field", str("nested")), variant("Field", str("$type"))), failure.path());
+    }
+
+    @Test void generalDecimalsPrioritizeBoundedIntegralDecimalAcrossProfileFlags() {
+        Context enabled = context();
+        assertDoesNotThrow(() -> enabled.validate(enabled.reference(4), new DecimalValue("1.0")));
+        assertDoesNotThrow(() -> enabled.validate(enabled.reference(4), new DecimalValue("1.25")));
+        assertEquals("IntegerDomain", rejected(enabled, 4, new DecimalValue("11.0")).condition());
+        assertEquals("IntegerDomain", rejected(enabled, 4, new DecimalValue("1e999999999")).condition());
+        Context disabled = context(false);
+        assertDoesNotThrow(() -> disabled.validate(disabled.reference(4), new DecimalValue("1.0")));
+        assertEquals("IntegerDomain", rejected(disabled, 4, new DecimalValue("11.0")).condition());
+        assertEquals("InvalidDataModel", rejected(disabled, 4, new DecimalValue("1.25")).condition());
+        assertThrows(IllegalArgumentException.class, () -> new DecimalValue("1."));
+        Context numberOnly = context(true, false);
+        assertDoesNotThrow(() -> numberOnly.validate(numberOnly.reference(4), new DecimalValue("-1.25")));
+        assertDoesNotThrow(() -> numberOnly.validate(numberOnly.reference(9), arr(List.of(new DecimalValue("6.02e23")))));
+        assertDoesNotThrow(() -> numberOnly.validate(numberOnly.reference(4), new DecimalValue("11.0")));
     }
 
     @Test void duplicateMembersPrecedeTagValidation() {

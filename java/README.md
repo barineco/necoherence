@@ -3,7 +3,7 @@
 [Project overview](https://github.com/barineco/necoherence/blob/publish/README.md) | [日本語](README-ja.md)
 
 This package is the Java implementation of Necoherence, for Java 21.
-The Maven coordinates are `io.github.barineco:necoherence:0.2.1`.
+The Maven coordinates are `io.github.barineco:necoherence:0.2.2`.
 You can also build the jar from source and add it to the classpath.
 It depends only on the JDK.
 
@@ -75,10 +75,10 @@ printf '%s  %s\n' \
   lib/junit-platform-console-standalone-1.10.2.jar | shasum -a 256 -c -
 find src/test/java -name '*.java' -print0 \
   | xargs -0 javac -J-Duser.language=en --release 21 \
-      -cp "build/maven/io/github/barineco/necoherence/0.2.1/necoherence-0.2.1.jar:lib/junit-platform-console-standalone-1.10.2.jar" \
+      -cp "build/maven/io/github/barineco/necoherence/0.2.2/necoherence-0.2.2.jar:lib/junit-platform-console-standalone-1.10.2.jar" \
       -d build/test-classes
 java -Duser.language=en -jar lib/junit-platform-console-standalone-1.10.2.jar execute \
-  --class-path build/maven/io/github/barineco/necoherence/0.2.1/necoherence-0.2.1.jar:build/test-classes --scan-class-path
+  --class-path build/maven/io/github/barineco/necoherence/0.2.2/necoherence-0.2.2.jar:build/test-classes --scan-class-path
 ```
 
 ## Maven Central release artifacts
@@ -93,7 +93,7 @@ scripts/build-maven.sh build
 
 The default output directory is `java/build/maven/`, which Git ignores.
 The script requires a new output directory.
-For each of the core and the adapter, it writes four files under `io/github/barineco/<artifactId>/0.2.1/`:
+For each of the core and the adapter, it writes four files under `io/github/barineco/<artifactId>/0.2.2/`:
 
 - the binary jar
 - the sources jar
@@ -114,7 +114,7 @@ scripts/build-maven.sh bundle
 ```
 
 For each jar and POM, this step signs the file with GPG and writes the signature and the MD5 and SHA-1 checksums next to it.
-It then creates `central-bundle-0.2.1.zip` in the output directory.
+It then creates `central-bundle-0.2.2.zip` in the output directory.
 The step requires GPG, OpenSSL, and `zip`.
 The key stays in the local GPG keyring, and the upload to Maven Central is a separate manual step.
 The zip follows the [Central Portal bundle layout](https://central.sonatype.org/publish/publish-portal-upload/)

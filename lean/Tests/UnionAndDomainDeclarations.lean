@@ -151,6 +151,44 @@ def integerDomainForms : Bool :=
     integerCondition profile spec (.str "+1") == some (.wrongValueKind "integer") &&
     integerCondition profile spec (.str "1001") == some .integerDomain &&
     rejectedAt (expandValue graph (typeRef "unknown") [] (.num 11)) [] .integerDomain
+def generalDecimalData : Bool :=
+  let enabled := { profile with numbers := { decimals := true } }
+  let boundedIntegral := {
+    profile with
+    integerDomains := [{
+      name := "forms", reference, range := .inclusive (-10) 10,
+      forms := [.number, .integralDecimal] }],
+    defaultIntegerDomain := "forms" }
+  let priorityEnabled := { boundedIntegral with numbers := { decimals := true } }
+  let priorityDisabled := { boundedIntegral with numbers := { decimals := false } }
+  let unboundedIntegral := {
+    boundedIntegral with integerDomains := [{
+      name := "forms", reference, range := .unbounded,
+      forms := [.number, .integralDecimal] }] }
+  let numberOnly := { profile with
+    numbers := { decimals := true },
+    integerDomains := [{
+      name := "default", reference, range := .inclusive (-10) 10,
+      forms := [.number] }],
+    defaultIntegerDomain := "default" }
+  dataValueAccepts enabled (.dec "-1.25") &&
+    dataValueAccepts enabled (.dec "6.02e23") &&
+    dataValueAccepts enabled (.arr [.dec "-1.25"]) &&
+    dataValueAccepts enabled (.obj [("nested", .arr [.dec "6.02e23"])]) &&
+    dataValueAccepts priorityEnabled (.dec "1.0") &&
+    dataValueAccepts priorityEnabled (.dec "1.25") &&
+    !dataValueAccepts priorityEnabled (.dec "11.0") &&
+    integerCondition priorityEnabled {} (.dec "11.0") == some .integerDomain &&
+    dataValueAccepts priorityDisabled (.dec "1.0") &&
+    !dataValueAccepts priorityDisabled (.dec "11.0") &&
+    integerCondition priorityDisabled {} (.dec "11.0") == some .integerDomain &&
+    !dataValueAccepts priorityDisabled (.dec "1.25") &&
+    dataValueAccepts unboundedIntegral (.dec "1e999999") &&
+    dataValueAccepts numberOnly (.dec "11.0") &&
+    !dataValueAccepts enabled (.num 11) &&
+    !dataValueAccepts enabled (.dec "1.")
+
+
 
 def largeExponentIntegerDomains : Bool :=
   let int64Profile := {
@@ -304,7 +342,7 @@ def checks : List (String × Bool) := [
   ("union-selector-branches", unionSelectorBranches),
   ("sealed-form-declaration", sealedFormDeclaration),
   ("integer-domain-forms", integerDomainForms),
-  ("integer-domain-large-exponents", largeExponentIntegerDomains),
+  ("general-decimal-data", generalDecimalData),
   ("integer-domain-orthogonality", integerDomainOrthogonality),
   ("string-length-units", stringLengthUnits),
   ("string-length-orthogonality", stringLengthOrthogonality),

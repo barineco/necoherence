@@ -3,13 +3,13 @@
 [プロジェクトの概要](https://github.com/barineco/necoherence/blob/publish/README-ja.md) | [English](README.md)
 
 この任意のパッケージは、Necoherence のネットワーク副作用のコマンドを、Python の標準ライブラリを使って実行します。ライセンスは MIT です。
-Python 3.12 以降と `necoherence==0.2.1` が必要です。
+Python 3.12 以降と `necoherence==0.2.2` が必要です。
 核のパッケージが持つのは、ネットワーク副作用の台帳と、呼び出し側が渡す観測を受け取る仕組みです。
 
 アプリケーションが HTTP リクエストを実行する場合に、このパッケージを導入します。
 
 ```bash
-python -m pip install necoherence-http-adapter==0.2.1
+python -m pip install necoherence-http-adapter==0.2.2
 ```
 
 アダプターの読み込みは、次のように明示して書く形です。

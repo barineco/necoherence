@@ -158,13 +158,13 @@ jobs:
             lib/junit-platform-console-standalone-1.10.2.jar | shasum -a 256 -c -
           find src/main/java -name '*.java' -print0 \
             | xargs -0 javac -J-Duser.language=en --release 21 -d build/classes
-          jar --create --file build/necoherence-0.2.1.jar -C build/classes .
+          jar --create --file build/necoherence-0.2.2.jar -C build/classes .
           find src/test/java -name '*.java' -print0 \
             | xargs -0 javac -J-Duser.language=en --release 21 \
-                -cp "build/necoherence-0.2.1.jar:lib/junit-platform-console-standalone-1.10.2.jar" \
+                -cp "build/necoherence-0.2.2.jar:lib/junit-platform-console-standalone-1.10.2.jar" \
                 -d build/test-classes
           java -Duser.language=en -jar lib/junit-platform-console-standalone-1.10.2.jar execute \
-            --class-path build/necoherence-0.2.1.jar:build/test-classes --scan-class-path
+            --class-path build/necoherence-0.2.2.jar:build/test-classes --scan-class-path
 
       - name: Run the main-form tests
         run: |
@@ -177,12 +177,12 @@ jobs:
         run: |
           mkdir -p build/classes build/test-classes
           find src/main/java -name '*.java' -print0 \
-            | xargs -0 javac --release 21 -cp ../java/build/necoherence-0.2.1.jar -d build/classes
-          jar --create --file build/necoherence-http-adapter-0.2.1.jar -C build/classes .
+            | xargs -0 javac --release 21 -cp ../java/build/necoherence-0.2.2.jar -d build/classes
+          jar --create --file build/necoherence-http-adapter-0.2.2.jar -C build/classes .
           find src/test/java -name '*.java' -print0 \
-            | xargs -0 javac --release 21 -cp ../java/build/necoherence-0.2.1.jar:build/classes -d build/test-classes
+            | xargs -0 javac --release 21 -cp ../java/build/necoherence-0.2.2.jar:build/classes -d build/test-classes
           for test in NetworkEffectHttpSmoke NetworkEffectProgressionSmoke; do
-            java -cp ../java/build/necoherence-0.2.1.jar:build/classes:build/test-classes "necoherence.network.$test"
+            java -cp ../java/build/necoherence-0.2.2.jar:build/classes:build/test-classes "necoherence.network.$test"
           done
 
       - name: Set up Java 21 for the Maven Central artifacts

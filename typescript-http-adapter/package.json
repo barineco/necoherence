@@ -1,6 +1,6 @@
 {
   "name": "necoherence-http-adapter",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "HTTP host adapter for Necoherence",
   "license": "MIT",
   "type": "module",
@@ -23,7 +23,7 @@
     "test": "vitest run --fileParallelism=false"
   },
   "peerDependencies": {
-    "necoherence": "0.2.1"
+    "necoherence": "0.2.2"
   },
   "devDependencies": {
     "necoherence": "file:../typescript",
