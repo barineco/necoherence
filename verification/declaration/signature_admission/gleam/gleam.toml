@@ -1,0 +1,11 @@
+# SPDX-FileCopyrightText: 2026 barineco
+# SPDX-License-Identifier: AGPL-3.0-only
+
+name = "signature_admission_entry"
+version = "0.3.0"
+target = "erlang"
+
+[dependencies]
+gleam_stdlib = ">= 1.0.0 and < 2.0.0"
+necoherence = { path = "../../../../packages/gleam/adapter" }
+neco_quotient_certificate = "== 0.2.0"

@@ -1,0 +1,158 @@
+// SPDX-FileCopyrightText: 2026 barineco
+// SPDX-License-Identifier: MIT
+
+import gleam/list
+import gleam/option.{None, Some}
+import gleam/string
+import necoherence/exact_json as json
+import necoherence/semantic_generation_decode as decode
+import necoherence/semantic_types as types
+import necoherence/semantic_validation as validation
+import semantic_test_support as support
+
+pub fn canonical_profile_roundtrip_preserves_declarations_test() {
+  let value = support.profile()
+  let assert Ok(encoded) = decode.encode_semantic_profile(value)
+  let assert Ok(decoded) = decode.decode_semantic_profile(encoded)
+  let assert True = decoded == value
+  let assert Ok(reencoded) = decode.encode_semantic_profile(decoded)
+  let assert True = reencoded == encoded
+  let assert Ok(_) = validation.check_profile(decoded)
+}
+
+pub fn canonical_format_wire_roundtrips_every_constructor_test() {
+  let rules = [
+    types.AsciiDfa(types.DfaSpec(1, 0, [0], [])),
+    types.Timestamp(types.CalendarRule(False, 0, 9999, True)),
+    types.Choice([types.Text]),
+    types.Identifier("a", "a", None, 1, Some(2), []),
+    types.AbsoluteUri(Some(8)),
+    types.LanguageTag([]),
+    types.Literal("x"),
+    types.Sequence([types.Text]),
+    types.Optional(types.Text),
+    types.Labels(".", 1, None, None, types.Text),
+    types.Bounded(types.UnicodeScalars, 2, types.Text),
+    types.Text,
+    types.Not(types.Literal("x")),
+  ]
+  list.each(rules, fn(rule) {
+    let assert Ok(encoded) = decode.encode_format_rule(rule)
+    let assert Ok(decoded) = decode.decode_format_rule(encoded)
+    let assert True = decoded == rule
+  })
+}
+
+pub fn canonical_profile_admission_preserves_typed_failure_test() {
+  let invalid =
+    types.SemanticProfile(
+      ..support.profile(),
+      reference: types.ProfileRef("", "4", "digest"),
+    )
+  let assert Error(types.ProfileFailure(_, types.Pr01, ["profile"])) =
+    validation.check_profile(invalid)
+}
+
+pub fn identifier_optional_maximum_wire_and_meaning_test() {
+  list.each([None, Some(3)], fn(maximum) {
+    let rule = types.Identifier("ab", "ab", None, 1, maximum, ["ba"])
+    let assert Ok(encoded) = decode.encode_format_rule(rule)
+    let expected_maximum = case maximum {
+      None -> json.JsonValueNull
+      Some(_) -> json.JsonValueStr("3")
+    }
+    let assert json.JsonValueObj(members) = encoded
+    let assert Ok(json.JsonValueObj(fields)) = list.key_find(members, "fields")
+    let assert Ok(observed) = list.key_find(fields, "max_length")
+    let assert True = observed == expected_maximum
+    let assert Ok(decoded) = decode.decode_format_rule(encoded)
+    let assert True = decoded == rule
+    let assert True = validation.recognizes(None, decoded, "ab")
+    let assert False = validation.recognizes(None, decoded, "")
+    let assert False = validation.recognizes(None, decoded, "ba")
+    let assert False = validation.recognizes(None, decoded, "ac")
+    let assert False = validation.recognizes(None, decoded, "é")
+    let assert True =
+      validation.recognizes(None, decoded, "abab") == { maximum == None }
+    let binding =
+      types.FormatBinding("identifier", support.profile().reference, decoded)
+    let profile =
+      types.SemanticProfile(..support.profile(), format_bindings: [binding])
+    let assert Ok(_) = validation.check_profile(profile)
+  })
+  let exact = types.Identifier("ab", "ab", Some(4), 1, None, [])
+  let assert True = validation.recognizes(None, exact, "abab")
+  let assert False = validation.recognizes(None, exact, "aba")
+  list.each(
+    [
+      types.Identifier("ab", "ab", None, 4, Some(3), []),
+      types.Identifier("ab", "ab", Some(4), 1, Some(3), []),
+      types.Identifier("ab", "ab", Some(0), 1, None, []),
+    ],
+    fn(rule) {
+      let binding =
+        types.FormatBinding("identifier", support.profile().reference, rule)
+      let profile =
+        types.SemanticProfile(..support.profile(), format_bindings: [binding])
+      let assert Error(_) = validation.check_profile(profile)
+    },
+  )
+}
+
+fn source_ref_json(
+  content_digest: String,
+  document_id: String,
+  declared_revision: json.JsonValue,
+) -> json.JsonValue {
+  json.JsonValueObj([
+    #("repository", json.JsonValueStr("repo")),
+    #("revision", json.JsonValueStr("revision")),
+    #("path", json.JsonValueStr("path")),
+    #("content_digest", json.JsonValueStr(content_digest)),
+    #("document_id", json.JsonValueStr(document_id)),
+    #("declared_revision", declared_revision),
+  ])
+}
+
+pub fn source_ref_accepts_the_empty_content_digest_of_the_type_source_test() {
+  let value =
+    json.JsonValueObj([
+      #("repository", json.JsonValueStr("ncoh-type-signatures")),
+      #("revision", json.JsonValueStr("1")),
+      #("path", json.JsonValueStr("")),
+      #("content_digest", json.JsonValueStr("")),
+      #("document_id", json.JsonValueStr("")),
+      #("declared_revision", json.JsonValueNull),
+    ])
+  let assert Ok(source) = decode.decode_source_ref(value)
+  let assert True = source == types.type_source()
+}
+
+pub fn source_ref_keeps_document_id_and_declared_revision_test() {
+  let assert Ok(source) =
+    decode.decode_source_ref(source_ref_json(
+      string.repeat("a", 64),
+      "document",
+      json.JsonValueStr("3"),
+    ))
+  let assert True =
+    source
+    == types.SourceRef(
+      "repo",
+      "revision",
+      "path",
+      string.repeat("a", 64),
+      "document",
+      Some(3),
+    )
+}
+
+pub fn source_ref_decode_keeps_the_content_digest_text_test() {
+  let assert Ok(source) =
+    decode.decode_source_ref(source_ref_json(
+      "ABC",
+      "document",
+      json.JsonValueNull,
+    ))
+  let assert True = source.content_digest == "ABC"
+}

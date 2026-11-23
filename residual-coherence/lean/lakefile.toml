@@ -1,0 +1,14 @@
+# SPDX-FileCopyrightText: 2026 barineco
+# SPDX-License-Identifier: AGPL-3.0-only
+
+name = "residual-coherence-lean"
+version = "0.3.0"
+defaultTargets = ["ResidualCoherenceLean"]
+
+[[require]]
+name = "necoherence"
+path = "../../packages/lean"
+
+[[lean_lib]]
+name = "ResidualCoherenceLean"
+roots = ["ResidualCoherenceLean.ResidualCoherence", "ResidualCoherenceLean.ResidualCoherenceTheorems"]

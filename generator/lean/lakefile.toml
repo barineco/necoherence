@@ -1,0 +1,22 @@
+# SPDX-FileCopyrightText: 2026 barineco
+# SPDX-License-Identifier: AGPL-3.0-only
+
+name = "necoherence-generator"
+version = "0.3.0"
+defaultTargets = ["NecoherenceGenerator", "NecoherenceGeneratorTest"]
+
+[[require]]
+name = "necoherence"
+path = "../../packages/lean"
+
+[[lean_lib]]
+name = "NecoherenceGenerator"
+roots = ["NecoherenceGenerator.SemanticRenderer", "NecoherenceGenerator.SignatureGeneration", "NecoherenceGenerator.SignatureFailureJson"]
+
+[[lean_lib]]
+name = "NecoherenceGeneratorTest"
+roots = ["NecoherenceGeneratorTest.TypeSignatures", "NecoherenceGeneratorTest.TheoremStatements"]
+
+[[lean_exe]]
+name = "semantic_generation"
+root = "NecoherenceGenerator.SemanticGenerationRunner"

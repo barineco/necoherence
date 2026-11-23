@@ -1,0 +1,23 @@
+# Do not manually edit this file, it is managed by Gleam.
+#
+# This file locks the dependency versions used, to make your build
+# deterministic and to prevent unexpected versions from being included
+# in your application.
+#
+# You should check this file into your source control repository.
+
+packages = [
+  { name = "gleam_crypto", version = "1.6.0", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "gleam_crypto", source = "hex", outer_checksum = "2DE9E4EF53CF6FEE049D4F765731F7178F7A11AEFAE00EEE63BF7536B354AD3F" },
+  { name = "gleam_json", version = "3.1.0", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "gleam_json", source = "hex", outer_checksum = "44FDAA8847BE8FC48CA7A1C089706BD54BADCC4C45B237A992EDDF9F2CDB2836" },
+  { name = "gleam_stdlib", version = "1.2.0", build_tools = ["gleam"], requirements = [], otp_app = "gleam_stdlib", source = "hex", outer_checksum = "93D27B978967D61211E06BB1F1062BCF36B6E546F67A575EFA928605F467AF65" },
+  { name = "neco_quotient_application", version = "0.1.0", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "neco_quotient_application", source = "hex", outer_checksum = "58EC1541578824678D536EF6B50D8D0BE4F229531875A5E38FD1992A187B2582" },
+  { name = "neco_quotient_certificate", version = "0.2.0", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "neco_quotient_certificate", source = "hex", outer_checksum = "1DCB0D212DF9EEA397EB312F2AB9E588EF67FCE6E8CD9140540DBA674DE4E8D5" },
+  { name = "neco_quotient_encoding", version = "0.1.0", build_tools = ["gleam"], requirements = ["gleam_crypto", "gleam_stdlib"], otp_app = "neco_quotient_encoding", source = "hex", outer_checksum = "0953DF6CD6E8BD76A080F89D06804F6CB97270EA71D94E5354797CFDF967CAE4" },
+  { name = "neco_quotient_retention", version = "0.1.0", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "neco_quotient_retention", source = "hex", outer_checksum = "ECEE6C4B82350C310F3CA7D3C795A30B5142A2A9DF5C672298CAC4FE24651E3D" },
+  { name = "necoherence", version = "0.3.0", build_tools = ["gleam"], requirements = ["gleam_json", "gleam_stdlib", "neco_quotient_application", "neco_quotient_certificate", "neco_quotient_encoding", "neco_quotient_retention"], source = "local", path = "../../../packages/gleam/adapter" },
+]
+
+[requirements]
+gleam_json = { version = ">= 3.1.0 and < 4.0.0" }
+gleam_stdlib = { version = ">= 1.0.0 and < 2.0.0" }
+necoherence = { path = "../../../packages/gleam/adapter" }

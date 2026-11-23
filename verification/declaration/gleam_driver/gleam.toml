@@ -1,0 +1,13 @@
+# SPDX-FileCopyrightText: 2026 barineco
+# SPDX-License-Identifier: AGPL-3.0-only
+
+name = "semantic_invariant_runner"
+version = "0.3.0"
+gleam = ">= 1.17.0 and < 2.0.0"
+description = "Semantic invariant observation of necoherence through its MIT package"
+licences = ["AGPL-3.0-only"]
+
+[dependencies]
+necoherence = { path = "../../../packages/gleam/adapter" }
+neco_quotient_certificate = "== 0.2.0"
+gleam_stdlib = ">= 1.0.0 and < 2.0.0"

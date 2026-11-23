@@ -17,16 +17,15 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v4
       - name: Remove the tools to build the MIT package alone
-        run: rm -rf tools
+        run: rm -rf generator solver verification/rust verification/lean
       - name: Set up Lean
         uses: leanprover/lean-action@v1
         with:
-          lake-package-directory: lean
+          lake-package-directory: packages/lean
       - name: Build and run theorem tests
-        working-directory: lean
+        working-directory: packages/lean
         run: |
           lake build
-          lake env lean Tests/ResidualCoherenceTheorems.lean
           lake env lean --run Tests/ProofCompleteness.lean
           lake env lean --run Tests/ExactJsonCodec.lean
           lake env lean --run Tests/GraphemeProfileVectors.lean
@@ -45,37 +44,40 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v4
       - name: Remove the tools to build the MIT package alone
-        run: rm -rf tools
+        run: rm -rf generator solver verification/rust verification/lean
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version-file: python/pyproject.toml
+          python-version-file: packages/python/adapter/pyproject.toml
+      - name: Install neco-quotient packages from PyPI
+        run: |
+          python -m pip install "neco-quotient-certificate==0.2.0" "neco-quotient-application==0.1.0" "neco-quotient-retention==0.1.0" "neco-quotient-encoding==0.1.0"
       - name: Install build and test dependencies
-        working-directory: python
+        working-directory: packages/python/adapter
         run: python -m pip install build .[dev]
       - name: Test and type-check
-        working-directory: python
+        working-directory: packages/python/adapter
         run: |
           python -m pytest -q
           python -m mypy src tests
       - name: Build the wheel and test it in a clean environment
-        working-directory: python
+        working-directory: packages/python/adapter
         run: |
           python -m build
           python -m venv .clean-install
           .clean-install/bin/python -m pip install dist/*.whl pytest hypothesis
           .clean-install/bin/python -c "import necoherence, sysconfig; assert necoherence.__file__.startswith(sysconfig.get_paths()['purelib']), necoherence.__file__"
           .clean-install/bin/python -m pytest -q -p no:cacheprovider -o pythonpath=
-          .clean-install/bin/python -c "import zipfile; wheel=next(__import__('pathlib').Path('dist').glob('*.whl')); names=set(zipfile.ZipFile(wheel).namelist()); assert {'necoherence/README.md','necoherence/README-ja.md'} <= names, names"
+          .clean-install/bin/python -c "import zipfile; wheel=next(__import__('pathlib').Path('dist').glob('*.whl')); names=set(zipfile.ZipFile(wheel).namelist()); assert 'necoherence/README.md' in names, names"
       - name: Build and test the separate HTTP adapter
-        working-directory: python-http-adapter
+        working-directory: packages/python/adapter/http
         run: |
-          python -m pip install ../python '.[dev]'
+          python -m pip install .. '.[dev]'
           python -m pytest -q
           python -m mypy src tests
           python -m build
           python -m venv .clean-install
-          .clean-install/bin/python -m pip install ../python/dist/*.whl dist/*.whl pytest
+          .clean-install/bin/python -m pip install ../dist/*.whl dist/*.whl pytest
           .clean-install/bin/python -m pytest -q -p no:cacheprovider -o pythonpath=
 
   rust:
@@ -84,23 +86,29 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v4
       - name: Remove the tools to build the MIT package alone
-        run: rm -rf tools
+        run: rm -rf generator solver verification/rust verification/lean
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
           targets: wasm32-unknown-unknown
       - name: Check, test, and package
-        working-directory: rust
+        working-directory: packages/rust/adapter
         run: |
           cargo fmt --all -- --check
           cargo clippy --all-targets -- -D warnings
           cargo test --all-targets
-          cargo clippy --all-targets --features http-adapter -- -D warnings
-          cargo test --all-targets --features http-adapter
           cargo check --lib --target wasm32-unknown-unknown --no-default-features
           cargo package
-          cargo package --list | grep -qx README-ja.md
+          cargo package --list | grep -qx README.md
+      - name: Check, test, and package the HTTP adapter
+        working-directory: packages/rust/adapter/http
+        run: |
+          cargo fmt --all -- --check
+          cargo clippy --all-targets -- -D warnings
+          cargo test
+          cargo package --config "patch.crates-io.necoherence.path=\"${{ github.workspace }}/packages/rust/adapter\""
+          cargo package --list | grep -qx README.md
 
   typescript:
     runs-on: ubuntu-latest
@@ -108,46 +116,91 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v4
       - name: Remove the tools to build the MIT package alone
-        run: rm -rf tools
+        run: rm -rf generator solver verification/rust verification/lean
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: lts/*
           cache: npm
-          cache-dependency-path: typescript/package-lock.json
+          cache-dependency-path: packages/typescript/adapter/package-lock.json
       - name: Install dependencies
-        working-directory: typescript
+        working-directory: packages/typescript/adapter
         run: npm ci
       - name: Type-check, test, and verify the package consumer
-        working-directory: typescript
+        working-directory: packages/typescript/adapter
         run: |
           npm run typecheck
+          npm run lint
           npm test
+          npx tsx --test "$GITHUB_WORKSPACE/verification/network_effect/ts_runner.test.mts"
           npm run verify:consumer
           npm pack --json > pack.json
-          python -c "import json, tarfile; name=json.load(open('pack.json'))[0]['filename']; names=set(tarfile.open(name).getnames()); assert {'package/README.md','package/README-ja.md'} <= names, names"
+          python -c "import json, tarfile; name=json.load(open('pack.json'))[0]['filename']; names=set(tarfile.open(name).getnames()); assert 'package/README.md' in names, names"
       - name: Build and test the separate HTTP adapter
-        working-directory: typescript-http-adapter
+        working-directory: packages/typescript/adapter/http
         run: |
           npm ci
           npm run typecheck
+          npm run lint
           npm test
           npm pack
 
   java:
     runs-on: ubuntu-latest
+    env:
+      NCOH_NECO_QUOTIENT_JAVA: ${{ github.workspace }}/../neco-quotient-certificate-0.2.0-sources
+      NCOH_NECO_QUOTIENT_APPLICATION_JAVA: ${{ github.workspace }}/../neco-quotient-application-sources
+      NCOH_NECO_QUOTIENT_RETENTION_JAVA: ${{ github.workspace }}/../neco-quotient-retention-sources
+      NCOH_NECO_QUOTIENT_ENCODING_JAVA: ${{ github.workspace }}/../neco-quotient-encoding-sources
+      NCOH_JAVAC_FLAGS: >-
+        -Xlint:all -Werror -XDcompilePolicy=simple -XDshould-stop.ifError=FLOW
+        -XDaddTypeAnnotationsToSymbol=true
+        -J--add-exports=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED
+        -J--add-exports=jdk.compiler/com.sun.tools.javac.code=ALL-UNNAMED
+        -J--add-exports=jdk.compiler/com.sun.tools.javac.comp=ALL-UNNAMED
+        -J--add-exports=jdk.compiler/com.sun.tools.javac.file=ALL-UNNAMED
+        -J--add-exports=jdk.compiler/com.sun.tools.javac.main=ALL-UNNAMED
+        -J--add-exports=jdk.compiler/com.sun.tools.javac.model=ALL-UNNAMED
+        -J--add-exports=jdk.compiler/com.sun.tools.javac.parser=ALL-UNNAMED
+        -J--add-exports=jdk.compiler/com.sun.tools.javac.processing=ALL-UNNAMED
+        -J--add-exports=jdk.compiler/com.sun.tools.javac.tree=ALL-UNNAMED
+        -J--add-exports=jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED
+        -processorpath ${{ github.workspace }}/packages/java/adapter/lib/error_prone_core-2.51.0-with-dependencies.jar
+      NCOH_ERROR_PRONE_PLUGIN: "-Xplugin:ErrorProne -XepDisableAllChecks -Xep:BanJNDI:ERROR -Xep:DoNotCall:ERROR -Xep:CatchFail:ERROR -Xep:CheckReturnValue:ERROR"
     steps:
       - name: Check out source
         uses: actions/checkout@v4
+      - name: Fetch the neco-quotient Java sources from Maven Central
+        run: |
+          curl --fail --location --silent --show-error --output "$RUNNER_TEMP/neco-quotient-certificate-0.2.0-sources.jar" \
+            https://repo1.maven.org/maven2/io/github/barineco/neco-quotient-certificate/0.2.0/neco-quotient-certificate-0.2.0-sources.jar
+          printf '%s  %s\n' dd477ac74974b3a676dd719cefdffe68f44bfb105025cb12282916efa6020e98 \
+            "$RUNNER_TEMP/neco-quotient-certificate-0.2.0-sources.jar" | shasum -a 256 -c -
+          unzip -q "$RUNNER_TEMP/neco-quotient-certificate-0.2.0-sources.jar" -d "$NCOH_NECO_QUOTIENT_JAVA"
+          curl --fail --location --silent --show-error --output "$RUNNER_TEMP/neco-quotient-application-0.1.0-sources.jar" \
+            https://repo1.maven.org/maven2/io/github/barineco/neco-quotient-application/0.1.0/neco-quotient-application-0.1.0-sources.jar
+          printf '%s  %s\n' 15f64a3fa26e07015adfca6f6c16320accdedca33b080bdf4a236a049cd81e41 \
+            "$RUNNER_TEMP/neco-quotient-application-0.1.0-sources.jar" | shasum -a 256 -c -
+          unzip -q "$RUNNER_TEMP/neco-quotient-application-0.1.0-sources.jar" -d "$NCOH_NECO_QUOTIENT_APPLICATION_JAVA"
+          curl --fail --location --silent --show-error --output "$RUNNER_TEMP/neco-quotient-retention-0.1.0-sources.jar" \
+            https://repo1.maven.org/maven2/io/github/barineco/neco-quotient-retention/0.1.0/neco-quotient-retention-0.1.0-sources.jar
+          printf '%s  %s\n' 7c514b0cb42d2f10a11e398be7a01e8aabb4bab867132c4fec18e160e01dfb5b \
+            "$RUNNER_TEMP/neco-quotient-retention-0.1.0-sources.jar" | shasum -a 256 -c -
+          unzip -q "$RUNNER_TEMP/neco-quotient-retention-0.1.0-sources.jar" -d "$NCOH_NECO_QUOTIENT_RETENTION_JAVA"
+          curl --fail --location --silent --show-error --output "$RUNNER_TEMP/neco-quotient-encoding-0.1.0-sources.jar" \
+            https://repo1.maven.org/maven2/io/github/barineco/neco-quotient-encoding/0.1.0/neco-quotient-encoding-0.1.0-sources.jar
+          printf '%s  %s\n' b58874a0c5131b2eceb649ff757befe30fa0c36856528c28635aab2b62c67e46 \
+            "$RUNNER_TEMP/neco-quotient-encoding-0.1.0-sources.jar" | shasum -a 256 -c -
+          unzip -q "$RUNNER_TEMP/neco-quotient-encoding-0.1.0-sources.jar" -d "$NCOH_NECO_QUOTIENT_ENCODING_JAVA"
       - name: Remove the tools to build the MIT package alone
-        run: rm -rf tools
+        run: rm -rf generator solver verification/rust verification/lean
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: x
       - name: Build the jar and test it
-        working-directory: java
+        working-directory: packages/java/adapter
         run: |
           mkdir -p lib build/classes build/test-classes
           curl --fail --location --silent --show-error \
@@ -156,33 +209,49 @@ jobs:
           printf '%s  %s\n' \
             a1de557821293ce903c213c694165fff532cf92081bac4238b9e05b35f04f43f \
             lib/junit-platform-console-standalone-1.10.2.jar | shasum -a 256 -c -
+          curl --fail --location --silent --show-error \
+            --output lib/error_prone_core-2.51.0-with-dependencies.jar \
+            https://repo1.maven.org/maven2/com/google/errorprone/error_prone_core/2.51.0/error_prone_core-2.51.0-with-dependencies.jar
+          printf '%s  %s\n' \
+            9a6aee2aa413500ac9314bfb22a30b6a4992aeb1156ddfd5f8d5c3dc280f1af1 \
+            lib/error_prone_core-2.51.0-with-dependencies.jar | shasum -a 256 -c -
           find src/main/java -name '*.java' -print0 \
-            | xargs -0 javac -J-Duser.language=en --release 21 -d build/classes
-          jar --create --file build/necoherence-0.2.2.jar -C build/classes .
+            | xargs -0 javac -J-Duser.language=en --release 21 $NCOH_JAVAC_FLAGS "$NCOH_ERROR_PRONE_PLUGIN" -sourcepath "$NCOH_NECO_QUOTIENT_JAVA:$NCOH_NECO_QUOTIENT_APPLICATION_JAVA:$NCOH_NECO_QUOTIENT_RETENTION_JAVA:$NCOH_NECO_QUOTIENT_ENCODING_JAVA" -d build/classes
+          jar --create --file build/necoherence-0.3.0.jar -C build/classes .
           find src/test/java -name '*.java' -print0 \
-            | xargs -0 javac -J-Duser.language=en --release 21 \
-                -cp "build/necoherence-0.2.2.jar:lib/junit-platform-console-standalone-1.10.2.jar" \
+            | xargs -0 javac -J-Duser.language=en --release 21 $NCOH_JAVAC_FLAGS "$NCOH_ERROR_PRONE_PLUGIN" \
+                -sourcepath "$NCOH_NECO_QUOTIENT_JAVA:$NCOH_NECO_QUOTIENT_APPLICATION_JAVA:$NCOH_NECO_QUOTIENT_RETENTION_JAVA:$NCOH_NECO_QUOTIENT_ENCODING_JAVA" \
+                -cp "build/necoherence-0.3.0.jar:lib/junit-platform-console-standalone-1.10.2.jar" \
                 -d build/test-classes
           java -Duser.language=en -jar lib/junit-platform-console-standalone-1.10.2.jar execute \
-            --class-path build/necoherence-0.2.2.jar:build/test-classes --scan-class-path
+            --class-path build/necoherence-0.3.0.jar:build/test-classes --scan-class-path
+          mkdir -p ../../../verification/network_effect/java_driver/classes
+          javac -J-Duser.language=en --release 21 $NCOH_JAVAC_FLAGS "$NCOH_ERROR_PRONE_PLUGIN" \
+            -cp "build/necoherence-0.3.0.jar:lib/junit-platform-console-standalone-1.10.2.jar" \
+            -d ../../../verification/network_effect/java_driver/classes \
+            ../../../verification/network_effect/java_driver/NetworkEffectRunner.java \
+            ../../../verification/network_effect/java_driver/NetworkEffectRunnerIntegerCheck.java
+          java -Duser.language=en -jar lib/junit-platform-console-standalone-1.10.2.jar execute \
+            --class-path build/necoherence-0.3.0.jar:../../../verification/network_effect/java_driver/classes \
+            --select-class necoherence.network.NetworkEffectRunnerIntegerCheck
 
       - name: Run the main-form tests
         run: |
           for test in semantic.SemanticFormatTest semantic.SemanticGraphemeTest semantic.SemanticCalendarTest network.NetworkEffectTest; do
-            java -Duser.language=en -cp java/build/classes:java/build/test-classes:java/lib/junit-platform-console-standalone-1.10.2.jar "necoherence.$test"
+            java -Duser.language=en -cp packages/java/adapter/build/classes:packages/java/adapter/build/test-classes:packages/java/adapter/lib/junit-platform-console-standalone-1.10.2.jar "necoherence.$test"
           done
 
       - name: Build and test the separate HTTP adapter jar
-        working-directory: java-http-adapter
+        working-directory: packages/java/adapter/http
         run: |
           mkdir -p build/classes build/test-classes
           find src/main/java -name '*.java' -print0 \
-            | xargs -0 javac --release 21 -cp ../java/build/necoherence-0.2.2.jar -d build/classes
-          jar --create --file build/necoherence-http-adapter-0.2.2.jar -C build/classes .
+            | xargs -0 javac --release 21 $NCOH_JAVAC_FLAGS "$NCOH_ERROR_PRONE_PLUGIN" -cp ../build/necoherence-0.3.0.jar -d build/classes
+          jar --create --file build/necoherence-http-adapter-0.3.0.jar -C build/classes .
           find src/test/java -name '*.java' -print0 \
-            | xargs -0 javac --release 21 -cp ../java/build/necoherence-0.2.2.jar:build/classes -d build/test-classes
+            | xargs -0 javac --release 21 $NCOH_JAVAC_FLAGS "$NCOH_ERROR_PRONE_PLUGIN" -cp ../build/necoherence-0.3.0.jar:build/classes -d build/test-classes
           for test in NetworkEffectHttpSmoke NetworkEffectProgressionSmoke; do
-            java -cp ../java/build/necoherence-0.2.2.jar:build/classes:build/test-classes "necoherence.network.$test"
+            java -cp ../build/necoherence-0.3.0.jar:build/classes:build/test-classes "necoherence.network.$test"
           done
 
       - name: Set up Java 21 for the Maven Central artifacts
@@ -192,7 +261,7 @@ jobs:
           java-version: 21
 
       - name: Build the Maven Central artifacts
-        run: sh scripts/build-maven.sh build "$RUNNER_TEMP/maven"
+        run: sh packages/java/build-maven.sh build "$RUNNER_TEMP/maven"
 
   gleam:
     runs-on: ubuntu-latest
@@ -200,10 +269,10 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v4
       - name: Remove the tools to build the MIT package alone
-        run: rm -rf tools
+        run: rm -rf generator solver verification/rust verification/lean
       - name: Read the Gleam version range from the package manifest
         id: gleam
-        run: python3 -c "import tomllib; print('version=' + tomllib.load(open('gleam/gleam.toml', 'rb'))['gleam'].replace(' and ', ' '))" >> "$GITHUB_OUTPUT"
+        run: python3 -c "import tomllib; print('version=' + tomllib.load(open('packages/gleam/adapter/gleam.toml', 'rb'))['gleam'].replace(' and ', ' '))" >> "$GITHUB_OUTPUT"
       - name: Set up Erlang and Gleam
         uses: erlef/setup-beam@v1
         with:
@@ -211,7 +280,7 @@ jobs:
           gleam-version: ${{ steps.gleam.outputs.version }}
           rebar3-version: "3"
       - name: Check, test, and build the package archive
-        working-directory: gleam
+        working-directory: packages/gleam/adapter
         run: |
           gleam format --check
           gleam build --warnings-as-errors
@@ -220,9 +289,9 @@ jobs:
           archive=$(python3 -c 'import tomllib; package = tomllib.load(open("gleam.toml", "rb")); print("build/" + package["name"] + "-" + package["version"] + ".tar")')
           contents=$(mktemp -d)
           tar -xf "$archive" -C "$contents" contents.tar.gz
-          test "$(tar -tzf "$contents/contents.tar.gz" | grep -Ec '^(README|README-ja)\.md$')" -eq 2
+          test "$(tar -tzf "$contents/contents.tar.gz" | grep -Ec '^README\.md$')" -eq 1
       - name: Build and test the separate HTTP adapter
-        working-directory: comparison/network_effect/gleam_driver
+        working-directory: verification/network_effect/gleam_driver
         run: |
           gleam format --check
           gleam build --warnings-as-errors
@@ -230,31 +299,67 @@ jobs:
 
   shared-operations:
     runs-on: ubuntu-latest
+    env:
+      NCOH_NECO_QUOTIENT_JAVA: ${{ github.workspace }}/../neco-quotient-certificate-0.2.0-sources
+      NCOH_NECO_QUOTIENT_APPLICATION_JAVA: ${{ github.workspace }}/../neco-quotient-application-sources
+      NCOH_NECO_QUOTIENT_RETENTION_JAVA: ${{ github.workspace }}/../neco-quotient-retention-sources
+      NCOH_NECO_QUOTIENT_ENCODING_JAVA: ${{ github.workspace }}/../neco-quotient-encoding-sources
     steps:
       - name: Check out source
         uses: actions/checkout@v4
+      - name: Fetch the neco-quotient Java sources from Maven Central
+        run: |
+          curl --fail --location --silent --show-error --output "$RUNNER_TEMP/neco-quotient-certificate-0.2.0-sources.jar" \
+            https://repo1.maven.org/maven2/io/github/barineco/neco-quotient-certificate/0.2.0/neco-quotient-certificate-0.2.0-sources.jar
+          printf '%s  %s\n' dd477ac74974b3a676dd719cefdffe68f44bfb105025cb12282916efa6020e98 \
+            "$RUNNER_TEMP/neco-quotient-certificate-0.2.0-sources.jar" | shasum -a 256 -c -
+          unzip -q "$RUNNER_TEMP/neco-quotient-certificate-0.2.0-sources.jar" -d "$NCOH_NECO_QUOTIENT_JAVA"
+          curl --fail --location --silent --show-error --output "$RUNNER_TEMP/neco-quotient-application-0.1.0-sources.jar" \
+            https://repo1.maven.org/maven2/io/github/barineco/neco-quotient-application/0.1.0/neco-quotient-application-0.1.0-sources.jar
+          printf '%s  %s\n' 15f64a3fa26e07015adfca6f6c16320accdedca33b080bdf4a236a049cd81e41 \
+            "$RUNNER_TEMP/neco-quotient-application-0.1.0-sources.jar" | shasum -a 256 -c -
+          unzip -q "$RUNNER_TEMP/neco-quotient-application-0.1.0-sources.jar" -d "$NCOH_NECO_QUOTIENT_APPLICATION_JAVA"
+          curl --fail --location --silent --show-error --output "$RUNNER_TEMP/neco-quotient-retention-0.1.0-sources.jar" \
+            https://repo1.maven.org/maven2/io/github/barineco/neco-quotient-retention/0.1.0/neco-quotient-retention-0.1.0-sources.jar
+          printf '%s  %s\n' 7c514b0cb42d2f10a11e398be7a01e8aabb4bab867132c4fec18e160e01dfb5b \
+            "$RUNNER_TEMP/neco-quotient-retention-0.1.0-sources.jar" | shasum -a 256 -c -
+          unzip -q "$RUNNER_TEMP/neco-quotient-retention-0.1.0-sources.jar" -d "$NCOH_NECO_QUOTIENT_RETENTION_JAVA"
+          curl --fail --location --silent --show-error --output "$RUNNER_TEMP/neco-quotient-encoding-0.1.0-sources.jar" \
+            https://repo1.maven.org/maven2/io/github/barineco/neco-quotient-encoding/0.1.0/neco-quotient-encoding-0.1.0-sources.jar
+          printf '%s  %s\n' b58874a0c5131b2eceb649ff757befe30fa0c36856528c28635aab2b62c67e46 \
+            "$RUNNER_TEMP/neco-quotient-encoding-0.1.0-sources.jar" | shasum -a 256 -c -
+          unzip -q "$RUNNER_TEMP/neco-quotient-encoding-0.1.0-sources.jar" -d "$NCOH_NECO_QUOTIENT_ENCODING_JAVA"
       - name: Remove the tools to compare the MIT implementations alone
-        run: rm -rf tools
+        run: rm -rf generator solver verification/rust verification/lean
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version-file: python/pyproject.toml
+          python-version-file: packages/python/adapter/pyproject.toml
+      - name: Install neco-quotient packages from PyPI
+        run: |
+          python -m pip install "neco-quotient-certificate==0.2.0" "neco-quotient-application==0.1.0" "neco-quotient-retention==0.1.0" "neco-quotient-encoding==0.1.0"
       - name: Read the Gleam version range from the package manifest
         id: gleam
-        run: python -c "import tomllib; print('version=' + tomllib.load(open('gleam/gleam.toml', 'rb'))['gleam'].replace(' and ', ' '))" >> "$GITHUB_OUTPUT"
+        run: python -c "import tomllib; print('version=' + tomllib.load(open('packages/gleam/adapter/gleam.toml', 'rb'))['gleam'].replace(' and ', ' '))" >> "$GITHUB_OUTPUT"
       - name: Set up Lean
         uses: leanprover/lean-action@v1
         with:
           auto-config: "false"
-          lake-package-directory: comparison/shared_operations/lean_driver
+          lake-package-directory: verification/shared_operations/lean_driver
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - name: Set up wasmtime
+        uses: bytecodealliance/actions/wasmtime/setup@v1
+        with:
+          version: "50.0.1"
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: lts/*
           cache: npm
-          cache-dependency-path: typescript/package-lock.json
+          cache-dependency-path: packages/typescript/adapter/package-lock.json
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
@@ -266,28 +371,73 @@ jobs:
           otp-version: "> 0"
           gleam-version: ${{ steps.gleam.outputs.version }}
       - name: Install the TypeScript dependencies
-        working-directory: typescript
+        working-directory: packages/typescript/adapter
         run: npm ci
       - name: Compare the six implementations on the shared operations
-        run: python -m comparison.shared_operations.differential
+        run: python -m verification.shared_operations.differential
+      - name: Check the per-operation fuel of the Rust state families
+        run: python -m verification.shared_operations.rust_cost --repeat 3
+      - name: Check the allocation counts of the Rust state families and prepared validation
+        working-directory: verification/shared_operations/rust_driver
+        run: cargo test --test state_machine_allocations --test borrowed_value_allocations
+      - name: Check the per-operation cost of the TypeScript state families
+        run: |
+          npm --prefix packages/typescript/adapter run build
+          python -m verification.shared_operations.ts_cost --repeat 3
+      - name: Check the per-operation cost of the Java state families
+        run: python -m verification.shared_operations.java_cost --repeat 3
+      - name: Check the per-operation cost of the Python state families
+        run: python -m verification.shared_operations.python_cost --repeat 3
+      - name: Check the per-operation reductions of the Gleam state families
+        run: python -m verification.shared_operations.gleam_cost --repeat 3
 
   network-effect:
     runs-on: ubuntu-latest
+    env:
+      NCOH_NECO_QUOTIENT_JAVA: ${{ github.workspace }}/../neco-quotient-certificate-0.2.0-sources
+      NCOH_NECO_QUOTIENT_APPLICATION_JAVA: ${{ github.workspace }}/../neco-quotient-application-sources
+      NCOH_NECO_QUOTIENT_RETENTION_JAVA: ${{ github.workspace }}/../neco-quotient-retention-sources
+      NCOH_NECO_QUOTIENT_ENCODING_JAVA: ${{ github.workspace }}/../neco-quotient-encoding-sources
     steps:
       - name: Check out source
         uses: actions/checkout@v4
+      - name: Fetch the neco-quotient Java sources from Maven Central
+        run: |
+          curl --fail --location --silent --show-error --output "$RUNNER_TEMP/neco-quotient-certificate-0.2.0-sources.jar" \
+            https://repo1.maven.org/maven2/io/github/barineco/neco-quotient-certificate/0.2.0/neco-quotient-certificate-0.2.0-sources.jar
+          printf '%s  %s\n' dd477ac74974b3a676dd719cefdffe68f44bfb105025cb12282916efa6020e98 \
+            "$RUNNER_TEMP/neco-quotient-certificate-0.2.0-sources.jar" | shasum -a 256 -c -
+          unzip -q "$RUNNER_TEMP/neco-quotient-certificate-0.2.0-sources.jar" -d "$NCOH_NECO_QUOTIENT_JAVA"
+          curl --fail --location --silent --show-error --output "$RUNNER_TEMP/neco-quotient-application-0.1.0-sources.jar" \
+            https://repo1.maven.org/maven2/io/github/barineco/neco-quotient-application/0.1.0/neco-quotient-application-0.1.0-sources.jar
+          printf '%s  %s\n' 15f64a3fa26e07015adfca6f6c16320accdedca33b080bdf4a236a049cd81e41 \
+            "$RUNNER_TEMP/neco-quotient-application-0.1.0-sources.jar" | shasum -a 256 -c -
+          unzip -q "$RUNNER_TEMP/neco-quotient-application-0.1.0-sources.jar" -d "$NCOH_NECO_QUOTIENT_APPLICATION_JAVA"
+          curl --fail --location --silent --show-error --output "$RUNNER_TEMP/neco-quotient-retention-0.1.0-sources.jar" \
+            https://repo1.maven.org/maven2/io/github/barineco/neco-quotient-retention/0.1.0/neco-quotient-retention-0.1.0-sources.jar
+          printf '%s  %s\n' 7c514b0cb42d2f10a11e398be7a01e8aabb4bab867132c4fec18e160e01dfb5b \
+            "$RUNNER_TEMP/neco-quotient-retention-0.1.0-sources.jar" | shasum -a 256 -c -
+          unzip -q "$RUNNER_TEMP/neco-quotient-retention-0.1.0-sources.jar" -d "$NCOH_NECO_QUOTIENT_RETENTION_JAVA"
+          curl --fail --location --silent --show-error --output "$RUNNER_TEMP/neco-quotient-encoding-0.1.0-sources.jar" \
+            https://repo1.maven.org/maven2/io/github/barineco/neco-quotient-encoding/0.1.0/neco-quotient-encoding-0.1.0-sources.jar
+          printf '%s  %s\n' b58874a0c5131b2eceb649ff757befe30fa0c36856528c28635aab2b62c67e46 \
+            "$RUNNER_TEMP/neco-quotient-encoding-0.1.0-sources.jar" | shasum -a 256 -c -
+          unzip -q "$RUNNER_TEMP/neco-quotient-encoding-0.1.0-sources.jar" -d "$NCOH_NECO_QUOTIENT_ENCODING_JAVA"
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version-file: python/pyproject.toml
+          python-version-file: packages/python/adapter/pyproject.toml
+      - name: Install neco-quotient packages from PyPI
+        run: |
+          python -m pip install "neco-quotient-certificate==0.2.0" "neco-quotient-application==0.1.0" "neco-quotient-retention==0.1.0" "neco-quotient-encoding==0.1.0"
       - name: Read the Gleam version range from the package manifest
         id: gleam
-        run: python -c "import tomllib; print('version=' + tomllib.load(open('gleam/gleam.toml', 'rb'))['gleam'].replace(' and ', ' '))" >> "$GITHUB_OUTPUT"
+        run: python -c "import tomllib; print('version=' + tomllib.load(open('packages/gleam/adapter/gleam.toml', 'rb'))['gleam'].replace(' and ', ' '))" >> "$GITHUB_OUTPUT"
       - name: Set up Lean
         uses: leanprover/lean-action@v1
         with:
           auto-config: "false"
-          lake-package-directory: lean
+          lake-package-directory: verification/lean
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Set up Node.js
@@ -295,7 +445,7 @@ jobs:
         with:
           node-version: lts/*
           cache: npm
-          cache-dependency-path: typescript/package-lock.json
+          cache-dependency-path: packages/typescript/adapter/package-lock.json
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
@@ -307,35 +457,87 @@ jobs:
           otp-version: "> 0"
           gleam-version: ${{ steps.gleam.outputs.version }}
           rebar3-version: "3"
+      - name: Check the exit values of the network effect checks
+        run: python -m unittest verification.network_effect.test_exit_codes
       - name: Compare the network effect implementations
-        run: python -m comparison.network_effect.differential --all
-      - name: Install the TypeScript HTTP adapter dependencies
+        run: python -m verification.network_effect.differential --all
+      - name: Build the TypeScript adapter and install the HTTP adapter dependencies
         run: |
-          npm --prefix typescript-http-adapter ci
+          npm --prefix packages/typescript/adapter ci
+          npm --prefix packages/typescript/adapter run build
+          npm --prefix packages/typescript/adapter/http ci
       - name: Check the host failure matrix
-        run: python -m comparison.network_effect.host_failure_matrix --all --assert-counts
+        run: python -m verification.network_effect.host_failure_matrix --all --assert-counts
       - name: Check the request progression bridge
-        run: python -m comparison.network_effect.progression_bridge --all
+        run: python -m verification.network_effect.progression_bridge --all
 
   typed-mapping-solver:
     runs-on: ubuntu-latest
+    env:
+      NCOH_NECO_QUOTIENT_JAVA: ${{ github.workspace }}/../neco-quotient-certificate-0.2.0-sources
+      NCOH_NECO_QUOTIENT_APPLICATION_JAVA: ${{ github.workspace }}/../neco-quotient-application-sources
+      NCOH_NECO_QUOTIENT_RETENTION_JAVA: ${{ github.workspace }}/../neco-quotient-retention-sources
+      NCOH_NECO_QUOTIENT_ENCODING_JAVA: ${{ github.workspace }}/../neco-quotient-encoding-sources
     steps:
       - name: Check out source
         uses: actions/checkout@v4
+      - name: Fetch the neco-quotient Java sources from Maven Central
+        run: |
+          curl --fail --location --silent --show-error --output "$RUNNER_TEMP/neco-quotient-certificate-0.2.0-sources.jar" \
+            https://repo1.maven.org/maven2/io/github/barineco/neco-quotient-certificate/0.2.0/neco-quotient-certificate-0.2.0-sources.jar
+          printf '%s  %s\n' dd477ac74974b3a676dd719cefdffe68f44bfb105025cb12282916efa6020e98 \
+            "$RUNNER_TEMP/neco-quotient-certificate-0.2.0-sources.jar" | shasum -a 256 -c -
+          unzip -q "$RUNNER_TEMP/neco-quotient-certificate-0.2.0-sources.jar" -d "$NCOH_NECO_QUOTIENT_JAVA"
+          curl --fail --location --silent --show-error --output "$RUNNER_TEMP/neco-quotient-application-0.1.0-sources.jar" \
+            https://repo1.maven.org/maven2/io/github/barineco/neco-quotient-application/0.1.0/neco-quotient-application-0.1.0-sources.jar
+          printf '%s  %s\n' 15f64a3fa26e07015adfca6f6c16320accdedca33b080bdf4a236a049cd81e41 \
+            "$RUNNER_TEMP/neco-quotient-application-0.1.0-sources.jar" | shasum -a 256 -c -
+          unzip -q "$RUNNER_TEMP/neco-quotient-application-0.1.0-sources.jar" -d "$NCOH_NECO_QUOTIENT_APPLICATION_JAVA"
+          curl --fail --location --silent --show-error --output "$RUNNER_TEMP/neco-quotient-retention-0.1.0-sources.jar" \
+            https://repo1.maven.org/maven2/io/github/barineco/neco-quotient-retention/0.1.0/neco-quotient-retention-0.1.0-sources.jar
+          printf '%s  %s\n' 7c514b0cb42d2f10a11e398be7a01e8aabb4bab867132c4fec18e160e01dfb5b \
+            "$RUNNER_TEMP/neco-quotient-retention-0.1.0-sources.jar" | shasum -a 256 -c -
+          unzip -q "$RUNNER_TEMP/neco-quotient-retention-0.1.0-sources.jar" -d "$NCOH_NECO_QUOTIENT_RETENTION_JAVA"
+          curl --fail --location --silent --show-error --output "$RUNNER_TEMP/neco-quotient-encoding-0.1.0-sources.jar" \
+            https://repo1.maven.org/maven2/io/github/barineco/neco-quotient-encoding/0.1.0/neco-quotient-encoding-0.1.0-sources.jar
+          printf '%s  %s\n' b58874a0c5131b2eceb649ff757befe30fa0c36856528c28635aab2b62c67e46 \
+            "$RUNNER_TEMP/neco-quotient-encoding-0.1.0-sources.jar" | shasum -a 256 -c -
+          unzip -q "$RUNNER_TEMP/neco-quotient-encoding-0.1.0-sources.jar" -d "$NCOH_NECO_QUOTIENT_ENCODING_JAVA"
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version-file: python/pyproject.toml
+          python-version-file: packages/python/adapter/pyproject.toml
+      - name: Install neco-quotient packages from PyPI
+        run: |
+          python -m pip install "neco-quotient-certificate==0.2.0" "neco-quotient-application==0.1.0" "neco-quotient-retention==0.1.0" "neco-quotient-encoding==0.1.0"
       - name: Read the Gleam version range from the package manifest
         id: gleam
-        run: python -c "import tomllib; print('version=' + tomllib.load(open('tools/gleam/gleam.toml', 'rb'))['gleam'].replace(' and ', ' '))" >> "$GITHUB_OUTPUT"
+        run: python -c "import tomllib; print('version=' + tomllib.load(open('packages/gleam/adapter/gleam.toml', 'rb'))['gleam'].replace(' and ', ' '))" >> "$GITHUB_OUTPUT"
       - name: Set up Lean
         uses: leanprover/lean-action@v1
         with:
           auto-config: "false"
-          lake-package-directory: tools/lean
+          lake-package-directory: solver/lean
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+          components: llvm-tools
+      - name: Set up wasmtime
+        uses: bytecodealliance/actions/wasmtime/setup@v1
+        with:
+          version: "50.0.1"
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: packages/typescript/adapter/package-lock.json
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
       - name: Set up Erlang and Gleam
         uses: erlef/setup-beam@v1
         with:
@@ -344,44 +546,53 @@ jobs:
           rebar3-version: "3"
       - name: Compare the public solver implementations
         run: |
-          python comparison/typed_mapping_solver/check.py --prepare-fixtures
+          python solver/verification/check.py --prepare-fixtures
           (
-            cd tools/lean
-            lake build NecoherenceTools NecoherenceToolsTest
-            TMS_FIXTURES=../../comparison/typed_mapping_solver/fixtures.json \
-              lake env lean ../../comparison/typed_mapping_solver/lean_runner.lean \
-              > ../../comparison/typed_mapping_solver/out-lean.json
+            cd solver/lean
+            lake build NecoherenceSolver NecoherenceSolverTest
+            TMS_FIXTURES=../verification/fixtures.json \
+              lake env lean ../verification/lean_runner.lean \
+              > ../verification/out-lean.json
           )
-          cargo run --quiet --manifest-path tools/rust/Cargo.toml \
+          cargo run --quiet --manifest-path solver/rust/Cargo.toml \
             --example typed_mapping_solver_compare -- \
-            comparison/typed_mapping_solver/fixtures.json \
-            > comparison/typed_mapping_solver/out-rust.json
-          (
-            cd tools/gleam
-            gleam run -m typed_mapping_solver_compare -- \
-              ../../comparison/typed_mapping_solver/fixtures.json \
-              > ../../comparison/typed_mapping_solver/out-gleam.json
-          )
-          python comparison/typed_mapping_solver/check.py \
+            solver/verification/fixtures.json \
+            > solver/verification/out-rust.json
+          python solver/verification/check.py \
             --compare-public-producers \
-              lean=out-lean.json rust=out-rust.json gleam=out-gleam.json \
-            --require-same-public-solver \
-              lean-runtime-test rust-runtime-test gleam-runtime-test \
+              lean=out-lean.json rust=out-rust.json \
             --reject-local-producers \
             --reject-test-only-producers
+      - name: Compare the typed mapping core operations of Lean and Gleam
+        run: |
+          python solver/verification/core_compare.py --prepare
+          (
+            cd solver/lean
+            TMS_CASES=../verification/core_cases.json \
+              lake env lean ../verification/core_runner.lean \
+              > ../verification/core-lean.json
+          )
+          (
+            cd solver/verification/gleam_driver
+            gleam build --warnings-as-errors
+            erl -noshell -pa build/dev/erlang/*/ebin \
+              -eval 'typed_mapping_core_compare:main(), halt().' \
+              < ../core_cases.json \
+              > ../core-gleam.json
+          )
+          python solver/verification/core_compare.py --compare \
+            solver/verification/core-lean.json solver/verification/core-gleam.json
       - name: Recheck the saved mutation classifications
         run: |
-          python comparison/typed_mapping_solver/check.py \
+          python solver/verification/check.py \
             --mutation-classification \
-            --fixtures comparison/typed_mapping_solver/fixtures.json \
-            --mutation-results comparison/typed_mapping_solver/mutation-results.json \
-            --oracle comparison/typed_mapping_solver/oracle.py \
-            --lean-runner comparison/typed_mapping_solver/lean_runner.lean \
-            --rust-runner tools/rust/examples/typed_mapping_solver_compare.rs \
-            --gleam-runner tools/gleam/src/typed_mapping_solver_compare.gleam \
-            --lean-test tools/lean/NecoherenceToolsTests/TypedMappingSolverTest.lean \
-            --rust-test tools/rust/tests/typed_mapping_solver_tests.rs \
-            --gleam-test tools/gleam/test/typed_mapping_solver_test.gleam \
+            --fixtures solver/verification/fixtures.json \
+            --mutation-results solver/verification/mutation-results.json \
+            --oracle solver/verification/oracle.py \
+            --lean-runner solver/verification/lean_runner.lean \
+            --rust-runner solver/rust/examples/typed_mapping_solver_compare.rs \
+            --lean-test solver/lean/NecoherenceSolverTest/TypedMappingSolverTest.lean \
+            --rust-test solver/rust/tests/typed_mapping_solver_tests.rs \
             --require-coordinate binding-type \
             --require-coordinate multiplicity \
             --require-coordinate read-consume-mode \
@@ -399,37 +610,83 @@ jobs:
             --require-preserving-result-equality \
             --require-bound-exhaustion-result Unknown \
             --require-unreachable-closure-witness \
-            --require-independent-entry oracle \
-            --require-independent-entry lean-checker \
-            --require-independent-entry rust-public-api \
-            --require-independent-entry gleam-public-api \
-            --require-independent-entry lean-runtime-test \
-            --require-independent-entry rust-runtime-test \
-            --require-independent-entry gleam-runtime-test \
-            --reject-shared-oracle-implementation \
-            --reject-candidate-only-agreement
-          rm comparison/typed_mapping_solver/fixtures.json \
-            comparison/typed_mapping_solver/out-lean.json \
-            comparison/typed_mapping_solver/out-rust.json \
-            comparison/typed_mapping_solver/out-gleam.json
+            --reject-shared-oracle-implementation
+          rm solver/verification/fixtures.json \
+            solver/verification/out-lean.json \
+            solver/verification/out-rust.json
+      - name: Compare composition verification between Lean and Rust
+        run: |
+          (cd solver/composition/lean && lake build NecoherenceCompositionSolver @necoherence/Necoherence)
+          python solver/composition/verification/check.py
+      - name: Compare kernel and generated composition execution
+        run: |
+          (cd generator/lean && lake build NecoherenceGenerator @necoherence/Necoherence)
+          npm --prefix packages/typescript/adapter ci
+          npm --prefix packages/typescript/adapter run build
+          sh packages/java/build-maven.sh build packages/java/adapter/build/maven
+          (cd verification/execution/gleam_driver && gleam build)
+          python verification/execution/check.py
+      - name: Check that executions of inputs built from the rule definitions stay in the declared ranges
+        run: python verification/execution/semantic_soundness.py
+      - name: Count admission work after initialization in the generated code
+        run: |
+          curl --fail --location --silent --show-error \
+            --output "$RUNNER_TEMP/asm-9.7.1.jar" \
+            https://repo1.maven.org/maven2/org/ow2/asm/asm/9.7.1/asm-9.7.1.jar
+          printf '%s  %s\n' \
+            8cadd43ac5eb6d09de05faecca38b917a040bb9139c7edeb4cc81c740b713281 \
+            "$RUNNER_TEMP/asm-9.7.1.jar" | shasum -a 256 -c -
+          NCOH_ASM_JAR="$RUNNER_TEMP/asm-9.7.1.jar" python verification/execution/admission_once/check.py python typescript java rust gleam --gleam-threshold 1.000165
+      - name: Reject a replaced generation document at initialization
+        run: python verification/execution/admission_once/replaced_document.py rust python typescript java gleam
 
   declarations-and-presets:
     runs-on: ubuntu-latest
+    env:
+      NCOH_NECO_QUOTIENT_JAVA: ${{ github.workspace }}/../neco-quotient-certificate-0.2.0-sources
+      NCOH_NECO_QUOTIENT_APPLICATION_JAVA: ${{ github.workspace }}/../neco-quotient-application-sources
+      NCOH_NECO_QUOTIENT_RETENTION_JAVA: ${{ github.workspace }}/../neco-quotient-retention-sources
+      NCOH_NECO_QUOTIENT_ENCODING_JAVA: ${{ github.workspace }}/../neco-quotient-encoding-sources
     steps:
       - name: Check out source
         uses: actions/checkout@v4
+      - name: Fetch the neco-quotient Java sources from Maven Central
+        run: |
+          curl --fail --location --silent --show-error --output "$RUNNER_TEMP/neco-quotient-certificate-0.2.0-sources.jar" \
+            https://repo1.maven.org/maven2/io/github/barineco/neco-quotient-certificate/0.2.0/neco-quotient-certificate-0.2.0-sources.jar
+          printf '%s  %s\n' dd477ac74974b3a676dd719cefdffe68f44bfb105025cb12282916efa6020e98 \
+            "$RUNNER_TEMP/neco-quotient-certificate-0.2.0-sources.jar" | shasum -a 256 -c -
+          unzip -q "$RUNNER_TEMP/neco-quotient-certificate-0.2.0-sources.jar" -d "$NCOH_NECO_QUOTIENT_JAVA"
+          curl --fail --location --silent --show-error --output "$RUNNER_TEMP/neco-quotient-application-0.1.0-sources.jar" \
+            https://repo1.maven.org/maven2/io/github/barineco/neco-quotient-application/0.1.0/neco-quotient-application-0.1.0-sources.jar
+          printf '%s  %s\n' 15f64a3fa26e07015adfca6f6c16320accdedca33b080bdf4a236a049cd81e41 \
+            "$RUNNER_TEMP/neco-quotient-application-0.1.0-sources.jar" | shasum -a 256 -c -
+          unzip -q "$RUNNER_TEMP/neco-quotient-application-0.1.0-sources.jar" -d "$NCOH_NECO_QUOTIENT_APPLICATION_JAVA"
+          curl --fail --location --silent --show-error --output "$RUNNER_TEMP/neco-quotient-retention-0.1.0-sources.jar" \
+            https://repo1.maven.org/maven2/io/github/barineco/neco-quotient-retention/0.1.0/neco-quotient-retention-0.1.0-sources.jar
+          printf '%s  %s\n' 7c514b0cb42d2f10a11e398be7a01e8aabb4bab867132c4fec18e160e01dfb5b \
+            "$RUNNER_TEMP/neco-quotient-retention-0.1.0-sources.jar" | shasum -a 256 -c -
+          unzip -q "$RUNNER_TEMP/neco-quotient-retention-0.1.0-sources.jar" -d "$NCOH_NECO_QUOTIENT_RETENTION_JAVA"
+          curl --fail --location --silent --show-error --output "$RUNNER_TEMP/neco-quotient-encoding-0.1.0-sources.jar" \
+            https://repo1.maven.org/maven2/io/github/barineco/neco-quotient-encoding/0.1.0/neco-quotient-encoding-0.1.0-sources.jar
+          printf '%s  %s\n' b58874a0c5131b2eceb649ff757befe30fa0c36856528c28635aab2b62c67e46 \
+            "$RUNNER_TEMP/neco-quotient-encoding-0.1.0-sources.jar" | shasum -a 256 -c -
+          unzip -q "$RUNNER_TEMP/neco-quotient-encoding-0.1.0-sources.jar" -d "$NCOH_NECO_QUOTIENT_ENCODING_JAVA"
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version-file: python/pyproject.toml
+          python-version-file: packages/python/adapter/pyproject.toml
+      - name: Install neco-quotient packages from PyPI
+        run: |
+          python -m pip install "neco-quotient-certificate==0.2.0" "neco-quotient-application==0.1.0" "neco-quotient-retention==0.1.0" "neco-quotient-encoding==0.1.0"
       - name: Read the Gleam version range from the package manifest
         id: gleam
-        run: python -c "import tomllib; print('version=' + tomllib.load(open('tools/gleam/gleam.toml', 'rb'))['gleam'].replace(' and ', ' '))" >> "$GITHUB_OUTPUT"
+        run: python -c "import tomllib; print('version=' + tomllib.load(open('packages/gleam/adapter/gleam.toml', 'rb'))['gleam'].replace(' and ', ' '))" >> "$GITHUB_OUTPUT"
       - name: Set up Lean
         uses: leanprover/lean-action@v1
         with:
           auto-config: "false"
-          lake-package-directory: tools/lean
+          lake-package-directory: verification/lean
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Set up Node.js
@@ -438,8 +695,7 @@ jobs:
           node-version: lts/*
           cache: npm
           cache-dependency-path: |
-            typescript/package-lock.json
-            tools/typescript/package-lock.json
+            packages/typescript/adapter/package-lock.json
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
@@ -451,45 +707,61 @@ jobs:
           otp-version: "> 0"
           gleam-version: ${{ steps.gleam.outputs.version }}
           rebar3-version: "3"
-      - name: Install the Python implementations
-        run: |
-          python -m pip install -e python
-          python -m pip install -e tools/python
+      - name: Install the Python implementation
+        run: python -m pip install -e packages/python/adapter
       - name: Compare declaration semantics
-        run: python comparison/declaration/semantic_invariant_checks.py --mode declarations --languages python typescript java rust gleam
+        run: python verification/declaration/semantic_invariant_checks.py --mode declarations --languages python typescript java rust gleam
       - name: Compare bounded default materialization
-        run: python comparison/declaration/default_materialization_compare.py --bounded
+        run: python verification/declaration/default_materialization_compare.py --bounded
       - name: Compare preset semantics
-        run: python comparison/declaration/semantic_invariant_checks.py --mode presets --languages python typescript java rust gleam
+        run: python verification/declaration/semantic_invariant_checks.py --mode presets --languages python typescript java rust gleam
       - name: Check the representative input generators
-        run: python comparison/declaration/semantic_invariant_inputs_test.py
+        run: python verification/declaration/semantic_invariant_inputs_test.py
+      - name: Check the comparison normalization
+        run: python verification/declaration/comparison_normalization_test.py
       - name: Check generated signatures end to end
-        run: python comparison/declaration/signature_generation_e2e.py
-      - name: Check semantic axioms
-        run: python comparison/declaration/semantic_axioms.py
+        run: python verification/declaration/signature_generation_e2e.py
+      - name: Build the admission entries of the six languages
+        run: |
+          npm --prefix packages/typescript/adapter ci
+          npm --prefix packages/typescript/adapter run build
+          mkdir -p packages/java/adapter/build/classes
+          find packages/java/adapter/src/main/java -name '*.java' -print0 | xargs -0 javac -J-Duser.language=en --release 21 -sourcepath "$NCOH_NECO_QUOTIENT_JAVA:$NCOH_NECO_QUOTIENT_APPLICATION_JAVA:$NCOH_NECO_QUOTIENT_RETENTION_JAVA:$NCOH_NECO_QUOTIENT_ENCODING_JAVA" -d packages/java/adapter/build/classes
+          jar --create --file packages/java/adapter/build/necoherence-0.3.0.jar -C packages/java/adapter/build/classes .
+          (cd verification/declaration/signature_admission && lake build)
+      - name: Compare the admission results of the six languages
+        run: python verification/declaration/signature_admission_compare.py
+      - name: Compare the generator boundary of Lean and Rust
+        run: python verification/declaration/signature_admission_compare.py --mode propagation
+      - name: Build the Lean nodes
+        run: |
+          (cd generator/lean && lake build)
+          (cd solver/lean && lake build)
+          (cd solver/composition/lean && lake build)
+          (cd verification/lean && lake build)
       - name: Check observation profiles
-        run: python tests/observation/check.py
+        run: python verification/observation/check.py
       - name: Run the Lean signature generation executable
-        working-directory: tools/lean
+        working-directory: verification/lean
         run: lake exe signature_generation_tests
       - name: Reproduce the Unicode data and preset files
         run: |
           temporary=$(mktemp -d)
           trap 'rm -rf "$temporary"' EXIT
-          python comparison/declaration/semantic_profile_data/materialize_unicode.py \
-            --source-root comparison/declaration/semantic_profile_data \
-            --source-manifest comparison/declaration/semantic_profile_data/source-manifest.json \
+          python verification/declaration/semantic_profile_data/materialize_unicode.py \
+            --source-root verification/declaration/semantic_profile_data \
+            --source-manifest verification/declaration/semantic_profile_data/source-manifest.json \
             --output "$temporary/comparison-unicode.json"
-          python presets/tools/unicode/materialize_unicode.py \
-            --source-root presets/tools/unicode \
-            --source-manifest presets/tools/unicode/source-manifest.json \
+          python verification/presets/tools/unicode/materialize_unicode.py \
+            --source-root verification/presets/tools/unicode \
+            --source-manifest verification/presets/tools/unicode/source-manifest.json \
             --output "$temporary/preset-unicode.json"
           cmp "$temporary/comparison-unicode.json" "$temporary/preset-unicode.json"
-          cp -R presets "$temporary/presets"
+          cp -R verification/presets "$temporary/presets"
           python "$temporary/presets/tools/generate.py"
-          cmp presets/atproto-data-model/profile.json \
+          cmp verification/presets/atproto-data-model/profile.json \
             "$temporary/presets/atproto-data-model/profile.json"
-          cmp presets/manifest.json "$temporary/presets/manifest.json"
+          cmp verification/presets/manifest.json "$temporary/presets/manifest.json"
 
   tools-lean:
     runs-on: ubuntu-latest
@@ -499,31 +771,19 @@ jobs:
       - name: Set up Lean
         uses: leanprover/lean-action@v1
         with:
-          lake-package-directory: tools/lean
-      - name: Build the tools and the test library
-        working-directory: tools/lean
-        run: lake build NecoherenceTools NecoherenceToolsTest
-
-  tools-gleam:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out source
-        uses: actions/checkout@v4
-      - name: Read the Gleam version range from the package manifest
-        id: gleam
-        run: python3 -c "import tomllib; print('version=' + tomllib.load(open('tools/gleam/gleam.toml', 'rb'))['gleam'].replace(' and ', ' '))" >> "$GITHUB_OUTPUT"
-      - name: Set up Erlang and Gleam
-        uses: erlef/setup-beam@v1
-        with:
-          otp-version: "> 0"
-          gleam-version: ${{ steps.gleam.outputs.version }}
-          rebar3-version: "3"
-      - name: Build and test
-        working-directory: tools/gleam
-        run: |
-          gleam format --check
-          gleam build --warnings-as-errors
-          gleam test
+          lake-package-directory: verification/lean
+      - name: Build the generator
+        working-directory: generator/lean
+        run: lake build NecoherenceGenerator NecoherenceGeneratorTest
+      - name: Build the solver
+        working-directory: solver/lean
+        run: lake build NecoherenceSolver NecoherenceSolverTest
+      - name: Build the composition solver
+        working-directory: solver/composition/lean
+        run: lake build NecoherenceCompositionSolver
+      - name: Build the verification and its tests
+        working-directory: verification/lean
+        run: lake build NecoherenceVerification NecoherenceVerificationTest
 
   tools-rust:
     runs-on: ubuntu-latest
@@ -534,93 +794,46 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
-      - name: Check and test
-        working-directory: tools/rust
+      - name: Check and test the generator
+        working-directory: generator/rust
+        run: |
+          cargo fmt --all -- --check
+          cargo clippy --all-targets -- -D warnings
+          cargo test
+      - name: Check and test the solver
+        working-directory: solver/rust
+        run: |
+          cargo fmt --all -- --check
+          cargo clippy --all-targets -- -D warnings
+          cargo test
+      - name: Check and test the composition solver
+        working-directory: solver/composition/rust
+        run: |
+          cargo fmt --all -- --check
+          cargo clippy --all-targets -- -D warnings
+          cargo test
+      - name: Check and test the verification
+        working-directory: verification/rust
         run: |
           cargo fmt --all -- --check
           cargo clippy --all-targets -- -D warnings
           cargo test
 
-  tools-python:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out source
-        uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version-file: tools/python/pyproject.toml
-      - name: Install the MIT package and the tools in editable mode
-        run: |
-          python -m pip install -e python
-          python -m pip install -e "tools/python[dev]"
-      - name: Test and type-check
-        working-directory: tools/python
-        run: |
-          python -m pytest -q
-          python -m mypy src tests
 
-  tools-typescript:
+  residual-coherence-lean:
     runs-on: ubuntu-latest
     steps:
       - name: Check out source
         uses: actions/checkout@v4
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - name: Set up Lean
+        uses: leanprover/lean-action@v1
         with:
-          node-version: lts/*
-          cache: npm
-          cache-dependency-path: |
-            typescript/package-lock.json
-            tools/typescript/package-lock.json
-      - name: Build the MIT package
-        working-directory: typescript
+          lake-package-directory: residual-coherence/lean
+      - name: Build and run the theorem tests
+        working-directory: residual-coherence/lean
         run: |
-          npm ci
-          npm run build
-      - name: Build and test the tools
-        working-directory: tools/typescript
-        run: |
-          npm ci
-          npm run build
-          npm run typecheck
-          npm test
-
-  tools-java:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out source
-        uses: actions/checkout@v4
-      - name: Set up Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: x
-      - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
-      - name: Compile against the MIT classes and run the main-form tests
-        run: |
-          mkdir -p java/lib tools/java/build/classes tools/java/build/test-classes
-          curl --fail --location --silent --show-error \
-            --output java/lib/junit-platform-console-standalone-1.10.2.jar \
-            https://repo1.maven.org/maven2/org/junit/platform/junit-platform-console-standalone/1.10.2/junit-platform-console-standalone-1.10.2.jar
-          printf '%s  %s\n' \
-            a1de557821293ce903c213c694165fff532cf92081bac4238b9e05b35f04f43f \
-            java/lib/junit-platform-console-standalone-1.10.2.jar | shasum -a 256 -c -
-          find java/src/main/java tools/java/src/main/java -name '*.java' -print0 \
-            | xargs -0 javac -J-Duser.language=en --release 21 -d tools/java/build/classes
-          find java/src/test/java/necoherence/semantic tools/java/src/test/java -name '*.java' -print0 \
-            | xargs -0 javac -J-Duser.language=en --release 21 \
-                -cp tools/java/build/classes:java/lib/junit-platform-console-standalone-1.10.2.jar \
-                -d tools/java/build/test-classes
-          for test in SemanticInvariantAdapterTest SemanticJavaSizeTest SemanticJavaTargetTest SemanticSignatureCompositionTest SemanticSignatureTest GeneratedJavaSemanticTest LeanRepresentativeInvariantTest SemanticJavaCapacityTest; do
-            java -Duser.language=en -cp tools/java/build/classes:tools/java/build/test-classes:java/lib/junit-platform-console-standalone-1.10.2.jar \
-              "necoherence.tools.renderer.$test"
-          done
-          for test in ProfileLibraryPredicateTest InclusionAndSamplesTest DeclarationWireTest; do
-            java -Duser.language=en -cp tools/java/build/classes:tools/java/build/test-classes:java/lib/junit-platform-console-standalone-1.10.2.jar \
-              "necoherence.semantic.$test"
-          done
+          lake build
+          lake env lean Tests/ResidualCoherenceTheorems.lean
 
   residual-coherence:
     runs-on: ubuntu-latest
@@ -638,7 +851,7 @@ jobs:
         working-directory: residual-coherence
         run: |
           python -m pytest -q
-          python -m mypy src tests
+          python -m mypy python/src python/tests
           python -m build
           python - <<'EOF'
           import tomllib
@@ -649,9 +862,9 @@ jobs:
           names = set(zipfile.ZipFile(wheel).namelist())
           dist_info, = {name.split("/")[0] for name in names if name.split("/")[0].endswith(".dist-info")}
           project = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))["project"]
-          sources = [path for directory in ("schema", "examples") for path in Path(directory).iterdir()]
-          shipped = {f"residual_coherence/{path.as_posix()}" for path in sources}
-          shipped |= {"residual_coherence/README.md", "residual_coherence/README-ja.md"}
+          sources = [(name, path) for name, directory in (("schema", "schema"), ("examples", "python/examples")) for path in Path(directory).iterdir()]
+          shipped = {f"residual_coherence/{name}/{path.name}" for name, path in sources}
+          shipped |= {"residual_coherence/README.md"}
           shipped |= {f"{dist_info}/licenses/{name}" for name in project["license-files"]}
           assert shipped <= names, sorted(shipped - names)
           EOF
@@ -672,7 +885,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version-file: python/pyproject.toml
+          python-version-file: packages/python/adapter/pyproject.toml
       - name: Install the license tools
         run: python -m pip install pytest "reuse[charset-normalizer]"
       - name: Check the license declarations and the dependency direction

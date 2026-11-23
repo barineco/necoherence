@@ -1,0 +1,18 @@
+# SPDX-FileCopyrightText: 2026 barineco
+# SPDX-License-Identifier: AGPL-3.0-only
+
+name = "necoherence-solver"
+version = "0.3.0"
+defaultTargets = ["NecoherenceSolver", "NecoherenceSolverTest"]
+
+[[require]]
+name = "necoherence"
+path = "../../packages/lean"
+
+[[lean_lib]]
+name = "NecoherenceSolver"
+roots = ["NecoherenceSolver.TypedMappingSolver", "NecoherenceSolver.TypedMappingWire"]
+
+[[lean_lib]]
+name = "NecoherenceSolverTest"
+roots = ["NecoherenceSolverTest.TypedMappingSolverTest"]

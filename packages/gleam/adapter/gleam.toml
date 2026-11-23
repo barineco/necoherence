@@ -1,0 +1,24 @@
+# SPDX-FileCopyrightText: 2026 barineco
+# SPDX-License-Identifier: MIT
+
+name = "necoherence"
+version = "0.3.0"
+gleam = ">= 1.17.0 and < 2.0.0"
+description = "Revision-aware state transition utilities for Gleam"
+licences = ["MIT"]
+
+repository = { type = "github", user = "barineco", repo = "necoherence", path = "packages/gleam/adapter" }
+links = [{ title = "Homepage", href = "https://github.com/barineco/necoherence" }]
+
+internal_modules = ["necoherence/internal", "necoherence/internal/*"]
+
+[dependencies]
+gleam_stdlib = ">= 1.0.0 and < 2.0.0"
+gleam_json = ">= 3.1.0 and < 4.0.0"
+neco_quotient_certificate = "== 0.2.0"
+neco_quotient_application = "== 0.1.0"
+neco_quotient_encoding = "== 0.1.0"
+neco_quotient_retention = "== 0.1.0"
+[dev-dependencies]
+gleeunit = ">= 1.0.0 and < 2.0.0"
+simplifile = ">= 2.0.0 and < 3.0.0"

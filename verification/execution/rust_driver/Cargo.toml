@@ -1,0 +1,15 @@
+# SPDX-FileCopyrightText: 2026 barineco
+# SPDX-License-Identifier: AGPL-3.0-only
+
+[package]
+name = "execution_comparison_driver"
+version = "0.3.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+necoherence = { path = "../../../packages/rust/adapter" }
+necoherence-generator = { path = "../../../generator/rust" }
+necoherence-composition-solver = { path = "../../../solver/composition/rust" }
+serde_json = { version = "1", features = ["arbitrary_precision"] }
+

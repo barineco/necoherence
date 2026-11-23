@@ -1,0 +1,507 @@
+// SPDX-FileCopyrightText: 2026 barineco
+// SPDX-License-Identifier: AGPL-3.0-only
+
+use necoherence::semantic_types::{BranchSelector, EffectPoint, MemberTest};
+use necoherence::signature_admission::CheckedSignatureGeneration;
+use necoherence::type_signatures::{
+    CheckedLibrary, OperationContract, OutcomeCause, Shape, SignatureDefinitionShape,
+    SignatureExtraMembers, SignatureGenerationInput, SignaturePort, TypeSignatureLibrary,
+};
+
+#[derive(Debug)]
+pub enum RenderFailure {
+    Generation(Box<necoherence::semantic_exchange::GenerationFailure>),
+    Admission(Box<necoherence::signature_admission::AdmissionFailure>),
+    InvalidLibrary(necoherence::type_signatures::LibraryCheckFailure),
+    UndefinedType(String),
+    UndefinedMeaning(necoherence::semantic_types::MeaningFailure),
+    InvalidCheckedPlan(String),
+    IntegerEncodingFailure(String),
+    InvalidJavaTarget,
+    JavaEmission(String),
+    IdentifierCollision {
+        namespace: String,
+        name: String,
+        first: String,
+        second: String,
+    },
+}
+impl std::fmt::Display for RenderFailure {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(formatter, "{self:?}")
+    }
+}
+impl std::error::Error for RenderFailure {}
+
+fn name(value: &str) -> String {
+    let mut result = value.replace(|character: char| !character.is_ascii_alphanumeric(), "_");
+    if result
+        .chars()
+        .next()
+        .is_some_and(|character| character.is_ascii_digit())
+    {
+        result.insert(0, '_');
+    }
+    result
+}
+fn field_name(value: &str) -> String {
+    let candidate = name(value);
+    if matches!(
+        candidate.as_str(),
+        "as" | "break"
+            | "const"
+            | "continue"
+            | "crate"
+            | "else"
+            | "enum"
+            | "extern"
+            | "false"
+            | "fn"
+            | "for"
+            | "if"
+            | "impl"
+            | "in"
+            | "let"
+            | "loop"
+            | "match"
+            | "mod"
+            | "move"
+            | "mut"
+            | "pub"
+            | "ref"
+            | "return"
+            | "self"
+            | "Self"
+            | "static"
+            | "struct"
+            | "super"
+            | "trait"
+            | "true"
+            | "type"
+            | "unsafe"
+            | "use"
+            | "where"
+            | "while"
+            | "async"
+            | "await"
+            | "dyn"
+            | "abstract"
+            | "become"
+            | "box"
+            | "do"
+            | "final"
+            | "macro"
+            | "override"
+            | "priv"
+            | "typeof"
+            | "unsized"
+            | "virtual"
+            | "yield"
+            | "try"
+    ) {
+        format!("field_{candidate}")
+    } else {
+        candidate
+    }
+}
+fn pascal(value: &str) -> String {
+    value
+        .split(|character: char| !character.is_ascii_alphanumeric())
+        .filter(|part| !part.is_empty())
+        .map(|part| {
+            let mut characters = part.chars();
+            characters.next().map_or_else(String::new, |first| {
+                first.to_ascii_uppercase().to_string() + characters.as_str()
+            })
+        })
+        .collect()
+}
+fn snake(value: &str) -> String {
+    name(value).to_ascii_lowercase()
+}
+fn selector_code(selector: &BranchSelector) -> String {
+    match selector {
+        BranchSelector::InternalTag => {
+            "necoherence::semantic_types::BranchSelector::InternalTag".into()
+        }
+        BranchSelector::Otherwise => {
+            "necoherence::semantic_types::BranchSelector::Otherwise".into()
+        }
+        BranchSelector::Kind(kind) => format!(
+            "necoherence::semantic_types::BranchSelector::Kind(necoherence::semantic_types::ValueKind::{kind:?})"
+        ),
+        BranchSelector::MemberShape(tests) => {
+            let entries = tests
+                .iter()
+                .map(|(key, test)| match test {
+                    MemberTest::Absent => format!(
+                        "({key:?}.into(),necoherence::semantic_types::MemberTest::Absent)"
+                    ),
+                    MemberTest::Format(format) => format!(
+                        "({key:?}.into(),necoherence::semantic_types::MemberTest::Format({format:?}.into()))"
+                    ),
+                })
+                .collect::<Vec<_>>()
+                .join(",");
+            format!(
+                "necoherence::semantic_types::BranchSelector::MemberShape(vec![{entries}])"
+            )
+        }
+    }
+}
+
+mod composition;
+mod gleam;
+mod java;
+mod python;
+mod typescript;
+
+/// 生成するコードの先頭に置く、著作権、ライセンス、生成元の表示の行。`comment` は対象言語の行コメントの記号である。
+pub(crate) fn generated_header_lines(comment: &str) -> [String; 3] {
+    [
+        format!("{comment} SPDX\u{2d}FileCopyrightText: 2026 barineco"),
+        format!("{comment} SPDX\u{2d}License-Identifier: MIT"),
+        format!(
+            "{comment} Generated by Necoherence {} ({})",
+            env!("CARGO_PKG_VERSION"),
+            env!("CARGO_PKG_REPOSITORY")
+        ),
+    ]
+}
+
+pub(crate) fn generated_header(comment: &str) -> String {
+    generated_header_lines(comment)
+        .iter()
+        .map(|line| format!("{line}\n"))
+        .collect()
+}
+
+pub use java::JavaTarget;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Target {
+    Rust,
+    TypeScript { runtime_module: String },
+    Python,
+    Java(JavaTarget),
+    Gleam,
+}
+
+pub fn render_signature_exchange_for(
+    target: &Target,
+    expected: &necoherence::type_signatures::ExpectedSignatureBasis,
+    text: &str,
+) -> Result<String, RenderFailure> {
+    if let Target::Java(java_target) = target {
+        java::validate(java_target)?;
+    }
+    let input = necoherence::semantic_exchange::decode_signature_generation(text)
+        .map_err(|failure| RenderFailure::Generation(Box::new(failure)))?;
+    let checked = necoherence::signature_admission::admit_signature_generation(expected, input)
+        .map_err(|failure| RenderFailure::Admission(Box::new(failure)))?;
+    match target {
+        Target::Rust => render_generation(&checked, expected),
+        Target::TypeScript { runtime_module } => {
+            typescript::render_generation(&checked, expected, text, runtime_module)
+        }
+        Target::Python => python::render_generation(&checked, expected, text),
+        Target::Java(java_target) => java::render(&checked, expected, text, java_target),
+        Target::Gleam => gleam::render_generation(&checked, expected, text),
+    }
+}
+
+fn check_meaning(graph: &necoherence::semantic_types::SemanticGraph) -> Result<(), RenderFailure> {
+    for node in &graph.nodes {
+        necoherence::semantic_validation::check_meaning_defined(
+            graph,
+            std::slice::from_ref(&node.reference),
+        )
+        .map_err(RenderFailure::UndefinedMeaning)?;
+    }
+    Ok(())
+}
+
+pub fn render_library(library: &TypeSignatureLibrary) -> Result<String, RenderFailure> {
+    let checked = necoherence::type_signatures::check_library(library)
+        .map_err(RenderFailure::InvalidLibrary)?;
+    render_checked(&checked)
+}
+pub(crate) fn render_generation(
+    checked: &CheckedSignatureGeneration,
+    expected: &necoherence::type_signatures::ExpectedSignatureBasis,
+) -> Result<String, RenderFailure> {
+    let input = checked.input();
+    let checked_library = necoherence::type_signatures::check_library(&input.signatures)
+        .map_err(RenderFailure::InvalidLibrary)?;
+    let mut output = if checked.composition().is_none() {
+        render_checked(&checked_library)?
+    } else {
+        render_declarations(&checked_library)?
+    };
+    render_generation_metadata(&mut output, input, expected)?;
+    render_operations(&mut output, input);
+    if checked.composition().is_some() {
+        composition::render(&mut output, checked)?;
+    }
+    Ok(output)
+}
+
+fn render_generation_metadata(
+    output: &mut String,
+    input: &SignatureGenerationInput,
+    expected: &necoherence::type_signatures::ExpectedSignatureBasis,
+) -> Result<(), RenderFailure> {
+    let document = necoherence::semantic_exchange::encode_signature_generation(input)
+        .map_err(|failure| RenderFailure::Generation(Box::new(failure)))?;
+    let expected_basis = necoherence::semantic_exchange::encode_expected_signature_basis(expected)
+        .map_err(|failure| RenderFailure::Generation(Box::new(failure)))?;
+    output.push_str(&format!(
+        "pub const SIGNATURE_GENERATION_DOCUMENT:&str={document:?};\n\
+         pub const SIGNATURE_GENERATION_BASIS:&str={expected_basis:?};\n\
+         pub fn initialize()->Result<necoherence::signature_admission::CheckedSignatureGeneration,necoherence::semantic_exchange::GenerationFailure>{{\
+         let expected=necoherence::semantic_exchange::decode_expected_signature_basis(SIGNATURE_GENERATION_BASIS)?;\
+         necoherence::semantic_exchange::signature_generation_context(&expected,SIGNATURE_GENERATION_DOCUMENT)}}\n\
+         pub fn graph(context:&necoherence::signature_admission::CheckedSignatureGeneration)->&necoherence::semantic_types::SemanticGraph{{context.graph()}}\n\
+         pub fn annotations(context:&necoherence::signature_admission::CheckedSignatureGeneration)->&[necoherence::type_signatures::Annotation]{{&context.input().signatures.annotations}}\n"
+    ));
+    Ok(())
+}
+
+fn render_port_record(output: &mut String, record_name: &str, ports: &[SignaturePort]) {
+    output.push_str(&format!(
+        "#[derive(Debug,Clone,PartialEq)] pub struct {record_name} {{"
+    ));
+    for port in ports {
+        output.push_str(&format!(
+            "pub {}:Option<rt::JsonValue>,",
+            field_name(&port.id)
+        ));
+    }
+    output.push_str("}\n");
+}
+fn operation_completion_predicate(operation: &OperationContract) -> String {
+    operation
+        .outcomes
+        .iter()
+        .filter(|outcome| {
+            matches!(outcome.cause, OutcomeCause::ExternalCondition { .. })
+                && outcome.form == necoherence::type_signatures::OutcomeForm::DeclaredFailure
+        })
+        .map(|outcome| format!("outcome.0=={:?}", outcome.id))
+        .chain(std::iter::once("false".to_owned()))
+        .collect::<Vec<_>>()
+        .join("||")
+}
+fn render_operations(output: &mut String, input: &SignatureGenerationInput) {
+    output.push_str("pub mod signature_operations {\nuse super::*;\n");
+    for definition in &input.signatures.definitions {
+        let SignatureDefinitionShape::Operation(operation) = &definition.shape else {
+            continue;
+        };
+        let type_name = pascal(&definition.wire_identity);
+        render_port_record(output, &format!("{type_name}Input"), &operation.inputs);
+        for (index, outcome) in operation.outcomes.iter().enumerate() {
+            render_port_record(
+                output,
+                &format!("{type_name}Outcome{index}"),
+                &outcome.value_ports,
+            );
+        }
+        output.push_str(&format!(
+            "#[derive(Debug,Clone,PartialEq)] pub enum {type_name}Result {{"
+        ));
+        for index in 0..operation.outcomes.len() {
+            output.push_str(&format!("Outcome{index}({type_name}Outcome{index}),"));
+        }
+        output.push_str("}\n");
+        output.push_str(&format!(
+            "impl {type_name}Result {{ pub fn outcome_id(&self)->&'static str{{match self{{"
+        ));
+        for (index, outcome) in operation.outcomes.iter().enumerate() {
+            output.push_str(&format!("Self::Outcome{index}(..)=>{:?},", outcome.id));
+        }
+        output.push_str("}}}\n");
+        if operation.effect == EffectPoint::HttpRequestResponse {
+            let function = snake(&definition.wire_identity);
+            let external = operation_completion_predicate(operation);
+            output.push_str(&format!(
+                "pub fn {function}_prepare(binding:necoherence::semantic_execution::NetworkBinding<{type_name}Input,{type_name}Result>,input:{type_name}Input)->Result<necoherence::semantic_execution::BindingPreparedCall<{type_name}Result>,necoherence::semantic_execution::ExecutionFailure>{{\
+                   necoherence::semantic_execution::prepare_call(&binding,&input,|outcome|necoherence::semantic_composition::OutcomeId(outcome.outcome_id().into()),|outcome|{external})\
+                 }}\n"
+            ));
+        }
+    }
+    output.push_str("}\npub use signature_operations::*;\n");
+}
+
+pub fn render_checked(checked: &CheckedLibrary) -> Result<String, RenderFailure> {
+    check_meaning(
+        &necoherence::signature_admission::check_type_signatures(checked.library())
+            .map_err(|failure| RenderFailure::Admission(Box::new(failure)))?,
+    )?;
+    render_declarations(checked)
+}
+
+fn render_declarations(checked: &CheckedLibrary) -> Result<String, RenderFailure> {
+    let mut output = generated_header("//");
+    output.push_str(
+        "use necoherence::semantic_codegen_runtime as rt;\n\
+         use necoherence::semantic_types::{SemanticGraph,VersionedSemanticProfile,ValueDecision};\n\
+         pub struct Checked(rt::JsonValue);\n\
+         impl Checked{fn into_value(self)->rt::JsonValue{self.0}}\n\
+         pub struct Context<'a>{profile:&'a VersionedSemanticProfile,graph:&'a SemanticGraph,validator:necoherence::semantic_validation::PreparedValidator<'a>,references:Vec<Option<&'a necoherence::semantic_types::TypeRef>>}\n\
+         impl<'a> Context<'a>{\
+           pub fn new(generation:&'a necoherence::signature_admission::CheckedSignatureGeneration)->Self{Self::from_graph(generation.graph())}\
+           pub fn from_graph(graph:&'a SemanticGraph)->Self{\
+             let mut by_id=std::collections::HashMap::with_capacity(graph.nodes.len());\
+             for node in &graph.nodes{by_id.entry(node.reference.definition_name.as_ref()).or_insert(&node.reference);}\
+             let references=TYPE_IDS.iter().map(|id|by_id.get(id).copied()).collect();\
+             let validator=necoherence::semantic_validation::PreparedValidator::new(graph,necoherence::semantic_validation::FormatWorkspace::empty());\
+             Self{profile:graph.profile(),graph,validator,references}\
+           }\
+           fn prepared(&self)->&necoherence::semantic_validation::PreparedValidator<'a>{&self.validator}\
+           fn decide(&self,reference:&necoherence::semantic_types::TypeRef,value:&rt::JsonValue)->Result<(),rt::RuntimeFailure>{\
+             let decision=self.prepared().with_empty_workspace().accepts_value(reference,value);\
+             match decision{ValueDecision::Accepted=>Ok(()),ValueDecision::Rejected(failure)=>Err(rt::RuntimeFailure::Validation(necoherence::semantic_validation::ValidationFailure::Value(failure))),ValueDecision::Unresolved(obligations)=>Err(rt::RuntimeFailure::Validation(necoherence::semantic_validation::ValidationFailure::Unresolved(obligations)))}\
+           }\
+           fn validate(&self,index:usize,value:&rt::JsonValue)->Result<(),rt::RuntimeFailure>{\
+             let reference=self.references.get(index).copied().flatten().ok_or_else(||rt::representation(\"generated type reference\"))?;\
+             self.decide(reference,value)\
+           }\
+           fn check<T:WireValue>(&self,reference:&necoherence::semantic_types::TypeRef,value:rt::JsonValue)->Result<Checked,rt::RuntimeFailure>{self.decide(reference,&value)?;self.own::<T>(reference,&value)?;Ok(Checked(value))}\
+           fn own<T:WireValue>(&self,reference:&necoherence::semantic_types::TypeRef,value:&rt::JsonValue)->Result<(),rt::RuntimeFailure>{match T::read_index(){Some(index) if self.references.get(index).copied().flatten()!=Some(reference)=>self.validate(index,value),_=>Ok(())}}\
+           fn checked_for<T:WireValue>(&self,value:rt::JsonValue)->Result<Checked,rt::RuntimeFailure>{if let Some(index)=T::read_index(){self.validate(index,&value)?;}Ok(Checked(value))}\
+         }\n\
+         pub trait WireValue: Sized {\
+         fn write_wire(&self,cx:&Context<'_>)->Result<rt::JsonValue,rt::RuntimeFailure>;\
+         fn read_wire(cx:&Context<'_>,value:Checked)->Result<Self,rt::RuntimeFailure>;\
+         fn read_index()->Option<usize>{None}\
+         }\n\
+         pub struct DefaultDecoded<T>{typed_value:T,defaulted:necoherence::semantic_validation::DefaultedValue}\n\
+         impl<T> DefaultDecoded<T>{\
+           pub fn value(&self)->&T{&self.typed_value}\
+           pub fn into_value(self)->T{self.typed_value}\
+           pub fn applications(&self)->&[necoherence::semantic_validation::DefaultApplication]{self.defaulted.applications()}\
+           pub fn write_wire(&self)->&rt::JsonValue{self.defaulted.value()}\
+           pub fn encode(&self)->Result<String,rt::RuntimeFailure>{rt::encode_json(self.defaulted.value())}\
+         }\n\
+         pub fn decode<T:WireValue>(cx:&Context<'_>,reference:&necoherence::semantic_types::TypeRef,wire_text:&str)->Result<T,rt::RuntimeFailure>{\
+           let value=rt::decode_json(wire_text)?;\
+           let checked=cx.check::<T>(reference,value)?;T::read_wire(cx,checked)\
+         }\n\
+         pub fn decode_with_defaults<T:WireValue>(cx:&Context<'_>,reference:&necoherence::semantic_types::TypeRef,wire_text:&str)->Result<DefaultDecoded<T>,rt::RuntimeFailure>{\
+           let defaulted=necoherence::semantic_validation::decode_with_defaults(cx.prepared(),reference,wire_text).map_err(rt::RuntimeFailure::Defaults)?;\
+           cx.own::<T>(reference,defaulted.value())?;\
+           let typed_value=T::read_wire(cx,Checked(defaulted.value().clone()))?;\
+           Ok(DefaultDecoded{typed_value,defaulted})\
+         }\n",
+    );
+    output.push_str("const TYPE_IDS:&[&str]=&[");
+    for node in &checked.library().nodes {
+        output.push_str(&format!("{:?},", node.id));
+    }
+    output.push_str("];\n");
+    for (index, node) in checked.library().nodes.iter().enumerate() {
+        let type_name = name(&node.id);
+        match &node.shape {
+            Shape::Unknown(_) => output.push_str(&format!("#[derive(Debug,Clone,PartialEq)] pub struct {type_name}(pub rt::JsonValue); impl WireValue for {type_name} {{ fn write_wire(&self,_:&Context<'_>)->Result<rt::JsonValue,rt::RuntimeFailure>{{Ok(self.0.clone())}} fn read_wire(_:&Context<'_>,value:Checked)->Result<Self,rt::RuntimeFailure>{{let value=value.into_value();Ok(Self(value))}} }}\n")),
+            Shape::Unit => output.push_str(&format!("#[derive(Debug,Clone,PartialEq)] pub struct {type_name}; impl WireValue for {type_name} {{ fn write_wire(&self,_:&Context<'_>)->Result<rt::JsonValue,rt::RuntimeFailure>{{Ok(rt::JsonValue::Null)}} fn read_wire(_:&Context<'_>,value:Checked)->Result<Self,rt::RuntimeFailure>{{let value=value.into_value();match value{{rt::JsonValue::Null=>Ok(Self),_=>Err(rt::representation(\"unit\"))}}}} }}\n")),
+            Shape::Boolean(_) => output.push_str(&format!("#[derive(Debug,Clone,PartialEq)] pub struct {type_name}(pub bool); impl WireValue for {type_name} {{ fn write_wire(&self,_:&Context<'_>)->Result<rt::JsonValue,rt::RuntimeFailure>{{Ok(rt::JsonValue::Bool(self.0))}} fn read_wire(_:&Context<'_>,value:Checked)->Result<Self,rt::RuntimeFailure>{{let value=value.into_value();match value{{rt::JsonValue::Bool(value)=>Ok(Self(value)),_=>Err(rt::representation(\"boolean\"))}}}} }}\n")),
+            Shape::Integer(spec) => {
+                let domain = format!("{:?}", spec.domain.as_deref());
+                output.push_str(&format!("#[derive(Debug,Clone,PartialEq)] pub struct {type_name}(pub rt::BigInt); impl WireValue for {type_name} {{ fn write_wire(&self,cx:&Context<'_>)->Result<rt::JsonValue,rt::RuntimeFailure>{{let value=rt::integer_encode(cx.profile,{domain},&self.0)?;cx.validate({index},&value)?;Ok(value)}} fn read_wire(cx:&Context<'_>,value:Checked)->Result<Self,rt::RuntimeFailure>{{let value=value.into_value();Ok(Self(rt::integer_decode(cx.profile,{domain},value)?))}} fn read_index()->Option<usize>{{Some({index})}} }}\n"));
+            }
+            Shape::Decimal(_) => output.push_str(&format!("#[derive(Debug,Clone,PartialEq)] pub struct {type_name}(pub String); impl WireValue for {type_name} {{ fn write_wire(&self,_:&Context<'_>)->Result<rt::JsonValue,rt::RuntimeFailure>{{Ok(rt::JsonValue::Dec(self.0.clone()))}} fn read_wire(_:&Context<'_>,value:Checked)->Result<Self,rt::RuntimeFailure>{{let value=value.into_value();match &value{{rt::JsonValue::Dec(value)=>Ok(Self(value.clone())),_=>Err(rt::representation(\"decimal\"))}}}} }}\n")),
+            Shape::String(spec) => {
+                let write = spec.wrapper.as_ref().map_or(
+                    "Ok(rt::JsonValue::Str(self.0.clone()))".to_owned(),
+                    |wrapper| format!("rt::wrap_encode(cx.profile,{wrapper:?},self.0.clone())"),
+                );
+                let read = spec.wrapper.as_ref().map_or(
+                    "match &value { rt::JsonValue::Str(value)=>Ok(Self(value.clone())), _=>Err(rt::representation(\"string\")) }".to_owned(),
+                    |wrapper| format!("Ok(Self(rt::wrap_decode(cx.profile,{wrapper:?},value)?))"),
+                );
+                output.push_str(&format!("#[derive(Debug,Clone,PartialEq)] pub struct {type_name}(pub String); impl {type_name} {{ pub fn examples()->&'static[&'static str]{{&["));
+                for example in &spec.examples {
+                    output.push_str(&format!("{example:?},"));
+                }
+                output.push_str(&format!("]}} }} impl WireValue for {type_name} {{ fn write_wire(&self,cx:&Context<'_>)->Result<rt::JsonValue,rt::RuntimeFailure>{{{write}}} fn read_wire(cx:&Context<'_>,value:Checked)->Result<Self,rt::RuntimeFailure>{{let value=value.into_value();{read}}} }}\n"));
+            }
+            Shape::Bytes(_) | Shape::RawBody { .. } => output.push_str(&format!("#[derive(Debug,Clone,PartialEq)] pub struct {type_name}(pub rt::Bytes); impl WireValue for {type_name} {{ fn write_wire(&self,cx:&Context<'_>)->Result<rt::JsonValue,rt::RuntimeFailure>{{rt::bytes_encode(cx.profile,&self.0)}} fn read_wire(cx:&Context<'_>,value:Checked)->Result<Self,rt::RuntimeFailure>{{let value=value.into_value();Ok(Self(rt::bytes_decode(cx.profile,value)?))}} }}\n")),
+            Shape::Product(product) => {
+                output.push_str(&format!(
+                    "#[derive(Debug,Clone,PartialEq)] pub struct {type_name} {{"
+                ));
+                for field in &product.fields {
+                    output.push_str(&format!(
+                        "pub {}:Option<rt::JsonValue>,",
+                        field_name(&field.wire_name)
+                    ));
+                }
+                if matches!(product.extras, SignatureExtraMembers::Allow { .. }) {
+                    output.push_str("pub extras:Vec<(String,rt::JsonValue)>");
+                }
+                output.push_str("}\n");
+                output.push_str(&format!("impl WireValue for {type_name} {{ fn write_wire(&self,_:&Context<'_>)->Result<rt::JsonValue,rt::RuntimeFailure>{{let mut members=vec![];"));
+                if matches!(product.extras, SignatureExtraMembers::Allow { .. }) {
+                    output.push_str("members.extend(self.extras.clone());");
+                }
+                for field in &product.fields {
+                    let native = field_name(&field.wire_name);
+                    output.push_str(&format!(
+                        "if let Some(value)=&self.{native}{{members.push(({:?}.into(),value.clone()));}}",
+                        field.wire_name
+                    ));
+                }
+                output.push_str("Ok(rt::JsonValue::Obj(members))} fn read_wire(cx:&Context<'_>,value:Checked)->Result<Self,rt::RuntimeFailure>{let value=value.into_value();let mut members=rt::object(value)?;");
+                for field in &product.fields {
+                    output.push_str(&format!(
+                        "let {}=match members.iter().position(|member|member.0=={:?}){{Some(index)=>Some(members.remove(index).1),None=>None}};",
+                        field_name(&field.wire_name),
+                        field.wire_name
+                    ));
+                }
+                if matches!(product.extras, SignatureExtraMembers::Reject) {
+                    output.push_str("if !members.is_empty(){return Err(rt::representation(\"unexpected member\"));}");
+                }
+                output.push_str("Ok(Self{");
+                for field in &product.fields {
+                    let native = field_name(&field.wire_name);
+                    output.push_str(&format!("{native},"));
+                }
+                if matches!(product.extras, SignatureExtraMembers::Allow { .. }) {
+                    output.push_str("extras:members,");
+                }
+                output.push_str(&format!("}})}} fn read_index()->Option<usize>{{Some({index})}} }}\n"));
+            }
+            Shape::Array(_) => output.push_str(&format!("#[derive(Debug,Clone,PartialEq)] pub struct {type_name}(pub Vec<rt::JsonValue>); impl WireValue for {type_name} {{ fn write_wire(&self,_:&Context<'_>)->Result<rt::JsonValue,rt::RuntimeFailure>{{Ok(rt::JsonValue::Arr(self.0.clone()))}} fn read_wire(_:&Context<'_>,value:Checked)->Result<Self,rt::RuntimeFailure>{{let value=value.into_value();match &value{{rt::JsonValue::Arr(values)=>Ok(Self(values.clone())),_=>Err(rt::representation(\"array\"))}}}} }}\n")),
+            Shape::TaggedUnion(union) => {
+                output.push_str(&format!(
+                    "#[derive(Debug,Clone,PartialEq)] pub enum {type_name} {{"
+                ));
+                for branch in &union.branches {
+                    output.push_str(&format!("{}(rt::JsonValue),", name(&branch.wire_tag)));
+                }
+                output.push_str(&format!("}} impl WireValue for {type_name} {{ fn write_wire(&self,cx:&Context<'_>)->Result<rt::JsonValue,rt::RuntimeFailure>{{match self{{"));
+                for branch in &union.branches {
+                    let variant = name(&branch.wire_tag);
+                    if branch.selector == BranchSelector::InternalTag {
+                        output.push_str(&format!("Self::{variant}(value)=>rt::with_member(&cx.profile.tag.as_ref().ok_or_else(||rt::representation(\"tag model\"))?.key,{:?},value.clone()),",branch.wire_tag));
+                    } else {
+                        output.push_str(&format!("Self::{variant}(value)=>Ok(value.clone()),"));
+                    }
+                }
+                output.push_str("}} fn read_wire(cx:&Context<'_>,value:Checked)->Result<Self,rt::RuntimeFailure>{let value=value.into_value();");
+                for branch in &union.branches {
+                    output.push_str(&format!("if rt::branch_selector_matches(cx.prepared().metadata(),&{}, {:?},&value){{return Ok(Self::{}(value));}}",selector_code(&branch.selector),branch.wire_tag,name(&branch.wire_tag)));
+                }
+                output.push_str("Err(rt::representation(\"union branch\"))} }\n");
+            }
+            Shape::Sealed { tag, .. } => output.push_str(&format!("#[derive(Debug,Clone,PartialEq)] pub struct {type_name}(pub rt::JsonValue); impl WireValue for {type_name} {{ fn write_wire(&self,cx:&Context<'_>)->Result<rt::JsonValue,rt::RuntimeFailure>{{rt::with_member(&cx.profile.tag.as_ref().ok_or_else(||rt::representation(\"tag model\"))?.key,{tag:?},self.0.clone())}} fn read_wire(_:&Context<'_>,value:Checked)->Result<Self,rt::RuntimeFailure>{{let value=value.into_value();Ok(Self(value))}} }}\n")),
+            Shape::Never => output.push_str(&format!("#[derive(Debug,Clone,PartialEq)] pub enum {type_name} {{}} impl WireValue for {type_name} {{ fn write_wire(&self,_:&Context<'_>)->Result<rt::JsonValue,rt::RuntimeFailure>{{match *self{{}}}} fn read_wire(_:&Context<'_>,_:Checked)->Result<Self,rt::RuntimeFailure>{{Err(rt::representation(\"never\"))}} }}\n")),
+            Shape::Alias { target } => output.push_str(&format!("pub type {type_name}={};\n", name(target))),
+            Shape::Opaque { .. } => return Err(RenderFailure::UndefinedType(node.id.clone())),
+        }
+    }
+    Ok(output)
+}

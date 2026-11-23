@@ -1,0 +1,18 @@
+# SPDX-FileCopyrightText: 2026 barineco
+# SPDX-License-Identifier: AGPL-3.0-only
+
+name = "signature_admission"
+version = "0.3.0"
+defaultTargets = ["signature_admission"]
+
+[[require]]
+name = "necoherence"
+path = "../../../packages/lean"
+
+[[require]]
+name = "necoherence-generator"
+path = "../../../generator/lean"
+
+[[lean_exe]]
+name = "signature_admission"
+root = "SignatureAdmission"

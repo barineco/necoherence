@@ -1,0 +1,42 @@
+# SPDX-FileCopyrightText: 2026 barineco
+# SPDX-License-Identifier: AGPL-3.0-only
+
+name = "necoherence-verification"
+version = "0.3.0"
+defaultTargets = ["NecoherenceVerification", "NecoherenceVerificationTest"]
+
+[[require]]
+name = "necoherence"
+path = "../../packages/lean"
+
+[[require]]
+name = "necoherence-generator"
+path = "../../generator/lean"
+
+[[require]]
+name = "necoherence-solver"
+path = "../../solver/lean"
+
+[[require]]
+name = "necoherence-composition-solver"
+path = "../../solver/composition/lean"
+
+[[lean_lib]]
+name = "NecoherenceVerification"
+roots = ["NecoherenceVerification.SemanticInvariantOutput", "NecoherenceVerification.SemanticReferenceWire", "NecoherenceVerification.SemanticInvariantRunner"]
+
+[[lean_lib]]
+name = "NecoherenceVerificationTest"
+roots = ["NecoherenceVerificationTest.SignatureExchange", "NecoherenceVerificationTest.SignatureCompositionWire", "NecoherenceVerificationTest.SemanticFailureContracts"]
+
+[[lean_exe]]
+name = "signature_generation_tests"
+root = "NecoherenceVerificationTest.SignatureGeneration"
+
+[[lean_exe]]
+name = "semantic_invariant"
+root = "NecoherenceVerification.SemanticInvariantRunner"
+
+[[lean_exe]]
+name = "network_effect_runner"
+root = "NecoherenceVerification.NetworkEffectRunner"

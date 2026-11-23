@@ -1,0 +1,18 @@
+# SPDX-FileCopyrightText: 2026 barineco
+# SPDX-License-Identifier: MIT
+
+[package]
+name = "shared_operations_cost"
+version = "0.3.0"
+edition = "2021"
+publish = false
+
+[lib]
+path = "src/lib.rs"
+crate-type = ["cdylib"]
+
+[dependencies]
+necoherence = { path = "../../../packages/rust/adapter" }
+
+[profile.release]
+opt-level = 3

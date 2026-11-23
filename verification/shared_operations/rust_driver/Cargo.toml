@@ -1,0 +1,19 @@
+# SPDX-FileCopyrightText: 2026 barineco
+# SPDX-License-Identifier: MIT
+
+[package]
+name = "shared_operations_driver"
+version = "0.3.0"
+edition = "2021"
+publish = false
+
+[[bin]]
+name = "shared_operations_driver"
+path = "src/main.rs"
+
+[dependencies]
+necoherence = { path = "../../../packages/rust/adapter" }
+serde_json = { version = "1", features = ["arbitrary_precision"] }
+
+[dev-dependencies]
+num-bigint = "0.4"

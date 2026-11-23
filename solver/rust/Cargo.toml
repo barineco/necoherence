@@ -1,0 +1,32 @@
+# SPDX-FileCopyrightText: 2026 barineco
+# SPDX-License-Identifier: AGPL-3.0-only
+
+[package]
+name = "necoherence-solver"
+version = "0.3.0"
+edition = "2021"
+license = "AGPL-3.0-only"
+description = "Typed transition model solver for necoherence"
+rust-version = "1.88"
+
+repository = "https://github.com/barineco/necoherence"
+homepage = "https://github.com/barineco/necoherence"
+documentation = "https://docs.rs/necoherence-solver"
+include = ["src/**", "LICENSE", "Cargo.toml", "Cargo.lock"]
+
+[lib]
+name = "necoherence_solver"
+path = "src/lib.rs"
+
+[dependencies]
+necoherence = { version = "0.3.0", path = "../../packages/rust/adapter" }
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+indexing_slicing = "deny"
+panic = "deny"
+

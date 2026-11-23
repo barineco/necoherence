@@ -1,0 +1,23 @@
+# SPDX-FileCopyrightText: 2026 barineco
+# SPDX-License-Identifier: MIT
+
+[package]
+name = "host_failure_driver"
+version = "0.3.0"
+edition = "2021"
+publish = false
+
+[[bin]]
+name = "host_failure_driver"
+path = "src/main.rs"
+
+[[bin]]
+name = "network_effect_compare"
+path = "src/bin/network_effect_compare.rs"
+
+[dependencies]
+neco-quotient-retention = "=0.2.1"
+necoherence = { path = "../../../packages/rust/adapter" }
+necoherence-http-adapter = { path = "../../../packages/rust/adapter/http" }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["arbitrary_precision"] }

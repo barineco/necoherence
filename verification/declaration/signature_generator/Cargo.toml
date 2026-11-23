@@ -1,0 +1,21 @@
+# SPDX-FileCopyrightText: 2026 barineco
+# SPDX-License-Identifier: AGPL-3.0-only
+
+[package]
+name = "signature_generator"
+version = "0.3.0"
+edition = "2021"
+publish = false
+
+[[bin]]
+name = "signatures"
+path = "src/main.rs"
+
+[dependencies]
+necoherence = { path = "../../../packages/rust/adapter" }
+neco-quotient-certificate = "=0.2.0"
+necoherence-generator = { path = "../../../generator/rust" }
+necoherence-composition-solver = { path = "../../../solver/composition/rust" }
+necoherence-verification = { path = "../../../verification/rust" }
+num-bigint = "0.4"
+serde_json = { version = "1", features = ["arbitrary_precision", "preserve_order"] }

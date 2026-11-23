@@ -1,0 +1,40 @@
+# SPDX-FileCopyrightText: 2026 barineco
+# SPDX-License-Identifier: AGPL-3.0-only
+
+[package]
+name = "necoherence-generator"
+version = "0.3.0"
+edition = "2021"
+license = "AGPL-3.0-only"
+description = "Code generation tools for necoherence"
+rust-version = "1.88"
+
+repository = "https://github.com/barineco/necoherence"
+homepage = "https://github.com/barineco/necoherence"
+documentation = "https://docs.rs/necoherence-generator"
+readme = "README.md"
+include = ["src/**", "README.md", "LICENSE", "Cargo.toml", "Cargo.lock"]
+
+[lib]
+name = "necoherence_generator"
+path = "src/lib.rs"
+
+[[bin]]
+name = "necoherence-generate"
+path = "src/bin/necoherence_generate.rs"
+
+[dependencies]
+necoherence = { version = "0.3.0", path = "../../packages/rust/adapter" }
+neco-quotient-certificate = "=0.2.0"
+serde = "1"
+serde_json = { version = "1", features = ["arbitrary_precision"] }
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+indexing_slicing = "deny"
+panic = "deny"
+

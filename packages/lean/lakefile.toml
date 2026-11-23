@@ -1,0 +1,20 @@
+# SPDX-FileCopyrightText: 2026 barineco
+# SPDX-License-Identifier: MIT
+
+name = "necoherence"
+version = "0.3.0"
+defaultTargets = ["Necoherence", "NecoherenceTest"]
+
+[[require]]
+name = "NecoQuotient"
+git = "https://github.com/barineco/neco-quotient.git"
+rev = "83a6a15f836a24acd4e05c5add6eb604ef4df67e"
+subDir = "lean"
+
+[[lean_lib]]
+name = "Necoherence"
+globs = ["Necoherence", "Necoherence.+"]
+
+[[lean_lib]]
+name = "NecoherenceTest"
+roots = ["Necoherence.NetworkEffectTest", "Tests.ExactJsonCodec", "Tests.GraphemeProfileVectors", "Tests.FormatProfileAdmission", "Tests.ProfileAdmissionVariations", "Tests.TheoremStatements", "Tests.SequenceRecognition", "Tests.LabelSeparatorRecognition", "Tests.NonNullableFieldConstruction", "Tests.FormatRuleSamples", "Tests.ExternalValueShapes", "Tests.WrapperBase64Vectors", "Tests.SealedLeafSampleVectors", "Tests.BoundAndSealedExtras", "Tests.DerivationSumShapes", "Tests.NetworkHostRetention"]

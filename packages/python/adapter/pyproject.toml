@@ -1,0 +1,49 @@
+# SPDX-FileCopyrightText: 2026 barineco
+# SPDX-License-Identifier: MIT
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "necoherence"
+version = "0.3.0"
+description = "Revision-aware state transition utilities for Python"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.14"
+dependencies = [
+    "neco-quotient-certificate==0.2.0",
+    "neco-quotient-application==0.1.0",
+    "neco-quotient-retention==0.1.0",
+    "neco-quotient-encoding==0.1.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/barineco/necoherence"
+Repository = "https://github.com/barineco/necoherence"
+Issues = "https://github.com/barineco/necoherence/issues"
+
+[project.optional-dependencies]
+dev = ["pytest", "hypothesis", "mypy"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/necoherence"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"README.md" = "necoherence/README.md"
+
+[tool.hatch.build.targets.sdist]
+include = ["/src/necoherence", "/tests", "/examples", "/README.md", "/LICENSE", "/pyproject.toml"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.mypy]
+mypy_path = "src"
+
+[[tool.mypy.overrides]]
+module = ["neco_quotient_certificate", "neco_quotient_certificate.*", "neco_quotient_application", "neco_quotient_application.*", "neco_quotient_retention", "neco_quotient_retention.*", "neco_quotient_encoding", "neco_quotient_encoding.*"]
+ignore_missing_imports = true

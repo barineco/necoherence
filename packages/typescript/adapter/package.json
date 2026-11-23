@@ -1,0 +1,66 @@
+{
+  "name": "necoherence",
+  "version": "0.3.0",
+  "description": "Revision-aware state transition utilities for TypeScript",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    "./network-effect": {
+      "types": "./dist/network-effect.d.ts",
+      "default": "./dist/network-effect.js"
+    },
+    "./request-progression": {
+      "types": "./dist/request-progression.d.ts",
+      "default": "./dist/request-progression.js"
+    },
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist/",
+    "package.json",
+    "README.md",
+    "LICENSE",
+    "lint"
+  ],
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "pretest": "npm run build",
+    "typecheck": "tsc --project tsconfig.json --strict --noEmit",
+    "lint": "eslint src",
+    "test": "vitest run --fileParallelism=false --exclude \"http/**\"",
+    "pack": "npm pack --json",
+    "verify:consumer": "node scripts/verify-package-consumer.mjs"
+  },
+  "dependencies": {
+    "@noble/hashes": "2.4.0",
+    "jsonc-parser": "3.3.1",
+    "lossless-json": "4.3.1",
+    "neco-quotient-application": "0.1.0",
+    "neco-quotient-certificate": "0.2.0",
+    "neco-quotient-encoding": "0.1.0",
+    "neco-quotient-retention": "0.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.2",
+    "eslint": "^9.39.5",
+    "fast-check": "^3.23.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.72.1",
+    "vitest": "^2.1.8"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/barineco/necoherence.git",
+    "directory": "packages/typescript/adapter"
+  },
+  "homepage": "https://github.com/barineco/necoherence",
+  "bugs": {
+    "url": "https://github.com/barineco/necoherence/issues"
+  }
+}

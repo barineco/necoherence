@@ -1,0 +1,16 @@
+{"version": "1.2.0",
+ "packagesDir": ".lake/packages",
+ "packages":
+ [{"url": "https://github.com/barineco/neco-quotient.git",
+   "type": "git",
+   "subDir": "lean",
+   "scope": "",
+   "rev": "83a6a15f836a24acd4e05c5add6eb604ef4df67e",
+   "name": "NecoQuotient",
+   "manifestFile": "lake-manifest.json",
+   "inputRev": "83a6a15f836a24acd4e05c5add6eb604ef4df67e",
+   "inherited": false,
+   "configFile": "lakefile.toml"}],
+ "name": "necoherence",
+ "lakeDir": ".lake",
+ "fixedToolchain": false}

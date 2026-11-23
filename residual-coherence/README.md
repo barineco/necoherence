@@ -1,28 +1,28 @@
 # residual-coherence
 
-[Project overview](https://github.com/barineco/necoherence/blob/publish/README.md) | [日本語](README-ja.md)
+[プロジェクトの概要](../README.md)
 
-residual-coherence is a package that verifies residual coherence.
-The residual here is the difference between the points that analysis data declares reachable and the points that can be derived from the analysis data as reachable.
-The package validates the analysis data and reports this difference as the residual extent.
-The residual extent is the sum of the measure contributions (`measure_contribution`) of the derived points that are absent from the declarations.
+パッケージ `residual-coherence` は、残余の整合性 ( residual coherence ) を検証する Python パッケージです。解析対象プログラムを入力値から出力値を計算する関数合成としてモデル化し、分岐条件の評価を経て到達可能な状態点を有限データ空間上で追跡・検証します。入力は有限個の離散点から成る集合として表現され、各点が型ごとの座標値を持ちます。各分岐には評価対象の点集合である領域、要求型、および許容値の一覧が定義されており、領域内の点のうち該当型の座標値が一覧に含まれるものが分岐を通過して到達可能と判定されます。
 
-The analysis data is an `AnalysisInput`, whose fields are listed in [analysis-input.schema.json](schema/analysis-input.schema.json).
-The analysis data contains the following three things:
+## 残余と解析モデル
 
-- the points whose reachability is decided, each with its measure contribution
-- the branches
-- the points declared reachable
+残余 ( residual ) とは、「解析データから論理的に到達可能と導出できる点」から「解析データ内で到達可能と事前宣言された点」を除いた差分の点集合です。本パッケージは解析データを検証し、各残余点が持つ測度への寄与量 ( `measure_contribution` ) の総和を残余量として算出・報告します。
 
-Each branch derives as reachable the points in its region whose value for the type that the branch requires (`required_type`) is one of the branch's listed values.
+検証に用いる解析データの型は `AnalysisInput` であり、そのスキーマ定義は [`analysis-input.schema.json`](schema/analysis-input.schema.json) で定めています。
 
-The package also converts normalized analysis structures (the `normalized-analysis` format, produced by other tools) into an `AnalysisInput`, and extracts analysis data from Python source text that you pass in.
+解析データの主な構成要素:
 
-## Install
+- 入力点集合 ( 各点に寄与量が定義される )
+- 分岐条件の定義
+- 到達可能と事前宣言された点集合
 
-It runs on Python 3.12 or later and uses only the standard library at run time.
+外部ツールが出力する `normalized-analysis` 形式のデータ構造を検証して `AnalysisInput` へ変換する処理や、Python ソースコードから解析データを静的に抽出する処理も利用できます。
 
-Clone the repository, then install the package from its `residual-coherence` directory:
+## インストール
+
+動作には Python 3.12 以降が必要であり、実行時の依存関係は標準ライブラリのみです。
+
+リポジトリを取得後、`residual-coherence` ディレクトリでインストールします。
 
 ```sh
 git clone https://github.com/barineco/necoherence
@@ -30,42 +30,41 @@ cd necoherence/residual-coherence
 python -m pip install .
 ```
 
-## Command line
+## コマンドライン
 
-Run `residual-coherence <command>` with one JSON value on standard input.
-On success, it writes canonical JSON (with keys and set elements in a defined order) to standard output and exits with status 0.
-On any failure, including malformed input, it writes a typed failure to standard error and exits with status 1.
-A typed failure is a JSON object with a `kind`, a `path`, and optional detail text.
-The `path` locates the problem.
-It is a JSON path such as `$.schema_version`.
-For a failure found in a source file, `python-source` reports the path of that file instead.
+コマンド `residual-coherence <コマンド>` を実行すると、標準入力から 1 件の JSON を受け取って処理します。処理が正常終了した場合は、キーや集合要素を決定的な順序で整列した正準形 JSON を標準出力へ書き出して終了ステータス 0 を返します。
 
-| Command | Purpose |
+入力不正などの理由で処理が失敗した場合は、エラー種別、問題箇所の JSON パス、詳細メッセージからなる型付きエラー情報を標準エラー出力へ JSON 形式で出力し、終了ステータス 1 を返します。
+
+提供コマンド一覧:
+
+| コマンド | 処理内容 |
 |---|---|
-| `validate` | Validates an `AnalysisInput` and prints it in canonical form |
-| `report` | Computes the declared extent, the derived extent, and the residual extent: the sums of the measure contributions of the declared points, the derived points, and the derived points that are not declared |
-| `reachability` | Derives the reachable points: the points in a branch's region whose value for the type that the branch requires (`required_type`) is one of the branch's listed values |
-| `verify` | Runs eight self-consistency checks on an `AnalysisInput`: it reruns the derivation, the report, and the canonical encoding on the input, and prints for each check the observed value next to the expected one |
-| `normalized-analysis` | Validates a normalized analysis structure and prints the validated structure, the findings (a classification of each correspondence), the converted `AnalysisInput`, and its report |
-| `typed-reachability` | Validates typed reachability data and prints the results of its verification checks, the digest of the converted `AnalysisInput`, and the diagnostic |
-| `python-source` | Extracts analysis data from Python source text (experimental) |
+| `validate` | `AnalysisInput` の妥当性を検証し、正準形の JSON 形式で出力 |
+| `report` | 宣言点、導出点、未宣言の導出点 ( 残余 ) それぞれの寄与量総和を計算・出力 |
+| `reachability` | 各分岐の対象領域点のうち、要求型 ( `required_type` ) の値が分岐許容値に含まれる点を到達可能点として導出 |
+| `verify` | `AnalysisInput` に対する 8 種類の自己整合性検証を実行し、検証結果の観測値と期待値を出力 |
+| `normalized-analysis` | 正規化解析のデータ構造の妥当性を検証し、`AnalysisInput` への変換およびレポートを出力 |
+| `typed-reachability` | 型付き到達可能性データを検証し、検証結果および変換後ハッシュ値を出力 |
+| `python-source` | Python ソースコードから解析データを静的抽出 ( 実験的機能 ) |
 
-### Normalized analysis
+### 正規化解析
 
-The command `normalized-analysis` reads a JSON object in the `normalized-analysis` format, regardless of which tool produced it.
-The `schema_version` of the object is:
+コマンド `normalized-analysis` は、スキーマ形式が `normalized-analysis` である JSON オブジェクトを読み取ります。
+
+オブジェクトの `schema_version` には次の値を指定します。
 
 ```json
 {"schema_version": {"name": "normalized-analysis", "major": "1"}}
 ```
 
-In addition to `schema_version`, the object has exactly these members, all required:
+必須フィールド:
 
-- `source_revision`: a non-empty string
-- `language`: the language of the source, written as one of these lowercase JSON strings:
-  - `python`
-  - `gleam`
-- ten groups of relation tables, each an array of rows:
+- `source_revision`: 空でない文字列
+- `language`: 解析対象言語。次のいずれか
+  - `"python"`
+  - `"gleam"`
+- 10 種類のリレーションテーブル ( 行オブジェクトの配列 )
   - `declarations`
   - `types`
   - `values`
@@ -77,123 +76,81 @@ In addition to `schema_version`, the object has exactly these members, all requi
   - `source_spans`
   - `stage_correspondences`
 
-The command checks that every reference between the tables points to an existing identifier, then converts the structure.
-The same input always produces the same result.
+各テーブル間の外部キー参照がすべて実在する識別子を指していることを検証した上で、内部データ構造へ変換します。
 
-The fields of each row (for example `branch` and `digest`), and the classification of the findings, are defined in [normalized_analysis.py](https://github.com/barineco/necoherence/blob/publish/residual-coherence/src/residual_coherence/normalized_analysis.py).
+### Python ソースの解析
 
-### Python source analysis
+実験的コマンド `python-source` は、Python ソースコードをパースして AST から以下の構造パターンを静的に検出します。
 
-The command `python-source` is experimental.
-Its input is an object with a `revision` and a `sources` map from each path to its Python source text.
-It parses each source into a syntax tree and detects these structures:
-
-- `FlagCartesianProduct`: a function with two or more ordinary parameters annotated as `bool`, whose flags multiply the combinations it handles
-- `ReceiverHiding`: a function whose first parameter has one of these names, so that part of its input is passed implicitly
+- `FlagCartesianProduct`: `bool` 型として注釈された引数を 2 個以上持つ関数 ( フラグ組み合わせによる状態爆発 )
+- `ReceiverHiding`: 第 1 引数名が次のいずれかである関数 ( 暗黙のレシーバ注入 )
   - `self`
   - `cls`
-- `AmbientRead`: a function that reads a name assigned at module level, without receiving it as an argument
+- `AmbientRead`: モジュール直下で代入された変数を暗黙的に参照する関数
+  - 対象の形式: `名前 = 値`
+  - 対象外の形式 ( 型注釈付き ): `名前: 型 = 値`
 
-For `AmbientRead`, only a plain assignment of the form `name = value` defines a module-level name.
-An annotated assignment such as `name: int = 1` is excluded from this check.
+ソースコードに次の要素が含まれる場合は、型付きエラーを返して解析を拒否する仕様です。
 
-The result is an object with three members:
+- 動的インポート: `__import__` や `import_module`
+- リフレクション: 動的な `getattr` や各種の属性操作関数 ( `setattr` など )
+- 未宣言の外部出力: `print` や `open`
+- 型注釈: `Any`
 
-- `source_revision`: the revision and the digest of the sources
-- `input`: an `AnalysisInput`
-  - it holds the declared baseline point `p-baseline`
-  - it holds one point for each detected structure
-- `source_evidence`: the source locations that support the result
+### 型付き到達可能性
 
-A detected point is not declared, so it enters the residual extent.
-The supported scope is detecting the three structures above and reporting the typed failures below.
+- `artifact`: 型付き到達可能性データ
+- `provenance`: 2 件の `sha256:` ダイジェスト ( 64 桁の小文字 16 進数 ) を持つ JSON オブジェクト
 
-If a source contains one of the following, the command returns a typed failure instead of an analysis result:
-
-- `DynamicImport`: a dynamic import call such as `__import__`
-- `Reflection`: a call to a reflective built-in, for example one of these:
-  - `getattr`, except a three-argument call whose default is a name or a constant
-  - `setattr`
-- `UndeclaredExternalOutput`: a call to one of these built-in functions
-  - `print`
-  - `open`
-- `UnannotatedAny`: an `Any` annotation on a parameter or variable
-- `UnclosedExpression`: a syntax error, an empty source set, or an unreadable file given to `extract_paths`
-
-Example:
+テスト実行例:
 
 ```sh
-printf '%s\n' '{"revision":"example","sources":{"sample.py":"value: int = 1\n"}}' | residual-coherence python-source
+residual-coherence typed-reachability < python/examples/typed-reachability-minimal.json
 ```
 
-### Typed reachability
+## JSON Schema
 
-The command `typed-reachability` reads a JSON object with two members.
-The member `artifact` is typed reachability data: a closed set of types and constructors, branch regions, and the correspondence of each point across its surface, core, and native forms.
-Its fields are listed in [typed-reachability-artifact.schema.json](schema/typed-reachability-artifact.schema.json).
-The `source_revision` of the data has three non-empty string fields:
+ディレクトリ `schema/` 配下に、各コマンドの入出力スキーマ定義を収録しています。
 
-- `repository`
-- `revision`
-- `tree_digest`
-
-The member `provenance` is an object with exactly two values, each a SHA-256 digest written as `sha256:` followed by 64 lowercase hexadecimal digits.
-The key names are free, and the values are copied into the output.
-
-A minimal input is in the source tree at `examples/typed-reachability-minimal.json`.
-The installed package has it at `residual_coherence/examples/typed-reachability-minimal.json`.
-After installing the package from the source tree, run this command in the `residual-coherence` directory; it exits with status 0 and prints the verification result:
-
-```sh
-residual-coherence typed-reachability < examples/typed-reachability-minimal.json
-```
-
-## JSON Schemas
-
-The JSON Schemas in `schema/` describe the input and output of four commands:
-
-- [analysis-input.schema.json](schema/analysis-input.schema.json): the `AnalysisInput`, which `validate` reads
-- [residual-coherence-report.schema.json](schema/residual-coherence-report.schema.json): the output of `report`
-- [analysis-verification.schema.json](schema/analysis-verification.schema.json): the output of `verify`
-- [typed-reachability-artifact.schema.json](schema/typed-reachability-artifact.schema.json): the `artifact` member of the `typed-reachability` input
-- [typed-reachability-verification.schema.json](schema/typed-reachability-verification.schema.json): the output of `typed-reachability`
-- [reachability-diagnostic.schema.json](schema/reachability-diagnostic.schema.json): the `diagnostic` member of that output
+- [analysis-input.schema.json](schema/analysis-input.schema.json): `AnalysisInput` スキーマ
+- [residual-coherence-report.schema.json](schema/residual-coherence-report.schema.json): `report` 出力スキーマ
+- [analysis-verification.schema.json](schema/analysis-verification.schema.json): `verify` 出力スキーマ
+- [typed-reachability-artifact.schema.json](schema/typed-reachability-artifact.schema.json): `typed-reachability` 入力スキーマ
+- [typed-reachability-verification.schema.json](schema/typed-reachability-verification.schema.json): `typed-reachability` 出力スキーマ
+- [reachability-diagnostic.schema.json](schema/reachability-diagnostic.schema.json): 診断情報スキーマ
 
 ## Python API
 
-The main functions are:
+主要な公開関数:
 
-- `validate_analysis_input`: validates an `AnalysisInput`
-- `calculate_report`: computes the residual extent report
-- `reduce_normalized_analysis_structure`: converts a normalized analysis structure into an `AnalysisInput`
-- `reduce_typed_reachability`: converts typed reachability data into an `AnalysisInput`
-- `extract_sources`: extracts analysis data from Python source text
-- `extract_paths`: extracts analysis data from Python source files
+- `validate_analysis_input`: `AnalysisInput` の妥当性を検証
+- `calculate_report`: 残余量レポートを計算
+- `reduce_normalized_analysis_structure`: 正規化解析のデータ構造を `AnalysisInput` へ変換
+- `reduce_typed_reachability`: 型付き到達可能性データを `AnalysisInput` へ変換
+- `extract_sources`: Python ソース文字列から解析データを抽出
+- `extract_paths`: Python ソースファイルから解析データを抽出
 
-Failures are represented by these values:
+主要なエラー型:
 
-- `TypedFailure`: a failure while validating, encoding, reporting on, or running verification checks on an `AnalysisInput`
-- `CanonicalConsumerFailure`: a failure while decoding a normalized analysis, validating its structure, checking its references, or presenting it
-- `ReachabilityReductionFailure`: a failure while validating, converting, diagnosing, or running verification checks on typed reachability data
-- `AnalysisFailure`: a failure while analyzing Python source
+- `TypedFailure`: `AnalysisInput` の検証・レポート計算で発生するエラー
+- `CanonicalConsumerFailure`: 正規化解析のデコード・参照整合性の検証で発生するエラー
+- `ReachabilityReductionFailure`: 型付き到達可能性データの検証・変換で発生するエラー
+- `AnalysisFailure`: Python ソースコードの静的解析で発生するエラー
 
-The method `as_dict()` converts each value to the dictionary that the command line prints as JSON.
-The package's `__all__` lists the other public names.
+各エラー型の `as_dict()` メソッドで、CLI 出力と同等の JSON 辞書表現を取得できます。
 
-## Development
-
-Install the development dependencies, then test, type-check, and build:
+## 開発
 
 ```sh
 python3 -m pip install ".[dev]"
 python3 -m pytest -q
-python3 -m mypy src tests
+python3 -m mypy python/src python/tests
 python3 -m build
 ```
 
-## License
+## ライセンス
 
-- Verifier source and tests: [AGPL-3.0-only](LICENSE)
-- JSON Schemas for the data exchanged with the verifier: [MIT](schema/LICENSE)
+構成要素ごとのライセンス:
 
-The license conditions of the input passed to the verifier, and of the results it outputs, are decided by the author of the input.
+- 検証ツールのソースコードおよびテスト: [AGPL-3.0-only](LICENSE)
+- 入出力データ定義の JSON Schema: [MIT License](schema/LICENSE)

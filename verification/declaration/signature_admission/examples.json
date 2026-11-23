@@ -1,0 +1,51 @@
+{
+  "accepted": {
+    "result": "accepted",
+    "checked": {
+      "basis": {
+        "signature_schema": "ncoh-type-signatures@1",
+        "library_identity": "...",
+        "library_revision": "...",
+        "profile": {"identity": "...", "revision": "...", "content_digest": "..."},
+        "graph_sha256": "...",
+        "provenance_sha256": "...",
+        "metadata_sha256": "...",
+        "problem_sha256": null,
+        "entrypoints_sha256": "..."
+      },
+      "library": {"identity": "...", "revision": "..."},
+      "entrypoints": [{"identity": "...", "definition": "..."}],
+      "composition": null
+    }
+  },
+  "certificate": {
+    "result": "failed",
+    "failure": {
+      "kind": "certificate",
+      "conditions": {
+        "decode": "Matched",
+        "source": "Matched",
+        "coordinate": "Mismatched",
+        "observations": "Matched",
+        "digest": "Matched",
+        "residual": "Matched"
+      },
+      "failures": [{"condition": "coordinate", "operation": "admit"}],
+      "digests": {"entrypoints": "matched", "graph": "matched", "metadata": "matched", "provenance": "matched"},
+      "origin": {"rule_revision": "...", "source_identity": "...", "source_revision": "..."},
+      "provenance": "admit_signature_generation"
+    }
+  },
+  "other": {
+    "result": "failed",
+    "failure": {"kind": "entrypoint_duplicate", "identity": "..."}
+  },
+  "identity_empty": {
+    "result": "failed",
+    "failure": {"kind": "entrypoint_identity_empty"}
+  },
+  "request": {
+    "result": "failed",
+    "failure": {"kind": "request", "reason": "exchange_not_string"}
+  }
+}

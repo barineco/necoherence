@@ -1,0 +1,43 @@
+# SPDX-FileCopyrightText: 2026 barineco
+# SPDX-License-Identifier: MIT
+
+[package]
+name = "necoherence"
+version = "0.3.0"
+edition = "2021"
+license = "MIT"
+description = "Revision-aware state transition utilities"
+rust-version = "1.88"
+
+repository = "https://github.com/barineco/necoherence"
+homepage = "https://github.com/barineco/necoherence"
+documentation = "https://docs.rs/necoherence"
+readme = "README.md"
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+num-bigint = "0.4"
+num-traits = "0.2"
+serde_json = { version = "1", features = ["arbitrary_precision"] }
+serde = { version = "1", features = ["derive", "rc"] }
+stacker = "0.1"
+sha2 = "0.10"
+neco-quotient-certificate = "=0.2.0"
+neco-quotient-application = "=0.1.0"
+neco-quotient-encoding = "=0.2.0"
+neco-quotient-retention = "=0.2.1"
+
+[dev-dependencies]
+proptest = "1"
+tempfile = "3"
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+indexing_slicing = "deny"
+panic = "deny"

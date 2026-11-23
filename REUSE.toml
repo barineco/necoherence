@@ -7,67 +7,118 @@ version = 1
 path = [
   "LICENSE",
   "*/LICENSE",
+  "packages/*/adapter/LICENSE",
+  "packages/*/adapter/http/LICENSE",
+  "packages/lean/LICENSE",
   "*/README.md",
-  "*/README-ja.md",
-  "comparison/**/*.json",
-  "tests/observation/**/*.json",
-  "comparison/**/*.txt",
-  "comparison/**/Cargo.lock",
-  "comparison/**/manifest.toml",
-  "gleam/manifest.toml",
-  "gleam-http-adapter/manifest.toml",
-  "gleam/priv/japanese-readme",
-  "lean/lake-manifest.json",
-  "lean/lean-toolchain",
-  "lean/Tests/WrapperBase64Vectors.lean",
-  "rust/Cargo.lock",
-  "java/src/test/fixtures/discriminator-binding.json",
-  "rust/tests/fixtures/canonical-profile.json",
-  "typescript/package.json",
-  "typescript-http-adapter/package.json",
-  "typescript-http-adapter/package-lock.json",
-  "typescript-http-adapter/tsconfig.json",
-  "typescript-http-adapter/tsconfig.build.json",
-  "gleam-http-adapter/gleam.toml",
-  "python-http-adapter/pyproject.toml",
-  "typescript/package-lock.json",
-  "typescript/tsconfig.json",
-  "typescript/tsconfig.build.json",
-  "typescript/tests/synthetic-profile.json",
+  "packages/*/adapter/README.md",
+  "packages/*/adapter/http/README.md",
+  "packages/lean/README.md",
+  "docs/*.md",
+  "verification/declaration/**/*.json",
+  "verification/shared_operations/**/*.json",
+  "verification/observation/**/*.json",
+  "solver/verification/*.json",
+  "solver/composition/verification/*.json",
+  "verification/declaration/**/*.txt",
+  "verification/declaration/**/README.md",
+  "verification/declaration/signature_admission/.gitignore",
+  "verification/declaration/signature_admission/lean-toolchain",
+  "verification/execution/**/Cargo.lock",
+  "verification/declaration/**/Cargo.lock",
+  "verification/shared_operations/**/Cargo.lock",
+  "verification/network_effect/**/Cargo.lock",
+  "solver/composition/verification/**/Cargo.lock",
+  "verification/execution/**/manifest.toml",
+  "verification/declaration/**/manifest.toml",
+  "verification/shared_operations/**/manifest.toml",
+  "verification/network_effect/**/manifest.toml",
+  "packages/gleam/adapter/manifest.toml",
+  "packages/gleam/adapter/http/manifest.toml",
+  "packages/lean/lake-manifest.json",
+  "packages/lean/lean-toolchain",
+  "packages/lean/Tests/WrapperBase64Vectors.lean",
+  "packages/rust/adapter/Cargo.lock",
+  "packages/rust/adapter/src/signature_composition_diagnostics_schema.json",
+  "packages/rust/adapter/http/Cargo.lock",
+  "packages/java/adapter/src/test/fixtures/discriminator-binding.json",
+  "packages/rust/adapter/tests/fixtures/*",
+  "packages/gleam/adapter/test/fixtures/**/*.json",
+  "packages/java/adapter/src/test/resources/variant-guard-incomplete-coverage.json",
+  "packages/python/adapter/tests/fixtures/variant-guard-incomplete-coverage.json",
+  "packages/typescript/adapter/tests/fixtures/*.json",
+  "packages/typescript/adapter/package.json",
+  "packages/typescript/adapter/http/package.json",
+  "packages/typescript/adapter/http/package-lock.json",
+  "packages/typescript/adapter/http/tsconfig.json",
+  "packages/typescript/adapter/http/tsconfig.build.json",
+  "packages/gleam/adapter/http/gleam.toml",
+  "packages/python/adapter/http/pyproject.toml",
+  "packages/typescript/adapter/package-lock.json",
+  "packages/typescript/adapter/tsconfig.json",
+  "packages/typescript/adapter/tsconfig.build.json",
+  "packages/typescript/adapter/tests/synthetic-profile.json",
   "residual-coherence/schema/*",
-  "presets/**/*.json",
-  "scripts/build-maven.sh",
+  "verification/presets/**/*.json",
+  "packages/java/adapter/lint/error-prone.md",
+  "packages/java/build-maven.sh",
 ]
 SPDX-FileCopyrightText = "2026 barineco"
 SPDX-License-Identifier = "MIT"
 
 [[annotations]]
 path = [
-  "tools/LICENSE",
-  "tools/rust/README.md",
-  "tools/rust/LICENSE",
-  "tools/gleam/manifest.toml",
-  "tools/lean/lake-manifest.json",
-  "tools/lean/lean-toolchain",
-  "tools/rust/Cargo.lock",
-  "tools/typescript/package.json",
-  "tools/typescript/package-lock.json",
-  "tools/typescript/tsconfig.json",
-  "tools/typescript/tsconfig.build.json",
-  "comparison/declaration/signature_generator/Cargo.lock",
+  "verification/declaration/signature_admission/lake-manifest.json",
+  "verification/declaration/signature_admission/gleam/manifest.toml",
+  "verification/declaration/signature_admission/README.md",
+  "solver/verification/gleam_driver/manifest.toml",
+]
+precedence = "override"
+SPDX-FileCopyrightText = "2026 barineco"
+SPDX-License-Identifier = "AGPL-3.0-only"
+
+[[annotations]]
+path = [
+  "generator/LICENSE",
+  "generator/rust/LICENSE",
+  "generator/rust/Cargo.lock",
+  "generator/lean/lake-manifest.json",
+  "generator/lean/lean-toolchain",
+  "solver/lean/LICENSE",
+  "solver/rust/LICENSE",
+  "solver/rust/Cargo.lock",
+  "solver/lean/lake-manifest.json",
+  "solver/lean/lean-toolchain",
+  "solver/composition/lean/LICENSE",
+  "solver/composition/rust/LICENSE",
+  "solver/composition/rust/Cargo.lock",
+  "solver/composition/lean/lake-manifest.json",
+  "solver/composition/lean/lean-toolchain",
+  "verification/lean/LICENSE",
+  "verification/rust/LICENSE",
+  "verification/rust/Cargo.lock",
+  "verification/lean/lake-manifest.json",
+  "verification/lean/lean-toolchain",
+  "generator/rust/README.md",
+  "solver/composition/rust/tests/fixtures/composition-budget-default.json",
+  "generator/rust/tests/fixtures/gleam-identifier-collision.exchange.json",
+  "verification/declaration/signature_generator/Cargo.lock",
+  "verification/execution/rust_driver/Cargo.lock",
+  "verification/execution/package.json",
+  "solver/composition/verification/rust_driver/Cargo.lock",
   "residual-coherence/LICENSE",
+  "residual-coherence/lean/lake-manifest.json",
+  "residual-coherence/lean/lean-toolchain",
   "residual-coherence/README.md",
-  "residual-coherence/README-ja.md",
-  "residual-coherence/examples/*.json",
+  "residual-coherence/python/examples/*.json",
 ]
 SPDX-FileCopyrightText = "2026 barineco"
 SPDX-License-Identifier = "AGPL-3.0-only"
 
 [[annotations]]
 path = [
-  "CHANGELOG.md",
   "README.md",
-  "README-ja.md",
+
 ]
 precedence = "override"
 SPDX-FileCopyrightText = "2026 barineco"
@@ -75,15 +126,7 @@ SPDX-License-Identifier = "MIT"
 
 [[annotations]]
 path = [
-  "tools/gleam/src/necoherence_tools/renderer.gleam",
-  "tools/java/src/main/java/necoherence/tools/renderer/Renderer.java",
-  "tools/lean/NecoherenceTools/SignatureGeneration.lean",
-  "tools/python/src/necoherence_tools/signature_codegen.py",
-  "tools/rust/src/renderer.rs",
-  "tools/typescript/src/signature_generation.ts",
-  "tools/typescript/src/signature_renderer.ts",
-  "tools/README.md",
-  "tools/README-ja.md",
+  ".github/workflows/ci.yml",
 ]
 precedence = "override"
 SPDX-FileCopyrightText = "2026 barineco"
@@ -91,8 +134,20 @@ SPDX-License-Identifier = "AGPL-3.0-only"
 
 [[annotations]]
 path = [
-  "comparison/declaration/semantic_profile_data/*.txt",
-  "presets/tools/unicode/*.txt",
+  "generator/lean/NecoherenceGenerator/SignatureGeneration.lean",
+  "generator/rust/src/renderer.rs",
+  "generator/README.md",
+  "solver/README.md",
+  "solver/composition/README.md",
+]
+precedence = "override"
+SPDX-FileCopyrightText = "2026 barineco"
+SPDX-License-Identifier = "AGPL-3.0-only"
+
+[[annotations]]
+path = [
+  "verification/declaration/semantic_profile_data/*.txt",
+  "verification/presets/tools/unicode/*.txt",
 ]
 precedence = "override"
 SPDX-FileCopyrightText = "1991-2026 Unicode, Inc."

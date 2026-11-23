@@ -1,0 +1,37 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "necoherence-http-adapter"
+version = "0.3.0"
+description = "HTTP host adapter for Necoherence"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.14"
+dependencies = ["necoherence==0.3.0"]
+
+[project.urls]
+Homepage = "https://github.com/barineco/necoherence"
+Repository = "https://github.com/barineco/necoherence"
+Issues = "https://github.com/barineco/necoherence/issues"
+
+[project.optional-dependencies]
+dev = ["pytest", "mypy"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/necoherence_http_adapter"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src", "tests", "README.md", "LICENSE", "pyproject.toml"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src", "../src"]
+
+[tool.mypy]
+mypy_path = "src:../src"
+
+[[tool.mypy.overrides]]
+module = ["neco_quotient_certificate", "neco_quotient_certificate.*", "neco_quotient_application", "neco_quotient_application.*", "neco_quotient_retention", "neco_quotient_retention.*", "neco_quotient_encoding", "neco_quotient_encoding.*"]
+ignore_missing_imports = true

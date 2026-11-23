@@ -1,0 +1,22 @@
+# SPDX-FileCopyrightText: 2026 barineco
+# SPDX-License-Identifier: AGPL-3.0-only
+
+name = "necoherence-composition-solver"
+version = "0.3.0"
+defaultTargets = ["NecoherenceCompositionSolver", "NecoherenceCompositionSolverTest"]
+
+[[require]]
+name = "necoherence"
+path = "../../../packages/lean"
+
+[[require]]
+name = "necoherence-solver"
+path = "../../lean"
+
+[[lean_lib]]
+name = "NecoherenceCompositionSolver"
+roots = ["NecoherenceCompositionSolver.SemanticEvidence", "NecoherenceCompositionSolver.CompositionSearch"]
+
+[[lean_lib]]
+name = "NecoherenceCompositionSolverTest"
+roots = ["NecoherenceCompositionSolverTest.AxiomAudit"]
